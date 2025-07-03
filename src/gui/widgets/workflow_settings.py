@@ -154,14 +154,17 @@ class WorkflowSettings(ConfigWidget):
         # self.workflow_extras = None  # not added here
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
+        
+        self.layout.addWidget(self.compact_mode_back_button)
+        self.layout.addWidget(self.header_widget)
 
         self.workflow_panel = QWidget()
         panel_layout = CVBoxLayout(self.workflow_panel)
-        panel_layout.addWidget(self.compact_mode_back_button)
-        panel_layout.addWidget(self.header_widget)
-        panel_layout.addWidget(self.workflow_params)
-        panel_layout.addWidget(self.workflow_description)
-        panel_layout.addWidget(self.workflow_options)
+        # panel_layout.addWidget(self.compact_mode_back_button)
+        # panel_layout.addWidget(self.header_widget)
+        # panel_layout.addWidget(self.workflow_params)
+        # panel_layout.addWidget(self.workflow_description)
+        # panel_layout.addWidget(self.workflow_options)
         panel_layout.addWidget(self.workflow_buttons)
         panel_layout.addLayout(h_layout)
 
@@ -169,7 +172,12 @@ class WorkflowSettings(ConfigWidget):
         self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.splitter.setChildrenCollapsible(False)
 
+        self.splitter.addWidget(self.workflow_params)
+        self.splitter.addWidget(self.workflow_description)
+        self.splitter.addWidget(self.workflow_options)
+
         self.splitter.addWidget(self.workflow_panel)
+
         self.splitter.addWidget(self.member_config_widget)
         self.layout.addWidget(self.splitter)
 
@@ -376,21 +384,21 @@ class WorkflowSettings(ConfigWidget):
         input_count = len(self.inputs_in_view)
         if input_count > 0:
             return False
+
+        members = list(self.members_in_view.values())
         if member_count == 1:
-            member_config = next(iter(self.members_in_view.values())).member_config
+            member_config = members[0].member_config
             types_to_simplify = ['text_block', 'code_block', 'prompt_block', 'voice_model', 'image_model']
             if member_config.get('_TYPE', 'agent') in types_to_simplify:
                 return True
+
         elif member_count == 2:
-            members = list(self.members_in_view.values())
-            members.sort(key=lambda x: x.x())
+            members.sort(key=lambda m: m.x())
             first_member = members[0]
             second_member = members[1]
-            inputs_count = len(self.inputs_in_view)
-            if (first_member.member_type == 'user'
-            and second_member.member_type == 'agent'
-            and inputs_count == 0):
+            if first_member.member_type == 'user' and second_member.member_type == 'agent':
                 return True
+
         return False
 
     def toggle_view(self, visible):
@@ -399,15 +407,15 @@ class WorkflowSettings(ConfigWidget):
         self.splitter.setHandleWidth(0 if not visible else 3)
 
     def reposition_view(self):
-        return
+        # return
         min_scroll_x = self.view.horizontalScrollBar().minimum()
         min_scroll_y = self.view.verticalScrollBar().minimum()
         self.view.horizontalScrollBar().setValue(min_scroll_x)
         self.view.verticalScrollBar().setValue(min_scroll_y)
 
     def set_edit_mode(self, state):
-        if not self.compact_mode:
-            return
+        # if not self.compact_mode:
+        #     return
 
         self.view.temp_block_move_flag = True
 
@@ -422,11 +430,17 @@ class WorkflowSettings(ConfigWidget):
 
         self.compact_mode_editing = state
 
-        if hasattr(self.parent.parent, 'view'):
-            self.parent.parent.toggle_view(not state)
+        if hasattr(self.parent.parent, 'view'):  # todo clean
+            wf_settings = self.parent.parent
+            wf_settings.toggle_view(not state)
+            wf_settings.header_widget.setVisible(not state)
+            wf_settings.workflow_panel.setVisible(not state)
+            wf_settings.workflow_description.setVisible(not state and wf_settings.workflow_buttons.btn_toggle_description.isChecked())
+            wf_settings.workflow_options.setVisible(not state and wf_settings.workflow_buttons.btn_workflow_options.isChecked())
+            wf_settings.workflow_params.setVisible(not state and wf_settings.workflow_buttons.btn_workflow_params.isChecked())
 
         else:
-            tree_container = find_attribute(self.parent, 'tree_container', None)
+            tree_container = find_attribute(self.parent.parent, 'tree_container', None)
             tree_container.setVisible(not state)
 
         self.compact_mode_back_button.setVisible(state)
@@ -448,7 +462,7 @@ class WorkflowSettings(ConfigWidget):
         selected_lines = [x for x in selected_objects if isinstance(x, ConnectionLine)]
 
         can_simplify = self.can_simplify_view()
-        if self.compact_mode and not can_simplify and len(selected_objects) > 0 and not self.compact_mode_editing:
+        if not can_simplify and len(selected_objects) > 0 and not self.compact_mode_editing:
             self.set_edit_mode(True)
 
         if len(selected_objects) == 1 and (self.view.mini_view or not self.view.isVisible()):
@@ -472,8 +486,8 @@ class WorkflowSettings(ConfigWidget):
             self.member_list.refresh_selected()
 
     def add_insertable_entity(self, item, del_pairs=None):
-        if self.compact_mode:
-            self.set_edit_mode(True)
+        # if self.compact_mode:
+        self.set_edit_mode(True)
         if self.new_agents:
             return
 
@@ -518,8 +532,8 @@ class WorkflowSettings(ConfigWidget):
         self.view.setFocus()
 
     def add_insertable_input(self, item, member_bundle):
-        if self.compact_mode:
-            self.set_edit_mode(True)
+        # if self.compact_mode:
+        self.set_edit_mode(True)
         if self.new_lines:
             return
 
@@ -710,19 +724,25 @@ class WorkflowSettings(ConfigWidget):
 
     def refresh_member_headers(self):
         can_simplify = self.can_simplify_view()
+        self.member_config_widget.member_header_widget.setVisible(not can_simplify)
+        
         for member in self.members_in_view.values():
             mcw = member.member_proxy.member_config_widget
             if not mcw:
                 continue
+            
+            show = not can_simplify and member.member_type != 'workflow'
+            # if member.member_type == 'workflow':
+            #     show = True
 
-            if not can_simplify:
+            if show:
                 mcw.member_header_widget.show()
                 mcw.member_header_widget.setEnabled(True)
-                self.member_config_widget.member_header_widget.show()
+                # self.member_config_widget.member_header_widget.show()
             else:
                 mcw.member_header_widget.setEnabled(False)
                 mcw.member_header_widget.hide()  # setVisible(not can_simplify)
-                self.member_config_widget.member_header_widget.hide()
+                # self.member_config_widget.member_header_widget.hide()
 
     def goto_member(self, full_member_id):
         member_ids = full_member_id.split('.')
@@ -2024,8 +2044,8 @@ class MemberConfigWidget(ConfigWidget):
         # else:
         #     self.parent.parent.workflow_settings.refresh_member_headers()
         #
-        # # if hasattr(self.config_widget, 'reposition_view'):
-        # #     self.config_widget.reposition_view()
+        if hasattr(self.config_widget, 'reposition_view'):
+            self.config_widget.reposition_view()
 
 
 class DraggableMember(QGraphicsObject):

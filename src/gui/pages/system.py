@@ -13,7 +13,7 @@ from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_pages import ConfigPages
 from utils.helpers import display_message, set_module_type  # , clone_specific_subdirectory
 from gui.util import find_main_widget
-from utils.reset import reset_application
+from utils.reset import reset_application, bootstrap_modules, bootstrap_entities
 
 import subprocess
 import os
@@ -271,7 +271,14 @@ class Page_System_Settings(ConfigJoined):
                 self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
                 self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
 
-                # add a button 'Reset database'
+                self.bootstrap_modules_btn = QPushButton('Bootstrap baked Modules')
+                self.bootstrap_modules_btn.clicked.connect(bootstrap_modules)
+                self.layout.addWidget(self.bootstrap_modules_btn)
+
+                self.bootstrap_entities_btn = QPushButton('Bootstrap baked Entities')
+                self.bootstrap_entities_btn.clicked.connect(bootstrap_entities)
+                self.layout.addWidget(self.bootstrap_entities_btn)
+
                 self.reset_app_btn = QPushButton('Reset Application')
                 self.reset_app_btn.clicked.connect(reset_application)
                 self.layout.addWidget(self.reset_app_btn)
@@ -286,6 +293,24 @@ class Page_System_Settings(ConfigJoined):
             except Exception as e:
                 pass
 
+        def toggle_dev_mode(self, state=None):
+            # pass
+            if state is None and hasattr(self, 'dev_mode'):
+                state = self.dev_mode.isChecked()
+
+            self.main.page_chat.top_bar.btn_info.setVisible(state)
+            self.reset_app_btn.setVisible(state)
+            self.run_test_btn.setVisible(state)
+
+            for config_pages in self.main.findChildren(ConfigPages):
+                for page_name, page in config_pages.pages.items():
+                    page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
+                    if not page_is_dev_mode:
+                        continue
+                    config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
+
+            # self.main.apply_stylesheet()
+        
         def scrape_autogpt(self):
             # dialog to confirm scraping
             reply = QMessageBox.question(self, 'Scrape AutoGPT',
@@ -778,22 +803,3 @@ class Page_System_Settings(ConfigJoined):
         # #         # Clean up the temporary clone directory
         # #         if os.path.exists(temp_clone_dir):
         # #             shutil.rmtree(temp_clone_dir)
-
-
-        def toggle_dev_mode(self, state=None):
-            # pass
-            if state is None and hasattr(self, 'dev_mode'):
-                state = self.dev_mode.isChecked()
-
-            self.main.page_chat.top_bar.btn_info.setVisible(state)
-            self.reset_app_btn.setVisible(state)
-            self.run_test_btn.setVisible(state)
-
-            for config_pages in self.main.findChildren(ConfigPages):
-                for page_name, page in config_pages.pages.items():
-                    page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
-                    if not page_is_dev_mode:
-                        continue
-                    config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
-
-            # self.main.apply_stylesheet()

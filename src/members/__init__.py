@@ -587,19 +587,19 @@ class LlmMember(Member):
         return transformed
 
 
-# class Block(Member):
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self.receivable_function = self.receive
-#
-#     # def default_role(self):  # todo clean
-#     #     return self.config.get(self.default_role_key, 'block')
-#
-#
-# class Model(Member):
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self.receivable_function = self.receive
+class Block(Member):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.receivable_function = self.receive
+
+    # def default_role(self):  # todo clean
+    #     return self.config.get(self.default_role_key, 'block')
+
+
+class Model(Member):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.receivable_function = self.receive
 
 
 class CharProcessor:  # todo clean / rethink

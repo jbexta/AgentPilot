@@ -786,7 +786,6 @@ class Main(QMainWindow):
         # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
         self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
 
-        # self.page_chat.workflow_settings.member_config_widget.member_header_widget.hide()
         self.page_chat.workflow_settings.header_widget.hide()
 
     @property

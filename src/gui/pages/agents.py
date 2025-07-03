@@ -63,10 +63,10 @@ class Page_Entities(ConfigDBTree):
         self.tree.itemDoubleClicked.connect(self.on_chat_btn_clicked)
         self.splitter.setSizes([500, 500])
 
-    @override
-    def load(self, select_id=None, silent_select_id=None, append=False):
-        self.config_widget.set_edit_mode(False)
-        super().load(select_id, silent_select_id, append)
+    # @override
+    # def load(self, select_id=None, silent_select_id=None, append=False):
+    #     self.config_widget.set_edit_mode(False)
+    #     super().load(select_id, silent_select_id, append)
 
     # def save_config(self):
     #     item_id = self.tree.get_selected_item_id()

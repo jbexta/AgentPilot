@@ -32,7 +32,7 @@ class ConfigTree(ConfigWidget):
         tree_header_resizable = kwargs.get('tree_header_resizable', True)
         self.config_widget = kwargs.get('config_widget', None)
         self.folder_key = kwargs.get('folder_key', None)
-        self.folder_config_widget = kwargs.get('folder_config_widget', self.Folder_Config_Widget(parent=self))
+        self.folder_config_widget = kwargs.get('folder_config_widget', None)  # self.Folder_Config_Widget(parent=self))
 
         # patch the update_config method for the folder config widget
         if self.folder_config_widget is not None:
@@ -47,11 +47,6 @@ class ConfigTree(ConfigWidget):
         self.del_item_options = kwargs.get('del_item_options', None)
 
         self.layout = CVBoxLayout(self)
-
-        splitter_orientation = Qt.Horizontal if layout_type == 'horizontal' else Qt.Vertical
-        self.splitter = QSplitter(splitter_orientation)
-        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.splitter.setChildrenCollapsible(False)
 
         self.tree_container = QWidget()
         self.tree_layout = CVBoxLayout(self.tree_container)
@@ -86,9 +81,14 @@ class ConfigTree(ConfigWidget):
             self.load_count = 0
 
         self.tree_layout.addWidget(self.tree)
-        self.splitter.addWidget(self.tree_container)
 
         if self.config_widget is not None or self.folder_config_widget is not None:
+            splitter_orientation = Qt.Horizontal if layout_type == 'horizontal' else Qt.Vertical
+            self.splitter = QSplitter(splitter_orientation)
+            self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.splitter.setChildrenCollapsible(False)
+            self.splitter.addWidget(self.tree_container)
+
             config_container = QWidget()
             config_layout = CVBoxLayout(config_container)
             if self.config_widget:
@@ -97,8 +97,10 @@ class ConfigTree(ConfigWidget):
                 config_layout.addWidget(self.folder_config_widget)
 
             self.splitter.addWidget(config_container)
+            self.layout.addWidget(self.splitter)
+        else:
+            self.layout.addWidget(self.tree_container)
 
-        self.layout.addWidget(self.splitter)
 
     @abstractmethod
     def load(self):

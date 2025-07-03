@@ -419,6 +419,9 @@ def bootstrap():
     #     }
     # )
 
+def bootstrap_entities():
+    pass
+
 
 def bootstrap_modules():
     from system import manager
@@ -444,15 +447,6 @@ def bootstrap_modules():
             "data": module_source,
             "load_on_startup": True,
         }
-        # try:
-        #     sql.execute(f"INSERT INTO `modules` (name, config) VALUES ({placeholders})", values)
-        #     if not skip_load:
-        #         self.load()
-        # except IntegrityError:
-        #     display_message(self,
-        #         message='Item already exists',
-        #         icon=QMessageBox.Warning,
-        #     )
         manager.modules.add(
             name=module_name,
             config=config,
