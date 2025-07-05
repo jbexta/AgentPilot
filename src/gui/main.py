@@ -538,7 +538,7 @@ class MessageText(QTextEdit):
         super().resizeEvent(e)
         self.button_bar.move(self.width() - 40, 0)
 
-    def keyPressEvent(self, event):  # todo refactor
+    def keyPressEvent(self, event):
         combo = event.keyCombination()
         key = combo.key()
         mod = combo.keyboardModifiers()
@@ -549,8 +549,7 @@ class MessageText(QTextEdit):
             # Insert the code block where the cursor is
             cursor = self.textCursor()
             cursor.insertText("```\n\n```")  # Inserting with new lines between to create a space for the code
-            cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor,
-                                1)  # Move cursor inside the code block
+            cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor, 1)  # Move cursor inside the code block
             self.setTextCursor(cursor)
             self.resize(sh)
             self.setFixedHeight(sh.height())
@@ -558,16 +557,7 @@ class MessageText(QTextEdit):
             return  # We handle the event, no need to pass it to the base class
 
         if key == Qt.Key.Key_Enter or key == Qt.Key.Key_Return:
-            if mod == Qt.KeyboardModifier.ShiftModifier:
-                event.setModifiers(Qt.KeyboardModifier.NoModifier)
-
-                se = super().keyPressEvent(event)
-                # self.setFixedSize(self.sizeHint())
-                self.resize(sh)
-                self.setFixedHeight(sh.height())
-                self.parent.sync_send_button_size()
-                return  # se
-            else:
+            if mod != Qt.KeyboardModifier.ShiftModifier:
                 if self.toPlainText().strip() == '':
                     return
 
@@ -576,8 +566,16 @@ class MessageText(QTextEdit):
                 if not page_chat.workflow.responding:
                     self.enterPressed.emit()
                     return
+            # else:
+            #     event.setModifiers(Qt.KeyboardModifier.NoModifier)
 
-        se = super().keyPressEvent(event)
+            #     super().keyPressEvent(event)
+            #     self.resize(sh)
+            #     self.setFixedHeight(sh.height())
+            #     self.parent.sync_send_button_size()
+            #     return
+
+        super().keyPressEvent(event)
         self.resize(sh)
         self.setFixedHeight(sh.height())
         self.parent.sync_send_button_size()
@@ -694,10 +692,10 @@ class Main(QMainWindow):
         self.manager._main_gui = self
         self.manager.load()
 
-        if 'AP_DEV_MODE' in os.environ.keys():
-            from utils.reset import bootstrap_modules, reset_table
-            # reset_table(table_name='modules')
-            bootstrap_modules()
+        # if 'AP_DEV_MODE' in os.environ.keys():
+        #     from utils.reset import bootstrap_modules, reset_table
+        #     # reset_table(table_name='modules')
+        #     bootstrap_modules()
 
         get_stylesheet()  # init stylesheet
 

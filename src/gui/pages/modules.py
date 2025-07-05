@@ -1,6 +1,6 @@
-
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
+import uuid
 
 from gui.widgets.config_widget import ConfigWidget
 from gui.widgets.config_db_tree import ConfigDBTree
@@ -8,13 +8,13 @@ from gui.widgets.config_fields import ConfigFields
 from gui.util import IconButton, find_main_widget, CHBoxLayout, CVBoxLayout, \
     save_table_config, ToggleIconButton
 from utils import sql
-from utils.helpers import set_module_type
+from utils.helpers import set_module_type, get_module_type_folder_id
 
 
 @set_module_type(module_type='Pages')
 class Page_Module_Settings(ConfigDBTree):
-    display_name = 'Modules'
-    icon_path = ":/resources/icon-jigsaw.png"
+    display_name = 'Modulesss'
+    icon_path = ":/resources/icon-jigsa.png"
     page_type = 'any'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
 
     def __init__(self, parent):
@@ -49,6 +49,7 @@ class Page_Module_Settings(ConfigDBTree):
                     'visible': False,
                 },
             ],
+            extra_data=lambda: self.extra_data(),
             add_item_options={'title': 'Add module', 'prompt': 'Enter a name for the module:'},
             del_item_options={'title': 'Delete module', 'prompt': 'Are you sure you want to delete this module?'},
             folder_key='modules',
@@ -69,6 +70,77 @@ class Page_Module_Settings(ConfigDBTree):
         from system import manager
         module_id = item_id
         module_type = manager.modules.get(module_id, {}).get('type', None)
+
+    def extra_data(self):
+        from system import manager
+        extra_data = []
+        module_types = {name: controller for name, controller in manager.modules.type_controllers.items() if name is not None}
+        for module_type in module_types:
+            type_folder_id = get_module_type_folder_id(module_type)
+            module_type_modules = manager.modules.get_modules_in_folder(
+                module_type=module_type,
+                fetch_keys=('name', 'class',)
+            )
+            for module_name, module_class in module_type_modules:
+                # if module_class is None:
+                #     print(f"Module class for {module_name} in {module_type} is None, skipping.")
+                #     continue
+                extra_data.append((module_name, module_name, 1, type_folder_id))
+
+        return extra_data
+
+    # def extra_data(self):
+    #     from system import manager
+    #     extra_data = []
+    #     module_types = {name: controller for name, controller in manager.modules.type_controllers.items() if name is not None}
+    #     for module_type in module_types:
+    #         type_folder_id = get_module_type_folder_id(module_type)
+    #         module_type_modules = manager.modules.get_modules_in_folder(
+    #             module_type=module_type,
+    #             fetch_keys=('name', 'class',)
+    #         )
+    #         for module_name, module_class in module_type_modules:
+    #             # if module_class is None:
+    #             #     print(f"Module class for {module_name} in {module_type} is None, skipping.")
+    #             #     continue
+    #             extra_data.append((module_name, module_name, 1, type_folder_id))
+
+    #     return extra_data
+    #             add_module(
+    #                 module_class=module_class,
+    #                 module_name=module_name,
+    #                 folder_name=module_type,
+    #             )
+    #     from system import manager
+    #     import inspect
+
+    #     # Get the module name and folder (type) from the DB
+    #     module_name = sql.get_scalar('SELECT name FROM modules WHERE id = ?', (item_id,))
+    #     folder_id = sql.get_scalar('SELECT folder_id FROM modules WHERE id = ?', (item_id,))
+    #     if not module_name or not folder_id:
+    #         return None
+    #     folder_name = sql.get_scalar('SELECT name FROM folders WHERE id = ?', (folder_id,))
+    #     if not folder_name:
+    #         return None
+
+    #     # Try to get the class from source
+    #     module_class = manager.modules.get_module_class(folder_name, module_name)
+    #     if not module_class:
+    #         return None
+
+    #     try:
+    #         module_file_path = inspect.getfile(module_class)
+    #         with open(module_file_path, 'r', encoding='utf-8') as file:
+    #             module_source = file.read()
+    #         return {
+    #             'data': module_source,
+    #             'file_path': module_file_path,
+    #             'module_class': module_class.__name__,
+    #             'module_type': folder_name,
+    #         }
+    #     except Exception as e:
+    #         print(f"Error getting inferred data for module {module_name}: {e}")
+    #         return None
 
 class Module_Config_Widget(ConfigFields):
     def __init__(self, parent):

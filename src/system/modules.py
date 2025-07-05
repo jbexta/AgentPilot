@@ -171,6 +171,9 @@ class ModulesController(ManagerController):
         """
         Loads and registers modules of the specified type from the database and source code.
         """
+        if self.module_type is not None:
+            self.load_source_modules()
+
         rows = sql.get_results(f"""
             WITH RECURSIVE folder_path AS (
                 SELECT id, name, parent_id, name AS path
@@ -190,19 +193,17 @@ class ModulesController(ManagerController):
                 fp.path AS folder_path
             FROM modules m
             JOIN folder_path fp ON m.folder_id = fp.id
-	        WHERE m.locked = 1
+	        -- WHERE m.locked = 1
         """, (self.module_type,))
 
-        if self.module_type is not None:
-            self.load_source_modules()
-
         for row in rows:
-            uuid, name, config, metadata, locked, folder_path = row
-            module_path = self.get_module_path(name)
-            if locked == 1:
-                continue
-            else:
-                self.load_db_module(module_path, row)
+            module_name = row[1]
+            module_path = self.get_module_path(module_name)
+            self.load_db_module(module_path, row)
+            # if locked == 1:
+            #     continue
+            # else:
+            #     self.load_db_module(module_path, row)
 
     def load_db_module(self, module_path, row):
         uuid, module_name, config, metadata, locked, folder_path = row
@@ -230,6 +231,27 @@ class ModulesController(ManagerController):
 
         except Exception as e:
             print(f"Error loading dynamic module {module_name}: {str(e)}")
+
+    def load_source_modules(self):
+        """
+        Loads source modules by discovering them, importing, extracting their classes,
+        and storing them.
+        """
+        discovered_module_infos = self.discover_modules(self.load_to_path)
+
+        for cls, module_path_str in discovered_module_infos:
+            module_name = module_path_str.split('.')[-1]
+
+            if cls:  # Ensure a class was indeed found and extracted
+                self[module_name] = (
+                    None,  # UUID (not applicable for source modules)
+                    module_name,  # Simple name of the module
+                    {},  # Config (empty for source modules by default)
+                    cls,  # The extracted class from the module
+                    {},  # Metadata (empty for source modules by default)
+                    1,  # Locked (source modules are typically considered locked)
+                    '',  # Folder path (can be derived if needed, or left empty)
+                )
 
     def discover_modules(self, package_path: str, discovered_items=None):
         """
@@ -284,66 +306,6 @@ class ModulesController(ManagerController):
                 except Exception as e:  # Catch other potential errors during class extraction
                     print(f"Error extracting class from module {inner_module_full_path}: {e}")
         return discovered_items
-
-    # def discover_modules(self, module_path: str, discovered=None):
-    #     """Discover available source module names without importing them."""
-    #     if discovered is None:
-    #         discovered = set()
-    #
-    #     try:
-    #         module = importlib.import_module(module_path)
-    #         module_path_iter = pkgutil.iter_modules(module.__path__)
-    #     except (ImportError, AttributeError):
-    #         return discovered
-    #
-    #     for _, name, is_pkg in module_path_iter:
-    #         if name == 'base' or name.startswith('_'):
-    #             continue
-    #
-    #         inner_module_path = f"{module_path}.{name}"
-    #         if is_pkg:
-    #             # Recursively discover sub-packages
-    #             self.discover_modules(inner_module_path, discovered)
-    #         else:
-    #             cls = self.extract_module_class(module, default=None)
-    #             discovered.add((cls, inner_module_path))
-    #
-    #     return discovered
-
-    # def load_source_modules(self):
-    #     modules = self.discover_modules(self.load_to_path)
-    #     for cls, module_path in modules:
-    #         module_name = module_path.split('.')[-1]
-    #         self[module_name] = (
-    #             None,  # UUID is not applicable for source modules
-    #             module_name,
-    #             {},  # No config for source modules
-    #             cls,  # Class extracted from the module
-    #             {},  # No metadata for source modules
-    #             1,  # Locked
-    #             '',  # No folder path
-    #         )
-
-    def load_source_modules(self):
-        """
-        Loads source modules by discovering them, importing, extracting their classes,
-        and storing them.
-        """
-        discovered_module_infos = self.discover_modules(self.load_to_path)
-
-        for cls, module_path_str in discovered_module_infos:
-            module_name = module_path_str.split('.')[-1]
-
-            if cls:  # Ensure a class was indeed found and extracted
-                self[module_name] = (
-                    None,  # UUID (not applicable for source modules)
-                    module_name,  # Simple name of the module
-                    {},  # Config (empty for source modules by default)
-                    cls,  # The extracted class from the module
-                    {},  # Metadata (empty for source modules by default)
-                    1,  # Locked (source modules are typically considered locked)
-                    '',  # Folder path (can be derived if needed, or left empty)
-                )
 
     def get_modules(self, fetch_keys=('name',)):
         """

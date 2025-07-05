@@ -123,6 +123,8 @@ class ConfigDBTree(ConfigTree):
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', {})
         self.propagate = False
+
+        self.extra_data = kwargs.get('extra_data', None)
         # # # self.db_config_field = kwargs.get('db_config_field', 'config')
         # # # self.config_buttons = kwargs.get('config_buttons', None)
         # # # self.user_editable = True
@@ -224,6 +226,10 @@ class ConfigDBTree(ConfigTree):
 
         # query = self.query if not self.filterable else self.query.replace('{{kind}}', self.filter_widget.get_kind())
         data = sql.get_results(query=self.query, params=self.query_params)
+        if callable(self.extra_data):
+            extra_data = self.extra_data()
+            data.extend(extra_data)
+
         self.tree.load(
             data=data,
             append=append,

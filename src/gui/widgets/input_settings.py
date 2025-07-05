@@ -95,6 +95,7 @@ class InputSettings(ConfigJoined):
                         'step': 1,
                         'row_key': 0,
                         'visibility_predicate': lambda fields: fields.config.get('looper', False),
+                        'has_toggle': True,
                         'default': 10,
                     },
                 ]

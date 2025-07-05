@@ -313,10 +313,16 @@ class ConfigFields(ConfigWidget):
             visibility_predicate = param_dict.get('visibility_predicate', None)
             if visibility_predicate and callable(visibility_predicate):
                 is_visible = visibility_predicate(self)
-                widget.setVisible(is_visible)
                 label_widget = getattr(self, f'{key}_lbl', None)
+                toggle_box = getattr(self, f'{key}_tgl', None)
                 if label_widget:
                     label_widget.setVisible(is_visible)
+
+                if toggle_box:
+                    toggle_box.setVisible(is_visible)
+                    widget.setVisible(is_visible and toggle_box.isChecked())
+                else:
+                    widget.setVisible(is_visible)
 
     def toggle_widget(self, toggle, key, _):
         widget = getattr(self, key)

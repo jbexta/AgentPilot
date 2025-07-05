@@ -653,35 +653,6 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
 
     return colored_pixmap
 
-#
-# class BaseComboBox(QComboBox):
-#     def __init__(self, parent=None, **kwargs):
-#         super().__init__(parent)
-#         self.items_have_keys = kwargs.get('items_have_keys', True)
-#         self.setFixedHeight(25)
-#
-#     def last_item(self):
-#         if self.model().rowCount() == 0:
-#             return None
-#         last_item = self.model().item(self.model().rowCount() - 1)
-#         return last_item
-#
-#     def set_value(self, key):  # todo rename
-#         # items_have_keys =
-#         index = self.findData(key)  # if self.items_have_keys else self.findText(key)
-#         if index == -1:
-#             last_item = self.last_item()
-#             if last_item:
-#                 # Create a new item with the missing model key and set its color to red, and set the data to the model key
-#                 item = QStandardItem(key)
-#                 item.setForeground(QColor('red'))
-#                 if self.items_have_keys:
-#                     item.setData(key, Qt.UserRole)
-#                 self.model().appendRow(item)
-#                 self.setCurrentIndex(self.model().rowCount() - 1)
-#                 return
-#         self.setCurrentIndex(index)
-
 
 class WrappingDelegate(QStyledItemDelegate):
     def __init__(self, wrap_columns, parent=None):

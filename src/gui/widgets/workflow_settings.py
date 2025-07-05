@@ -1,4 +1,3 @@
-
 import json
 import math
 import sqlite3
@@ -112,7 +111,7 @@ class WorkflowSettings(ConfigWidget):
         self.inputs_in_view: Dict[Tuple[str, str], ConnectionLine] = {}  # (source_member_id, target_member_id): line
         # self.boxes_in_view: List[List[RoundedRectWidget]] = []
 
-        self.new_lines: Optional[List[InsertableLine]] = None
+        self.new_lines: Optional[List[ConnectionLine]] = None
         self.new_agents: Optional[List[Tuple[QPointF, DraggableMember]]] = None  # InsertableMember]]] = None
         self.adding_line: Optional[ConnectionLine] = None
         self.del_pairs: Optional[Any] = None
@@ -441,7 +440,8 @@ class WorkflowSettings(ConfigWidget):
 
         else:
             tree_container = find_attribute(self.parent.parent, 'tree_container', None)
-            tree_container.setVisible(not state)
+            if tree_container:
+                tree_container.setVisible(not state)
 
         self.compact_mode_back_button.setVisible(state)
 
@@ -532,7 +532,6 @@ class WorkflowSettings(ConfigWidget):
         self.view.setFocus()
 
     def add_insertable_input(self, item, member_bundle):
-        # if self.compact_mode:
         self.set_edit_mode(True)
         if self.new_lines:
             return
@@ -548,12 +547,12 @@ class WorkflowSettings(ConfigWidget):
         for inp in all_inputs:
             source_member_index, member_index, config = inp
             self.new_lines.append(
-                InsertableLine(
+                ConnectionLine(
                     self,
-                    member_bundle=member_bundle,
-                    source_member_index=source_member_index,
-                    member_index=member_index,
+                    None,
+                    None,
                     config=config,
+                    temp_indices=(source_member_index, member_index, self.new_agents)
                 )
             )
 
@@ -903,6 +902,56 @@ class WorkflowSettings(ConfigWidget):
                 elif chosen_action.text() == "Explode":
                     self.parent.workflow_buttons.explode_selected_item()
 
+        def closest_connection_point(self, mouse_screen_pos, use_point='output'):
+            """Return (member, distance) of the closest output_point to mouse_screen_pos within max_dist, or (None, None)."""
+            closest_member = None
+            max_dist = 20
+            max_inward_x_dist = 10
+            
+            closest_dist = max_dist + 1
+            for member in self.parent.members_in_view.values():
+                if not isinstance(member, DraggableMember):
+                    continue
+
+                if use_point == 'output':
+                    point_scene_pos = member.output_point.scenePos()
+                elif use_point == 'input':
+                    point_scene_pos = member.input_point.scenePos()
+                else:
+                    raise ValueError(f"Invalid point type: {use_point}")
+
+                view = self
+                point_view_pos = view.mapFromScene(point_scene_pos)
+                point_view_pos_int = point_view_pos.toPoint() if hasattr(point_view_pos, "toPoint") else point_view_pos
+                if not view.viewport().rect().contains(point_view_pos_int):
+                    continue
+                point_screen_pos = view.viewport().mapToGlobal(point_view_pos_int)
+                dx = point_screen_pos.x() - mouse_screen_pos.x()
+                dy = point_screen_pos.y() - mouse_screen_pos.y()
+                dist = (dx ** 2 + dy ** 2) ** 0.5
+
+                # Inward/outward logic
+                inward = False
+                x_dist = abs(dx)
+                if use_point == 'output':
+                    if mouse_screen_pos.x() < point_screen_pos.x():
+                        inward = True
+                elif use_point == 'input':
+                    if mouse_screen_pos.x() > point_screen_pos.x():
+                        inward = True
+
+                if inward and x_dist > max_inward_x_dist:
+                    continue
+
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_member = member
+
+            if closest_dist <= max_dist:
+                return closest_member
+                
+            return None
+
         def mouseReleaseEvent(self, event):
             self._is_panning = False
             self._mouse_press_pos = None
@@ -944,6 +993,33 @@ class WorkflowSettings(ConfigWidget):
                 event.accept()
                 return
 
+            # --- New Logic: InsertableLine on closest_connection_point ---
+            if event.button() == Qt.LeftButton:
+                if self.parent.adding_line is not None:
+
+                    mouse_screen_pos = self.viewport().mapToGlobal(event.pos())
+                    closest_member = self.closest_connection_point(mouse_screen_pos, use_point='input')
+                    if closest_member is None:
+                        self.parent.cancel_new_line()
+                    else:
+                        self.parent.add_input(closest_member.id)
+
+
+                else:
+                    mouse_screen_pos = self.viewport().mapToGlobal(event.pos())
+                    closest_member = self.closest_connection_point(mouse_screen_pos, use_point='output')
+                    if closest_member is not None:
+                        # # Check if mouse is over the draggable member
+                        # mouse_scene_pos = self.mapToScene(event.pos())
+                        # item = self.scene().itemAt(mouse_scene_pos, self.transform())
+                        # if item is closest_member or (hasattr(item, 'parentItem') and item.parentItem() is closest_member):
+                        #     # Mouse is on the member, do not select or start InsertableLine
+                        #     return
+                        # Begin InsertableLine from closest_member
+                        self.parent.adding_line = ConnectionLine(self.parent, closest_member)
+                        self.parent.scene.addItem(self.parent.adding_line)
+                        return
+
             # --- Default/Fallback Behavior ---
 
             # Let the event propagate to items or start a default drag (e.g., rubber band in mini_view)
@@ -971,33 +1047,47 @@ class WorkflowSettings(ConfigWidget):
 
             self._is_panning = False
 
-            # If no item handled it, check for connection creation.
-            mouse_scene_position = self.mapToScene(event.pos())
-            for member_id, member in self.parent.members_in_view.items():
-                if isinstance(member, DraggableMember):
-                    member_width = member.boundingRect().width()
-                    input_rad = int(member_width / 2.5)
-                    if self.parent.adding_line:
-                        input_point_pos = member.input_point.scenePos()
-                        if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
-                            self.parent.add_input(member_id)
-                            return
-                    else:
-                        output_point_pos = member.output_point.scenePos()
-                        output_point_pos.setX(output_point_pos.x() + 2)
-                        x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
-                        if x_diff_is_pos:
-                            input_rad = 20
-                        if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
-                            self.parent.adding_line = ConnectionLine(self.parent, member)
-                            self.parent.scene.addItem(self.parent.adding_line)
-                            return
+            # # If no item handled it, check for connection creation.
+            # mouse_scene_position = self.mapToScene(event.pos())
+            # for member_id, member in self.parent.members_in_view.items():
+            #     if isinstance(member, DraggableMember):
+            #         member_width = member.boundingRect().width()
+            #         input_rad = int(member_width / 2.5)
+            #         if self.parent.adding_line:
+            #             input_point_pos = member.input_point.scenePos()
+            #             if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
+            #                 self.parent.add_input(member_id)
+            #                 return
+            #         else:
+            #             output_point_pos = member.output_point.scenePos()
+            #             output_point_pos.setX(output_point_pos.x() + 2)
+            #             x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
+            #             if x_diff_is_pos:
+            #                 input_rad = 20
+            #             if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
+            #                 self.parent.adding_line = ConnectionLine(self.parent, member)
+            #                 self.parent.scene.addItem(self.parent.adding_line)
+            #                 return
 
             self.parent.cancel_new_line()
 
         def mouseMoveEvent(self, event):
             update = False
             mouse_point = self.mapToScene(event.pos())
+            # Get mouse position in global (screen) coordinates
+            mouse_screen_pos = self.viewport().mapToGlobal(event.pos())
+
+            # --- Only show the closest output_point within 20px ---
+            closest_member = self.closest_connection_point(mouse_screen_pos, use_point='output')
+            for member in self.parent.members_in_view.values():
+                if isinstance(member, DraggableMember):
+                    member.output_point.setVisible(member is closest_member)
+
+            # # Update output point visibility for all members
+            # for member in self.parent.members_in_view.values():
+            #     if isinstance(member, DraggableMember):
+            #         member.refresh_output_point_visibility(mouse_screen_pos)
+
             if self.parent.adding_line:
                 self.parent.adding_line.updateEndPoint(mouse_point)
                 update = True
@@ -2106,7 +2196,7 @@ class DraggableMember(QGraphicsObject):
         def __init__(self, parent, diameter):
             super().__init__(0, 0, diameter, diameter, parent=parent)
             from gui.style import TEXT_COLOR
-            self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
+            self.setPen(QPen(QColor(TEXT_COLOR), 0) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
             self.setAcceptHoverEvents(True)
 
     class MemberProxy(QGraphicsProxyWidget):
@@ -2496,10 +2586,8 @@ class DraggableMember(QGraphicsObject):
             self.setPos(center)
 
 
-class BaseLine(QGraphicsPathItem):
-    """A base class for lines to remove duplicated path calculation logic."""
-
-    def __init__(self, parent, config=None):
+class ConnectionLine(QGraphicsPathItem):
+    def __init__(self, parent, source_member, target_member=None, config=None, *, temp_indices=None):
         super().__init__()
         from gui.style import TEXT_COLOR
         self.parent = parent
@@ -2511,11 +2599,68 @@ class BaseLine(QGraphicsPathItem):
         self.color = QColor(TEXT_COLOR)
         self.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.setZValue(-1)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+        # temp_indices: (source_index, target_index, new_agents_ref)
+        self.temp_indices = temp_indices
+        if temp_indices is not None:
+            source_index, target_index, new_agents = temp_indices
+            self.source_member_index = source_index
+            self.target_member_index = target_index
+            self.new_agents = new_agents
+            self.source_member_id = None
+            self.target_member_id = None
+            self.start_point = None
+            self.end_point = None
+        else:
+            self.source_member_id = source_member.id
+            self.target_member_id = target_member.id if target_member else None
+            self.start_point = source_member.output_point
+            self.end_point = target_member.input_point if target_member else None
+        self.updatePath()
+
+    def updateEndPoint(self, end_point_pos):
+        # Use the new closest_connection_point method from the view
+        view = self.parent.view
+        mouse_screen_pos = view.viewport().mapToGlobal(view.mapFromScene(end_point_pos.toPoint() if hasattr(end_point_pos, "toPoint") else end_point_pos))
+        closest_member = view.closest_connection_point(mouse_screen_pos, use_point='input')
+
+        if closest_member and closest_member.id != self.source_member_id:
+            self.end_point = closest_member.input_point.scenePos()
+            self.config['looper'] = self.parent.check_for_circular_references(closest_member.id, [self.source_member_id])
+        else:
+            self.end_point = end_point_pos
+            self.config['looper'] = False
+        self.updatePath()
 
     def updatePosition(self):
         self.updatePath()
         if self.scene():
             self.scene().update(self.scene().sceneRect())
+
+    def updatePath(self):
+        if self.temp_indices:
+            source_index, target_index, new_agents = self.temp_indices
+            start_point = new_agents[source_index][1].output_point.scenePos()
+            end_point = new_agents[target_index][1].input_point.scenePos()
+        else:
+            if self.end_point is None:
+                return
+            start_point = self.start_point.scenePos() if isinstance(self.start_point, QGraphicsItem) else self.start_point
+            end_point = self.end_point.scenePos() if isinstance(self.end_point, QGraphicsItem) else self.end_point
+        
+        start_point.setX(start_point.x() - 2)
+        end_point.setX(end_point.x() - 2)
+
+        path = self._calculate_path(start_point, end_point)
+        self.setPath(path)
+        self.updateSelectionPath()
+
+    @staticmethod
+    def blend_colors(color1, color2, ratio):
+        r = int(color1.red() * (1 - ratio) + color2.red() * ratio)
+        g = int(color1.green() * (1 - ratio) + color2.green() * ratio)
+        b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
+        return QColor(r, g, b)
 
     def _calculate_path(self, start_point, end_point):
         """Calculates and returns the QPainterPath for the line."""
@@ -2551,7 +2696,7 @@ class BaseLine(QGraphicsPathItem):
             mid_point = QPointF(start_point.x() - (x_diff / 2), line_y)
             self.looper_midpoint = mid_point
 
-            side_length, gap = 15.0, 4.0
+            side_length, gap = 15.0, 2.0
             triangle_height = (side_length * math.sqrt(3)) / 2
             p_base_top = QPointF(mid_point.x(), mid_point.y() - side_length / 2.0)
             p_base_bottom = QPointF(mid_point.x(), mid_point.y() + side_length / 2.0)
@@ -2603,51 +2748,9 @@ class BaseLine(QGraphicsPathItem):
     def shape(self):
         return self.selection_path if self.selection_path else super().shape()
 
-
-class InsertableLine(BaseLine):
-    def __init__(self, parent, member_bundle, source_member_index, member_index, config=None):
-        super().__init__(parent, config)
-        self.member_bundle = member_bundle.copy()
-        self.source_member_index = source_member_index
-        self.target_member_index = member_index
-        self.updatePath()
-
     def paint(self, painter, option, widget):
-        line_width = 4 if self.isSelected() else 2
-        current_pen = self.pen()
-        current_pen.setWidth(line_width)
-
-        has_no_mappings = len(self.config.get('mappings.data', [])) == 0
-        if self.config.get('conditional', False):
-            current_pen.setStyle(Qt.DashLine)
-        if has_no_mappings:
-            color = current_pen.color()
-            color.setAlphaF(0.5)
-            current_pen.setColor(color)
-
-        painter.setPen(current_pen)
-        painter.drawPath(self.path())
-
-    def updatePath(self):
-        start_point = self.parent.new_agents[self.source_member_index][1].output_point.scenePos()
-        end_point = self.parent.new_agents[self.target_member_index][1].input_point.scenePos()
-        path = self._calculate_path(start_point, end_point)
-        self.setPath(path)
-        self.updateSelectionPath()
-
-
-class ConnectionLine(BaseLine):
-    def __init__(self, parent, source_member, target_member=None, config=None):
-        super().__init__(parent, config)
-        self.setFlag(QGraphicsItem.ItemIsSelectable)
-        self.source_member_id = source_member.id
-        self.target_member_id = target_member.id if target_member else None
-        self.start_point = source_member.output_point
-        self.end_point = target_member.input_point if target_member else None
-        self.updatePath()
-
-    def paint(self, painter, option, widget):
-        line_width = 4 if self.isSelected() else 2
+        # For temp lines, use thicker width
+        line_width = 4 if self.isSelected() and self.temp_indices else (2 if self.isSelected() else 0)
         current_pen = self.pen()
         current_pen.setWidth(line_width)
 
@@ -2656,87 +2759,32 @@ class ConnectionLine(BaseLine):
         if is_conditional:
             current_pen.setStyle(Qt.DashLine)
 
-        if not mappings_data:
-            faded_color = current_pen.color()
-            faded_color.setAlphaF(0.31)
-            current_pen.setColor(faded_color)
-            painter.setPen(current_pen)
-            painter.drawPath(self.path())
+        if self.temp_indices:
+            has_no_mappings = len(self.config.get('mappings.data', [])) == 0
+            if has_no_mappings:
+                color = current_pen.color()
+                color.setAlphaF(0.5)
+                current_pen.setColor(color)
         else:
-            from gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
-            color_codes = {"Output": QColor(TEXT_COLOR), "Message": QColor(TEXT_COLOR), "Param": QColor(PARAM_COLOR),
-                           "Structure": QColor(STRUCTURE_COLOR)}
-
-            gradient = QLinearGradient(self.path().pointAtPercent(0), self.path().pointAtPercent(1))
-            source_colors = list(
-                dict.fromkeys([color_codes.get(m['source'], QColor(TEXT_COLOR)) for m in mappings_data]))
-            target_colors = list(
-                dict.fromkeys([color_codes.get(m['target'], QColor(TEXT_COLOR)) for m in mappings_data]))
-
-            num_dashes = int(self.path().length() / 10)
-            if len(source_colors) > 1 and len(target_colors) == 1:
-                for i in range(num_dashes):
-                    gradient.setColorAt(i / num_dashes, source_colors[i % len(source_colors)])
-                    gradient.setColorAt((i + 1) / num_dashes,
-                                        self.blend_colors(source_colors[i % len(source_colors)], target_colors[0], 0.5))
-            elif len(source_colors) > 1 or len(target_colors) > 1:
-                for i in range(num_dashes):
-                    gradient.setColorAt(i / num_dashes, source_colors[i % len(source_colors)])
-                    gradient.setColorAt((i + 1) / num_dashes, target_colors[i % len(target_colors)])
-            else:
-                gradient.setColorAt(0, source_colors[0] if source_colors else QColor(TEXT_COLOR))
-                gradient.setColorAt(1, target_colors[0] if target_colors else QColor(TEXT_COLOR))
-
-            current_pen.setBrush(gradient)
-            painter.setPen(current_pen)
-            painter.drawPath(self.path())
-
-    @staticmethod
-    def blend_colors(color1, color2, ratio):
-        r = int(color1.red() * (1 - ratio) + color2.red() * ratio)
-        g = int(color1.green() * (1 - ratio) + color2.green() * ratio)
-        b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
-        return QColor(r, g, b)
-
-    def updateEndPoint(self, end_point_pos):
-        closest_member = None
-        min_dist = float('inf')
-        for member in self.parent.members_in_view.values():
-            if member.id == self.source_member_id:
-                continue
-            dist = (member.input_point.scenePos() - end_point_pos).manhattanLength()
-            if dist < min_dist:
-                min_dist = dist
-                closest_member = member
-
-        if min_dist < 20 and closest_member:
-            self.end_point = closest_member.input_point.scenePos()
-            self.config['looper'] = self.parent.check_for_circular_references(closest_member.id,
-                                                                              [self.source_member_id])
-        else:
-            self.end_point = end_point_pos
-            self.config['looper'] = False
-        self.updatePath()
-
-    def updatePath(self):
-        if self.end_point is None:
-            return
-        start_pos = self.start_point.scenePos() if isinstance(self.start_point, QGraphicsItem) else self.start_point
-        end_pos = self.end_point.scenePos() if isinstance(self.end_point, QGraphicsItem) else self.end_point
-        path = self._calculate_path(start_pos, end_pos)
-        self.setPath(path)
-        self.updateSelectionPath()
+            if not mappings_data:
+                faded_color = current_pen.color()
+                faded_color.setAlphaF(0.31)
+                current_pen.setColor(faded_color)
+                
+        painter.setPen(current_pen)
+        painter.drawPath(self.path())
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent, is_input):
-        super().__init__(0, 0, 4, 4, parent)
+        super().__init__(0, 0, 3, 3, parent)
         self.is_input = is_input
         # self.setBrush(QBrush(Qt.darkGray))
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
         from gui.style import TEXT_COLOR
         self.setPen(QPen(QColor(TEXT_COLOR), 0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.connections = []
+        self.setVisible(False)
 
     def setHighlighted(self, highlighted):
         if highlighted:

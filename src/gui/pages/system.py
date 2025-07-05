@@ -193,7 +193,7 @@ class Page_System_Settings(ConfigJoined):
                 {
                     'text': 'Auto-bake',
                     'type': bool,
-                    'tooltip': 'For modules and entities, automatically bake changes to source code',
+                    'tooltip': 'Automatically bake changes to source code when modified. This only applies for items that are already baked.',
                     'default': True,
                 },
                 {
