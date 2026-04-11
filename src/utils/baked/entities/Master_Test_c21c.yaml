@@ -1,0 +1,52 @@
+uuid: c21cd164-dac6-4c7b-b1a7-76130c5e724f
+name: Master Test
+config:
+  _TYPE: workflow
+  name: Master Test
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '5'
+    linked_id: null
+    loc_x: 36
+    loc_y: 147
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: user
+      name: You
+  - id: '6'
+    linked_id: null
+    loc_x: 149
+    loc_y: 145
+    width: 450.0
+    height: 350.0
+    config:
+      chat.model:
+        _model_name: claude-sonnet-4-6
+        kind: CHAT
+        provider: litellm
+        model_params:
+          structure.data:
+          - attribute: name
+            type: str
+            req: true
+          xml_roles.data: []
+      chat.display_markdown: true
+      chat.sys_msg: ''
+      chat.preload.data: []
+      _format_block_keys:
+      - chat.sys_msg
+      _TYPE: agent
+      name: Agent
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params:
+  - name: jlk
+    description: ''
+    type: String
+    req: true

@@ -6,7 +6,7 @@ import re
 from sqlite3 import IntegrityError
 from typing import Dict, Any, List
 
-from PySide6.QtCore import QSize, Qt, QMetaObject, Q_ARG
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 
 from utils.filesystem import unsimplify_path
@@ -19,45 +19,51 @@ from gui import system
 import json
 from utils import resources_rc, sql
 
+AUDIO_EXTS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.wma'}
+IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff'}
+VIDEO_EXTS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.wmv', '.flv'}
+ALL_MEDIA_EXTS = VIDEO_EXTS | IMAGE_EXTS | AUDIO_EXTS
+
+
+def get_media_type_from_ext(ext):
+    if ext in VIDEO_EXTS:
+        return 'video'
+    elif ext in IMAGE_EXTS:
+        return 'image'
+    elif ext in AUDIO_EXTS:
+        return 'audio'
+    return None
+
+
+def get_media_preview_class(media_type=None, ext=None):
+    from gui.media_previews.image import ImagePreview
+    from gui.media_previews.video import VideoPreview
+    from gui.media_previews.audio import AudioPreview
+
+    if not media_type:
+        media_type = get_media_type_from_ext(ext)
+    preview_dict = {
+        'video': VideoPreview,
+        'image': ImagePreview,
+        'audio': AudioPreview,
+    }
+    return preview_dict.get(media_type, None)
+
+
+def get_media_icon_path(media_type=None, ext=None):
+    if not media_type:
+        media_type = get_media_type_from_ext(ext)
+    icon_dict = {
+        'video': ':/resources/icon-video.png',
+        'image': ':/resources/icon-image.png',
+        'audio': ':/resources/icon-audio.png',
+    }
+    return icon_dict.get(media_type, ':/resources/icon-file.png')
+
 
 class BaseManager(dict):
     """
     The `BaseManager` class provides a base for managing data, including loading, saving, adding, and deleting items from a database table.
-
-    Attributes
-    ----------
-    system : SystemManager
-        Reference to the system system.manager.
-    db_connector : object, optional
-        Database connector instance used for data operations. (Default is SqliteConnector)
-    table_name : str, optional
-        Name of the database table managed by this system.manager.
-    query : str, optional
-        SQL query string for loading data.
-    query_params : tuple or dict, optional
-        Parameters for the SQL query.
-    load_columns : list of str, optional
-        List of columns to load from the database. (Default is None if query is provided)
-    folder_key : str, optional
-        Key used in `folders`.`type`. (Default is None)
-    default_fields : dict, optional
-        Default fields to apply when creating new items. (Default is {})
-    add_item_options : dict, optional
-        Options for adding new items (e.g., dialog titles/prompts).
-    del_item_options : dict, optional
-        Options for deleting items (e.g., dialog titles/prompts).
-    store_data : bool, optional
-        Indicates whether to store data in db_connector. (Default is True)
-    config_is_workflow : bool, optional
-        Indicates if the config field represents a workflow. (Default is False)
-
-    Methods
-    -------
-    __init__(system, **kwargs)
-        Initializes the BaseManager with configuration and database connector.
-    load()
-        Loads data from the database into the system.manager.
-    # ... (other methods not shown in this excerpt)
     """
     def __init__(self, system, **kwargs):
         super().__init__()
@@ -116,9 +122,6 @@ class BaseManager(dict):
 
         self.db_connector.define_table(self.table_name)  # incase it's not defined yet
     
-    # def get_json(self):
-    #     return []
-
     def load(self):
         if not self.store_data:
             return
@@ -226,17 +229,20 @@ def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
     if model_json is None:
         return {
             'kind': 'CHAT',
-            'model_name': 'mistral/mistral-large-latest',
+            '_model_name': 'mistral/mistral-large-latest',
             'model_params': {},
             'provider': 'litellm',
         }
     try:
-        return convert_json_to_obj(model_json)
+        obj = convert_json_to_obj(model_json)
+        if 'model_name' in obj and '_model_name' not in obj:
+            obj['_model_name'] = obj.pop('model_name')
+        return obj
 
     except json.JSONDecodeError:  # temp patch until 0.4.0
         return {
             'kind': 'CHAT',
-            'model_name': model_json,
+            '_model_name': model_json,
             'model_params': {},
             'provider': 'litellm',
         }
@@ -265,27 +271,34 @@ def get_json_value(json_str, key, default=None):
         return default
 
 
-def get_id_from_folder_path(folder_path):
+def get_id_from_folder_path(folder_path, folder_type=None):
     """
-    Get the folder ID from a folder path, or None if not found.
-    The folder_path should be folder names separated by '/' (e.g., 'parent/child').
+    Get the folder ID from a folder path, optionally creating
+    missing folders when ``folder_type`` is provided.
     """
-    if not folder_path or folder_path == "":
+    if not folder_path:
         return None
-        
+
     path_parts = folder_path.split('/')
     current_parent_id = None
-    
+
     for part in path_parts:
+        parent_clause = "IS NULL" if current_parent_id is None else "= ?"
+        params = (part,) if current_parent_id is None else (part, current_parent_id)
         folder_id = sql.get_scalar(
-            "SELECT id FROM folders WHERE name = ? AND parent_id " + 
-            ("IS NULL" if current_parent_id is None else "= ?"),
-            (part,) if current_parent_id is None else (part, current_parent_id)
+            f"SELECT id FROM folders WHERE name = ? AND parent_id {parent_clause}",
+            params,
         )
         if not folder_id:
-            return None
+            if not folder_type:
+                return None
+            sql.execute(
+                "INSERT INTO folders (name, parent_id, type) VALUES (?, ?, ?)",
+                (part, current_parent_id, folder_type),
+            )
+            folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
         current_parent_id = folder_id
-        
+
     return current_parent_id
 
 
@@ -298,8 +311,7 @@ def get_module_type_folder_id(module_type, config={}):  # todo clean
         WHERE REPLACE(LOWER(name), ' ', '_') = ?
             AND type = 'modules'
     """, (module_type.lower().replace(' ', '_'),))
-    # if module_type.lower() == 'finance_apis':
-    #     pass
+    
     if not folder_id:
         sql.execute("""
             INSERT INTO folders (name, type, config)
@@ -323,13 +335,6 @@ def set_module_type(module_type, plugin=None, settings=None):
             cls._ap_plugin_type = plugin
         if settings:
             cls._ap_settings_module = settings
-        return cls
-    return decorator
-
-
-def mini_avatar():
-    def decorator(cls):
-        cls._ap_mini_avatar = True
         return cls
     return decorator
 
@@ -454,7 +459,185 @@ def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str
         return default_name
 
 
+def resolve_linked_config(linked_id, visited=None):
+    """Fetch config from DB for a linked_id like 'entities.{uuid}'.
+
+    Recursively resolves nested linked_ids in the config.
+    Uses visited set to detect circular references.
+
+    Parameters
+    ----------
+    linked_id : str
+        Format: 'table.uuid'
+    visited : set, optional
+        Set of already-visited linked_ids for cycle detection.
+
+    Returns
+    -------
+    dict or None
+        Resolved config, or None if entity not found.
+    """
+    if not linked_id:
+        return None
+
+    if visited is None:
+        visited = set()
+
+    if linked_id in visited:
+        return None
+
+    visited.add(linked_id)
+
+    parts = linked_id.split('.', 1)
+    if len(parts) != 2:
+        return None
+
+    table, entity_uuid = parts
+
+    config_json = sql.get_scalar(
+        f"SELECT config FROM `{table}` WHERE uuid = ?",
+        (entity_uuid,)
+    )
+    if config_json is None:
+        return None
+
+    config = json.loads(config_json) if isinstance(config_json, str) else config_json
+
+    # Recursively resolve nested linked_ids in members
+    members = config.get('members', [])
+    for member in members:
+        nested_linked_id = member.get('linked_id')
+        if nested_linked_id:
+            nested_config = resolve_linked_config(nested_linked_id, visited=set(visited))
+            if nested_config is not None:
+                member['config'] = nested_config
+
+    return config
+
+
+def save_linked_config(linked_id, config):
+    """Write config back to the source entity.
+
+    Parameters
+    ----------
+    linked_id : str
+        Format: 'table.uuid'
+    config : dict
+        Config to save.
+    """
+    if not linked_id:
+        return
+
+    parts = linked_id.split('.', 1)
+    if len(parts) != 2:
+        return
+
+    table, entity_uuid = parts
+    config_to_save = {k: v for k, v in config.items() if k != 'linked_id'}
+    sql.execute(
+        f"UPDATE `{table}` SET config = ? WHERE uuid = ?",
+        (json.dumps(config_to_save), entity_uuid)
+    )
+
+    # Recursively save nested linked members
+    for member in config_to_save.get('members', []):
+        nested_linked_id = member.get('linked_id')
+        if nested_linked_id:
+            nested_config = member.get('config', {})
+            save_linked_config(nested_linked_id, nested_config)
+
+
+def has_circular_link(linked_id, existing_chain=None):
+    """Check if linking to linked_id would create a cycle.
+
+    Parameters
+    ----------
+    linked_id : str
+        The linked_id to check.
+    existing_chain : set, optional
+        Set of linked_ids already in the chain.
+
+    Returns
+    -------
+    bool
+        True if a cycle would be created.
+    """
+    if not linked_id:
+        return False
+
+    if existing_chain is None:
+        existing_chain = set()
+
+    if linked_id in existing_chain:
+        return True
+
+    existing_chain.add(linked_id)
+
+    parts = linked_id.split('.', 1)
+    if len(parts) != 2:
+        return False
+
+    table, entity_uuid = parts
+    config_json = sql.get_scalar(
+        f"SELECT config FROM `{table}` WHERE uuid = ?",
+        (entity_uuid,)
+    )
+    if config_json is None:
+        return False
+
+    config = json.loads(config_json) if isinstance(config_json, str) else config_json
+
+    members = config.get('members', [])
+    for member in members:
+        nested_linked_id = member.get('linked_id')
+        if nested_linked_id:
+            if has_circular_link(nested_linked_id, existing_chain=set(existing_chain)):
+                return True
+
+    return False
+
+
+def get_entity_workflow_config(entity_val):
+    """Build a workflow config from an entity field value.
+
+    Parameters
+    ----------
+    entity_val : str
+        Stored value in ``name:table:uuid`` format.
+
+    Returns
+    -------
+    dict
+        A workflow config, or empty dict if the value is invalid.
+    """
+    if not entity_val:
+        return {}
+    parts = entity_val.rsplit(':', 2)
+    if len(parts) != 3:
+        return {}
+    _, table, uuid = parts
+    from utils import sql
+    raw = sql.get_scalar(
+        f"SELECT config FROM `{table}` WHERE uuid = ?", (uuid,),
+    )
+    if not raw:
+        return {}
+    config = json.loads(raw) if isinstance(raw, str) else raw
+    return merge_config_into_workflow_config(
+        config, entity_id=uuid, entity_table=table,
+    )
+
+
 def merge_config_into_workflow_config(config, entity_id=None, entity_table=None) -> Dict[str, Any]:
+    """Wrap a non-workflow config into a workflow structure.
+
+    Parameters
+    ----------
+    entity_id : str or None
+        The *uuid* of the source entity (not the integer id).
+    entity_table : str or None
+        Table name, e.g. 'entities', 'blocks', 'tools'.
+    """
     linked_id = f'{entity_table}.{entity_id}' if entity_id is not None else None
 
     member_type = config.get('_TYPE', 'agent')
@@ -512,16 +695,18 @@ def merge_multiple_into_workflow_config(members, inputs) -> Dict[str, Any]:
 
 
 async def receive_workflow(
-    config: Dict[str, Any],
+    config: Dict[str, Any] = None,
     kind: str = 'BLOCK',
     params: Dict[str, Any] = None,
     tool_uuid: str = None,
     chat_title: str = '',
     main=None,
+    workflow = None,
 ):
-    from plugins.workflows.members.workflow import Workflow
-    wf_config = merge_config_into_workflow_config(config)
-    workflow = Workflow(main=main, config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
+    if workflow is None:
+        from plugins.workflows.members.workflow import Workflow
+        wf_config = merge_config_into_workflow_config(config)
+        workflow = Workflow(main=main, config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
 
     try:
         async for key, chunk in workflow.run():
@@ -531,15 +716,16 @@ async def receive_workflow(
 
 
 async def compute_workflow_async(  # todo rename, clean
-    config: Dict[str, Any],
+    config: Dict[str, Any] = None,
     kind: str = 'BLOCK',
     params: Dict[str, Any] = None,
     tool_uuid: str = None,
     chat_title: str = '',
     main=None,
+    workflow = None,
 ):
     response = ''
-    async for key, chunk in receive_workflow(config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main):
+    async for key, chunk in receive_workflow(config=config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main, workflow=workflow):
         response += chunk
     return response
 
@@ -551,8 +737,21 @@ def compute_workflow(  # todo rename
     tool_uuid: str = None,
     chat_title: str = '',
     main=None,
+    workflow = None,
 ):
-    return asyncio.run(compute_workflow_async(config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main))
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        from gui.main import loop as main_loop
+        if main_loop is not None and main_loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                compute_workflow_async(config=config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main, workflow=workflow),
+                main_loop,
+            )
+            return future.result()
+    return asyncio.run(compute_workflow_async(config=config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main, workflow=workflow))
 
 
 def params_to_schema(params):
@@ -580,6 +779,7 @@ def params_to_schema(params):
             'minimum': -99999,
             'maximum': 99999,
             'step': 1,
+            **({'has_toggle': True} if not param.get('req', True) else {}),
         }
         for param in params
         if param.get('name').lower() not in ignore_names
@@ -740,27 +940,58 @@ def try_parse_json(text):
         return False, {}
 
 
-# def get_all_children(widget):
-#     """Function to retrieve all child widgets of a given widget."""
-#     # findChildren already recursively finds all descendants, no need for manual recursion
-#     children = list(widget.findChildren(QWidget))
+async def download_url_to_file(url, base_dir=None, filename_without_ext=None):
+    """Download a URL to a local file and return the path.
 
-#     # Specialized handling for QTreeWidget
-#     if isinstance(widget, QTreeWidget):
-#         for i in range(widget.topLevelItemCount()):
-#             top_level_item = widget.topLevelItem(i)
-#             # Create an iterator to traverse all items in the tree
-#             it = QTreeWidgetItemIterator(top_level_item)
-#             while it.value():
-#                 item = it.value()
-#                 for j in range(widget.columnCount()):
-#                     cell_widget = widget.itemWidget(item, j)
-#                     if cell_widget and cell_widget not in children:
-#                         children.append(cell_widget)
-#                         # Add cell widget's children (findChildren is already recursive)
-#                         children.extend(cell_widget.findChildren(QWidget))
-#                 it += 1
-#     return children
+    Parameters
+    ----------
+    url : str
+        Remote URL to download.
+
+    Returns
+    -------
+    str or None
+        Local file path, or ``None`` on failure.
+    """
+    import os
+    from utils.filesystem import get_application_path
+
+    import aiofiles
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                content = await response.read()
+    except Exception as e:
+        print(f"Download error: {e}")
+        return None
+
+    remote_filename = os.path.basename(url.split('?')[0])
+    remote_filename_without_ext, remote_fileext = os.path.splitext(remote_filename)
+
+    if not filename_without_ext:
+        filename_without_ext = remote_filename_without_ext or 'download'
+    else:
+        # Guard against callers accidentally passing a filename with extension.
+        filename_without_ext = os.path.splitext(filename_without_ext)[0]
+    if not base_dir:
+        ext = remote_fileext.lower()
+        if ext in VIDEO_EXTS:
+            subdir = 'videos'
+        elif ext in AUDIO_EXTS:
+            subdir = 'music'
+        else:
+            subdir = 'images'
+        base_dir = os.path.join(get_application_path(), subdir)
+    os.makedirs(base_dir, exist_ok=True)
+
+    local_path = os.path.join(
+        base_dir, f"{filename_without_ext}{remote_fileext}")
+    async with aiofiles.open(local_path, 'wb') as f:
+        await f.write(content)
+    return local_path
 
 
 @contextmanager
@@ -795,7 +1026,7 @@ def display_message(message, title=None, icon='Information', duration=5000):
     if main:
         main.notification_manager.show_notification(
             message=message,
-            title=title or icon.name,
+            title=title or str(icon),
             color='blue' if icon == QMessageBox.Information else None,
             icon=icon,
             duration=duration

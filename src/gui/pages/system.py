@@ -19,11 +19,12 @@ The page provides comprehensive system administration tools for maintaining
 and optimizing the Agent Pilot installation and infrastructure.
 """
 
+import json
 import re
 
 import keyring
 import requests
-from PySide6.QtCore import Signal, QRunnable, Slot
+from PySide6.QtCore import Signal
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QLabel, QPushButton, QMessageBox
 from keyring.errors import PasswordDeleteError
@@ -33,8 +34,8 @@ from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_pages import ConfigPages
 from utils.helpers import display_message, set_module_type  # , clone_specific_subdirectory
-from gui.util import find_main_widget
-from utils.reset import reset_application, bootstrap_modules, bootstrap_entities
+from gui.util import find_main
+from utils.reset import reset_application, bootstrap_modules, bootstrap_entities, run_bake_block_maps
 
 import subprocess
 import os
@@ -176,7 +177,7 @@ class Page_System_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.main = find_main_widget(self)
+            self.main = find_main()
             self.auto_label_width = True
             self.margin_left = 20
             self.conf_namespace = 'system'
@@ -196,12 +197,12 @@ class Page_System_Settings(ConfigJoined):
                     'type': bool,
                     'default': True,
                 },
-                {
-                    'text': 'Backup database',
-                    'type': bool,
-                    'default': True,
-                    'tooltip': 'Save a rolling backup of the database to a file in the same directory as the application.',
-                },
+                # {
+                #     'text': 'Backup database',
+                #     'type': bool,
+                #     'default': True,
+                #     'tooltip': 'Save a rolling backup of the database to a file in the same directory as the application.',
+                # },
                 {
                     'text': 'Always on top',
                     'type': bool,
@@ -230,7 +231,6 @@ class Page_System_Settings(ConfigJoined):
                     'maximum': 30,
                     'step': 1,
                     'default': 5,
-                    'label_width': 165,
                     'has_toggle': True,
                 },
                 {
@@ -240,7 +240,6 @@ class Page_System_Settings(ConfigJoined):
                     'maximum': 30,
                     'step': 1,
                     'default': 5,
-                    'label_width': 165,
                     'tooltip': 'Auto-run code messages (where role = code)',
                     'has_toggle': True,
                 },
@@ -252,19 +251,37 @@ class Page_System_Settings(ConfigJoined):
                 {
                     'text': 'Default chat model',
                     'type': 'model',
+                    'popup_params': True,
                     'model_kind': 'CHAT',
                     'default': 'mistral/mistral-large-latest',
                 },
                 {
                     'text': 'Default voice model',
                     'type': 'model',
-                    'model_kind': 'VOICE',
-                    'default': {
-                        'kind': 'VOICE',
-                        'model_name': '9BWtsMINqrJLrRacOk9x',
-                        # 'model_params': {},
-                        'provider': 'elevenlabs',
-                    },
+                    'popup_params': True,
+                    'model_kind': 'AUDIO',
+                    'default': '',
+                },
+                {
+                    'text': 'Default image model',
+                    'type': 'model',
+                    'popup_params': True,
+                    'model_kind': 'IMAGE',
+                    'default': '',
+                },
+                {
+                    'text': 'Default video model',
+                    'type': 'model',
+                    'popup_params': True,
+                    'model_kind': 'VIDEO',
+                    'default': '',
+                },
+                {
+                    'text': 'Default audio model',
+                    'type': 'model',
+                    'popup_params': True,
+                    'model_kind': 'AUDIO',
+                    'default': '',
                 },
                 {
                     'text': 'Auto title',
@@ -277,6 +294,7 @@ class Page_System_Settings(ConfigJoined):
                     'text': 'Auto-title model',
                     'label_position': None,
                     'type': 'model',
+                    'popup_params': True,
                     'model_kind': 'CHAT',
                     'default': 'mistral/mistral-large-latest',
                     'visibility_predicate': lambda self: self.auto_title_wgt.isChecked(),
@@ -291,12 +309,17 @@ class Page_System_Settings(ConfigJoined):
                     'stretch_x': True,
                     'visibility_predicate': lambda self: self.auto_title_wgt.isChecked(),
                 },
+                {
+                    'text': 'Default project entity',
+                    'type': 'entity',
+                    'default': '',
+                },
             ]
 
         def after_init(self):
             try:
-                self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-                self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
+                self.dev_mode_wgt.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
+                self.always_on_top_wgt.stateChanged.connect(self.main.toggle_always_on_top)
 
                 self.bootstrap_modules_btn = QPushButton('Bootstrap baked Modules')
                 self.bootstrap_modules_btn.clicked.connect(bootstrap_modules)
@@ -314,20 +337,25 @@ class Page_System_Settings(ConfigJoined):
                 self.scrape_agpt_btn.clicked.connect(self.scrape_autogpt)
                 self.layout.addWidget(self.scrape_agpt_btn)
 
-                # self.run_test_btn = QPushButton('Run Tutorial')
-                # self.run_test_btn.clicked.connect(self.main.run_test)
-                # self.layout.addWidget(self.run_test_btn)
+                self.bake_docs_btn = QPushButton('Bake Docs')
+                self.bake_docs_btn.clicked.connect(self.on_bake_docs)
+                self.layout.addWidget(self.bake_docs_btn)
+
+                self.run_demo_btn = QPushButton('Run Demo')
+                self.run_demo_btn.clicked.connect(self.main.run_demo)
+                self.layout.addWidget(self.run_demo_btn)
             except Exception as e:
                 pass
 
         def toggle_dev_mode(self, state=None):
             # pass
-            if state is None and hasattr(self, 'dev_mode'):
-                state = self.dev_mode.isChecked()
+            if state is None and hasattr(self, 'dev_mode_wgt'):
+                state = self.dev_mode_wgt.isChecked()
 
             self.main.page_chat.workflow_settings.header_widget.widgets[1].btn_info.setVisible(state)
             self.reset_app_btn.setVisible(state)
-            # self.run_test_btn.setVisible(state)
+            self.bake_docs_btn.setVisible(state)
+            self.run_demo_btn.setVisible(state)
 
             for config_pages in self.main.findChildren(ConfigPages):
                 for page_name, page in config_pages.pages.items():
@@ -338,6 +366,20 @@ class Page_System_Settings(ConfigJoined):
 
             # self.main.apply_stylesheet()
         
+        def on_bake_docs(self):
+            from utils import sql
+
+            row = sql.get_results(
+                "SELECT config FROM projects WHERE json_extract(config, '$._PROJECT_TYPE') = 'application' LIMIT 1",
+                return_type='tuple',
+            )
+            if not row:
+                display_message('No application project found.')
+                return
+
+            config = json.loads(row[0])
+            run_bake_block_maps(config, self.bake_docs_btn)
+
         def scrape_autogpt(self):
             # dialog to confirm scraping
             reply = QMessageBox.question(self, 'Scrape AutoGPT',
@@ -492,341 +534,3 @@ class Page_System_Settings(ConfigJoined):
                         except Exception as e:
                             print(f"    Error processing file {filepath} for import rewrite: {e}")
             print(f"Import rewriting in '{directory_path}' completed.")
-
-        # def scrape_autogpt(self):
-        #     # Ensure Git is installed and in your PATH.
-        #
-        #     repo_to_clone_1 = "https://github.com/Significant-Gravitas/AutoGPT.git"
-        #     subdirectory_to_get_1 = "autogpt_platform/backend"
-        #     destination_folder_1 = "src/plugins/agpt"
-        #     full_destination_folder_1 = os.path.join(os.getcwd(), destination_folder_1)
-        #
-        #     print(
-        #         f"\nAttempting to clone subdirectory '{subdirectory_to_get_1}' from '{repo_to_clone_1}' into '{full_destination_folder_1}'")
-        #     self.clone_specific_subdirectory(repo_to_clone_1, subdirectory_to_get_1, full_destination_folder_1,
-        #                                      branch="master")
-        #
-        #     old_import_root_name = os.path.basename(subdirectory_to_get_1.strip('/'))
-        #
-        #     # MODIFIED: Correctly determine the new import prefix
-        #     new_import_prefix = ""
-        #     if destination_folder_1:  # Ensure it's not empty
-        #         path_parts = destination_folder_1.split(os.sep)
-        #         # This will create "src.plugins.agpt.backend"
-        #         new_import_prefix = '.'.join(filter(None, path_parts))
-        #
-        #     if new_import_prefix and old_import_root_name:
-        #         self._rewrite_imports_in_directory(full_destination_folder_1, old_import_root_name, new_import_prefix)
-        #     else:
-        #         print(
-        #             f"Warning: Could not determine import rewrite parameters (old: '{old_import_root_name}', new: '{new_import_prefix}'). Skipping import rewrite.")
-        #
-        # def clone_specific_subdirectory(self, repo_url: str, limit_to_subdirectory: str, target_directory: str,
-        #                                 branch: str = "main"):
-        #     temp_clone_dir = "temp_repo_sparse_clone"
-        #
-        #     try:
-        #         if os.path.exists(temp_clone_dir):
-        #             shutil.rmtree(temp_clone_dir)
-        #         os.makedirs(temp_clone_dir)
-        #
-        #         subprocess.run(["git", "init"], cwd=temp_clone_dir, check=True, capture_output=True, text=True)
-        #         subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=temp_clone_dir, check=True,
-        #                        capture_output=True, text=True)
-        #         subprocess.run(["git", "config", "core.sparsecheckout", "true"], cwd=temp_clone_dir, check=True,
-        #                        capture_output=True, text=True)
-        #
-        #         sparse_checkout_file_path = os.path.join(temp_clone_dir, ".git", "info", "sparse-checkout")
-        #         with open(sparse_checkout_file_path, "w") as f:
-        #             f.write(f"{limit_to_subdirectory.strip('/')}/\n")
-        #
-        #         print(f"Fetching branch '{branch}' from '{repo_url}' (sparse, depth=1)...")
-        #         fetch_command = ["git", "fetch", "--depth=1", "origin", branch]
-        #         result = subprocess.run(fetch_command, cwd=temp_clone_dir, check=True, capture_output=True, text=True)
-        #         # print(f"Fetch successful: {result.stdout.strip()}") # Can be noisy
-        #         # if result.stderr.strip(): print(f"Fetch stderr: {result.stderr.strip()}")
-        #
-        #         print(f"Checking out '{branch}' sparsely from FETCH_HEAD...")
-        #         checkout_command = ["git", "checkout", "-B", branch, "FETCH_HEAD"]
-        #         result = subprocess.run(checkout_command, cwd=temp_clone_dir, check=True, capture_output=True,
-        #                                 text=True)
-        #         # print(f"Checkout successful: {result.stdout.strip()}") # Can be noisy
-        #         # if result.stderr.strip(): print(f"Checkout stderr: {result.stderr.strip()}")
-        #
-        #         source_path_in_temp_clone = os.path.join(temp_clone_dir, limit_to_subdirectory.strip('/'))
-        #
-        #         os.makedirs(target_directory, exist_ok=True)
-        #
-        #         if os.path.exists(source_path_in_temp_clone) and os.path.isdir(source_path_in_temp_clone):
-        #             for item_name in os.listdir(source_path_in_temp_clone):
-        #                 source_item_path = os.path.join(source_path_in_temp_clone, item_name)
-        #                 destination_item_path = os.path.join(target_directory, item_name)
-        #                 shutil.move(source_item_path, destination_item_path)
-        #             print(f"Successfully moved contents of '{limit_to_subdirectory}' to '{target_directory}'")
-        #         elif os.path.exists(source_path_in_temp_clone) and os.path.isfile(source_path_in_temp_clone):
-        #             destination_file_path = os.path.join(target_directory,
-        #                                                  os.path.basename(limit_to_subdirectory.strip('/')))
-        #             shutil.move(source_path_in_temp_clone, destination_file_path)
-        #             print(f"Successfully moved file '{limit_to_subdirectory}' to '{destination_file_path}'")
-        #         else:
-        #             print(
-        #                 f"Error: Subdirectory or file '{source_path_in_temp_clone}' not found after sparse checkout.")
-        #             # ... (error details) ...
-        #
-        #     except subprocess.CalledProcessError as e:
-        #         print(f"Git command failed with exit code {e.returncode}:")
-        #         if e.stdout: print(f"Stdout: {e.stdout.strip()}")
-        #         if e.stderr: print(f"Stderr: {e.stderr.strip()}")
-        #     except Exception as e:
-        #         print(f"An unexpected error occurred: {e}")
-        #     finally:
-        #         if os.path.exists(temp_clone_dir):
-        #             shutil.rmtree(temp_clone_dir)
-        #             # print(f"Cleaned up temporary directory: {temp_clone_dir}") # Can be noisy
-        #
-        # def _rewrite_imports_in_directory(self, directory_path: str, old_module_name: str, new_package_path: str):
-        #     print(f"Rewriting imports in '{directory_path}': changing '{old_module_name}' to '{new_package_path}'")
-        #
-        #     from_pattern = re.compile(
-        #         r"(^\s*from\s+)(" + re.escape(old_module_name) + r")((?:\.\w+)*)(\s+import\s+.*)$"
-        #     )
-        #     import_pattern = re.compile(
-        #         r"(^\s*import\s+)(" + re.escape(old_module_name) + r")((?:\.\w+)*)(\s*as\s+\w+)?(.*)$"
-        #     )
-        #
-        #     for root, _, files in os.walk(directory_path):
-        #         for filename in files:
-        #             if filename.endswith(".py"):
-        #                 filepath = os.path.join(root, filename)
-        #                 try:
-        #                     with open(filepath, 'r', encoding='utf-8') as f:
-        #                         lines = f.readlines()
-        #
-        #                     new_lines = []
-        #                     modified = False
-        #                     for line_from_file in lines:
-        #                         # Determine if line originally had a newline and strip it for processing
-        #                         has_newline = line_from_file.endswith('\n')
-        #                         processed_line = line_from_file[:-1] if has_newline else line_from_file
-        #
-        #                         # Store the current state of processed_line for comparison
-        #                         current_processed_line_state = processed_line
-        #
-        #                         match = from_pattern.match(processed_line)
-        #                         if match:
-        #                             # Groups do not contain the newline as we matched on 'processed_line'
-        #                             processed_line = f"{match.group(1)}{new_package_path}{match.group(3)}{match.group(4)}"
-        #                         else:
-        #                             match = import_pattern.match(processed_line)
-        #                             if match:
-        #                                 alias_part = match.group(4) if match.group(4) else ""
-        #                                 # Group 5 (rest_part) also does not contain newline here
-        #                                 rest_part = match.group(5) if match.group(5) else ""
-        #                                 processed_line = f"{match.group(1)}{new_package_path}{match.group(3)}{alias_part}{rest_part}"
-        #
-        #                         final_line_to_append = processed_line
-        #                         if has_newline:
-        #                             final_line_to_append += '\n'
-        #
-        #                         if line_from_file != final_line_to_append:
-        #                             modified = True
-        #                         new_lines.append(final_line_to_append)
-        #
-        #                     if modified:
-        #                         with open(filepath, 'w', encoding='utf-8') as f:
-        #                             f.writelines(new_lines)
-        #                         # print(f"    Rewrote imports in: {filepath}")
-        #                 except Exception as e:
-        #                     print(f"    Error processing file {filepath} for import rewrite: {e}")
-        #     print(f"Import rewriting in '{directory_path}' completed.")
-        #
-        # # def scrape_autogpt(self):
-        # #
-        # #     # Ensure Git is installed and in your PATH.
-        # #
-        # #     # Example 1: Clone a subdirectory
-        #     # This repo has a folder 'autogpt_platform/backend' we want to clone
-        #     repo_to_clone_1 = "https://github.com/Significant-Gravitas/AutoGPT.git"
-        #     subdirectory_to_get_1 = "autogpt_platform/backend"  # Path relative to repo root
-        #     destination_folder_1 = "src/plugins/agpt"  # Relative to current project root
-        #     full_destination_folder_1 = os.path.join(os.getcwd(), destination_folder_1)
-        #     pass
-        #
-        #     print(f"\nAttempting to clone subdirectory '{subdirectory_to_get_1}' from '{repo_to_clone_1}' into '{full_destination_folder_1}'")
-        #     self.clone_specific_subdirectory(repo_to_clone_1, subdirectory_to_get_1, full_destination_folder_1, branch="master")
-        #
-        # def clone_specific_subdirectory(self, repo_url: str, limit_to_subdirectory: str, target_directory: str,
-        #                                 branch: str = "main"):
-        #     """
-        #     Clones a specific subdirectory (and its contents) from a Git repository
-        #     into a target directory using sparse checkout.
-        #
-        #     Args:
-        #         repo_url: The URL of the Git repository.
-        #         limit_to_subdirectory: The relative path of the subdirectory to clone (e.g., "docs/features").
-        #         target_directory: The local path where the subdirectory contents should be placed.
-        #         branch: The branch to clone from (defaults to "main").
-        #     """
-        #     temp_clone_dir = "temp_repo_sparse_clone"  # Temporary directory for the sparse checkout
-        #
-        #     try:
-        #         # Clean up any pre-existing temporary directory
-        #         if os.path.exists(temp_clone_dir):
-        #             shutil.rmtree(temp_clone_dir)
-        #         os.makedirs(temp_clone_dir)
-        #
-        #         # Initialize Git, add remote, and enable sparse checkout
-        #         subprocess.run(["git", "init"], cwd=temp_clone_dir, check=True, capture_output=True, text=True)
-        #         subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=temp_clone_dir, check=True,
-        #                        capture_output=True, text=True)
-        #         subprocess.run(["git", "config", "core.sparsecheckout", "true"], cwd=temp_clone_dir, check=True,
-        #                        capture_output=True, text=True)
-        #
-        #         # Define the subdirectory for sparse checkout.
-        #         sparse_checkout_file_path = os.path.join(temp_clone_dir, ".git", "info", "sparse-checkout")
-        #         with open(sparse_checkout_file_path, "w") as f:
-        #             f.write(f"{limit_to_subdirectory.strip('/')}\n")
-        #
-        #         # Fetch the specified branch shallowly (only the latest commit)
-        #         print(f"Fetching branch '{branch}' from '{repo_url}' (sparse, depth=1)...")
-        #         fetch_command = ["git", "fetch", "--depth=1", "origin", branch]
-        #         result = subprocess.run(fetch_command, cwd=temp_clone_dir, check=True, capture_output=True, text=True)
-        #         print(f"Fetch successful: {result.stdout.strip()}")
-        #         if result.stderr.strip():
-        #             print(f"Fetch stderr: {result.stderr.strip()}")
-        #
-        #         # Checkout the fetched branch. This step populates the working directory
-        #         # according to sparse-checkout rules. FETCH_HEAD points to the commit just fetched.
-        #         # Using '-B' creates the branch if it doesn't exist or resets it if it does, then checks it out.
-        #         print(f"Checking out '{branch}' sparsely from FETCH_HEAD...")
-        #         checkout_command = ["git", "checkout", "-B", branch, "FETCH_HEAD"]
-        #         result = subprocess.run(checkout_command, cwd=temp_clone_dir, check=True, capture_output=True,
-        #                                 text=True)
-        #         print(f"Checkout successful: {result.stdout.strip()}")
-        #         if result.stderr.strip():
-        #             print(f"Checkout stderr: {result.stderr.strip()}")
-        #
-        #         # Path to the desired subdirectory within the temporary clone
-        #         # limit_to_subdirectory should not have leading slashes for os.path.join in this context if temp_clone_dir is the root.
-        #         # Example: if limit_to_subdirectory is "foo/bar", source_path_in_temp_clone becomes "temp_repo_sparse_clone/foo/bar"
-        #         source_path_in_temp_clone = os.path.join(temp_clone_dir, limit_to_subdirectory.strip('/'))
-        #
-        #         if os.path.exists(source_path_in_temp_clone) and os.path.isdir(source_path_in_temp_clone):
-        #             os.makedirs(target_directory, exist_ok=True)
-        #             for item_name in os.listdir(source_path_in_temp_clone):
-        #                 source_item_path = os.path.join(source_path_in_temp_clone, item_name)
-        #                 destination_item_path = os.path.join(target_directory, item_name)
-        #                 shutil.move(source_item_path, destination_item_path)
-        #             print(f"Successfully moved contents of '{limit_to_subdirectory}' to '{target_directory}'")
-        #         elif os.path.exists(source_path_in_temp_clone) and os.path.isfile(source_path_in_temp_clone):
-        #             os.makedirs(target_directory, exist_ok=True)
-        #             destination_file_path = os.path.join(target_directory,
-        #                                                  os.path.basename(limit_to_subdirectory.strip('/')))
-        #             shutil.move(source_path_in_temp_clone, destination_file_path)
-        #             print(f"Successfully moved file '{limit_to_subdirectory}' to '{destination_file_path}'")
-        #         else:
-        #             print(
-        #                 f"Error: Subdirectory or file '{source_path_in_temp_clone}' (derived from '{limit_to_subdirectory}') not found in the repository after sparse checkout.")
-        #             print(f"Contents of temporary clone directory '{temp_clone_dir}': {os.listdir(temp_clone_dir)}")
-        #             # Also list contents of .git/info/sparse-checkout for debugging
-        #             if os.path.exists(sparse_checkout_file_path):
-        #                 with open(sparse_checkout_file_path, "r") as f:
-        #                     print(f"Contents of '.git/info/sparse-checkout':\n{f.read()}")
-        #             else:
-        #                 print("'.git/info/sparse-checkout' file not found.")
-        #
-        #         self._rewrite_imports_in_directory(full_destination_folder_1, old_import_root_name, new_import_prefix)
-        #
-        #     except subprocess.CalledProcessError as e:
-        #         print(f"Git command failed with exit code {e.returncode}:")
-        #         if e.stdout:
-        #             print(f"Stdout: {e.stdout.strip()}")
-        #         if e.stderr:
-        #             print(f"Stderr: {e.stderr.strip()}")
-        #     except Exception as e:
-        #         print(f"An unexpected error occurred: {e}")
-        #     finally:
-        #         # Clean up the temporary clone directory
-        #         if os.path.exists(temp_clone_dir):
-        #             shutil.rmtree(temp_clone_dir)
-        #             print(f"Cleaned up temporary directory: {temp_clone_dir}")
-        #
-        # # def clone_specific_subdirectory(self, repo_url: str, limit_to_subdirectory: str, target_directory: str, branch: str = "main"):
-        # #     """
-        # #     Clones a specific subdirectory (and its contents) from a Git repository
-        # #     into a target directory using sparse checkout.
-        # #
-        # #     Args:
-        # #         repo_url: The URL of the Git repository.
-        # #         limit_to_subdirectory: The relative path of the subdirectory to clone (e.g., "docs/features").
-        # #         target_directory: The local path where the subdirectory contents should be placed.
-        # #         branch: The branch to clone from (defaults to "main").
-        # #     """
-        # #     temp_clone_dir = "temp_repo_sparse_clone" # Temporary directory for the sparse checkout
-        # #
-        # #     try:
-        # #         # Clean up any pre-existing temporary directory
-        # #         if os.path.exists(temp_clone_dir):
-        # #             shutil.rmtree(temp_clone_dir)
-        # #         os.makedirs(temp_clone_dir)
-        # #
-        # #         # Initialize Git, add remote, and enable sparse checkout
-        # #         subprocess.run(["git", "init"], cwd=temp_clone_dir, check=True, capture_output=True)
-        # #         subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=temp_clone_dir, check=True, capture_output=True)
-        # #         subprocess.run(["git", "config", "core.sparsecheckout", "true"], cwd=temp_clone_dir, check=True, capture_output=True)
-        # #
-        # #         # Define the subdirectory for sparse checkout.
-        # #         # Writing the directory path (e.g., "path/to/folder") will include all its contents.
-        # #         sparse_checkout_file_path = os.path.join(temp_clone_dir, ".git", "info", "sparse-checkout")
-        # #         with open(sparse_checkout_file_path, "w") as f:
-        # #             # Ensure the path in sparse-checkout correctly targets the directory and its contents.
-        # #             # A common way is to just list the directory. Git will include its children.
-        # #             # If limit_to_subdirectory is "foo/bar", writing "foo/bar\n" is usually sufficient.
-        # #             # Adding a trailing "/*" (e.g. "foo/bar/*") can be more explicit for some Git versions/cases
-        # #             # but often isn't necessary for directories. Let's keep it simple.
-        # #             f.write(f"{limit_to_subdirectory.strip('/')}\n")
-        # #
-        # #         # Pull the specified branch using a shallow clone
-        # #         print(f"Pulling '{limit_to_subdirectory}' from branch '{branch}' of '{repo_url}' (sparse)...")
-        # #         pull_command = ["git", "pull", "--depth=1", "origin", branch]
-        # #         result = subprocess.run(pull_command, cwd=temp_clone_dir, check=True, capture_output=True, text=True)
-        # #         print(f"Pull successful: {result.stdout.strip()}")
-        # #
-        # #         # Path to the desired subdirectory within the temporary clone
-        # #         source_path_in_temp_clone = os.path.join(temp_clone_dir, limit_to_subdirectory.strip('/'))
-        # #
-        # #         if os.path.exists(source_path_in_temp_clone) and os.path.isdir(source_path_in_temp_clone):
-        # #             # Create target directory if it doesn't exist
-        # #             os.makedirs(target_directory, exist_ok=True)
-        # #
-        # #             # Move contents from the sparsely checked-out subdirectory to the target directory
-        # #             for item_name in os.listdir(source_path_in_temp_clone):
-        # #                 source_item_path = os.path.join(source_path_in_temp_clone, item_name)
-        # #                 destination_item_path = os.path.join(target_directory, item_name)
-        # #                 shutil.move(source_item_path, destination_item_path)
-        # #             print(f"Successfully cloned contents of '{limit_to_subdirectory}' to '{target_directory}'")
-        # #         elif os.path.exists(source_path_in_temp_clone) and os.path.isfile(source_path_in_temp_clone):
-        # #              # Handle case where limit_to_subdirectory is a single file
-        # #             os.makedirs(target_directory, exist_ok=True)
-        # #             destination_file_path = os.path.join(target_directory, os.path.basename(limit_to_subdirectory.strip('/')))
-        # #             shutil.move(source_path_in_temp_clone, destination_file_path)
-        # #             print(f"Successfully cloned file '{limit_to_subdirectory}' to '{destination_file_path}'")
-        # #         else:
-        # #             print(f"Error: Subdirectory or file '{limit_to_subdirectory}' not found in the repository after sparse checkout.")
-        # #             print(f"Contents of '{temp_clone_dir}': {os.listdir(temp_clone_dir)}")
-        # #             print(f"Contents of '.git/info/sparse-checkout':")
-        # #             with open(sparse_checkout_file_path, "r") as f:
-        # #                 print(f.read())
-        # #
-        # #     except subprocess.CalledProcessError as e:
-        # #         print(f"Git command failed with exit code {e.returncode}:")
-        # #         if e.stdout:
-        # #             print(f"Stdout: {e.stdout.strip()}")
-        # #         if e.stderr:
-        # #             print(f"Stderr: {e.stderr.strip()}")
-        # #     except Exception as e:
-        # #         print(f"An unexpected error occurred: {e}")
-        # #     finally:
-        # #         # Clean up the temporary clone directory
-        # #         if os.path.exists(temp_clone_dir):
-        # #             shutil.rmtree(temp_clone_dir)

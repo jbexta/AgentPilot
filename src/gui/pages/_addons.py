@@ -31,7 +31,7 @@ from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_json_db_tree import ConfigJsonDBTree
 from gui.widgets.config_joined import ConfigJoined
 
-from gui.util import IconButton, find_main_widget
+from gui.util import find_main
 from utils import sql
 from utils.helpers import display_message, display_message_box, get_metadata
 
@@ -337,7 +337,7 @@ class Page_Addon_Settings(ConfigDBTree):
 
         system.manager.load()
         self.load()
-        main = find_main_widget(self)
+        main = find_main()
         main.main_pages.build_schema()
         main.main_pages.pages['settings'].build_schema()
 

@@ -1,0 +1,16 @@
+uuid: 4105e445-ec5e-4b46-aeb3-b72ed050e7b8
+name: ''
+config:
+  name: ''
+  channel_url: https://www.youtube.com/channel/UC0znI3dRWpNF8lvbPBTlzyw
+  channel_handle: '@CharlesVeitch'
+  description: |-
+    Mathematical sentience complex trapped inside an over-clocked ape graphics card brain.
+
+    A living man can be enslaved and reduced to the historic condition of an object. But if he dies in refusing to be enslaved, he reaffirms the existence of another kind of human nature which refuses to be classified as an object.     -Albert Camus
+  subscriber_count: 232160394
+  video_count: 3
+  last_sync: '2025-10-03T14:52:17.887710'
+  auto_sync: false
+  sync_frequency: 24
+parent_id: null

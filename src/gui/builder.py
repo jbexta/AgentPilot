@@ -124,7 +124,13 @@ def _apply_ast_modification(module_id, modifier_class):
     The modifier_class is instantiated with no arguments, assuming it's a closure
     that captures its required variables from its defining scope.
     """
-    module_config = system.manager.modules.get(module_id, {})
+    from utils import sql
+    module_config = sql.get_scalar(
+        "SELECT config FROM modules WHERE id = ?",
+        (module_id,), load_json=True
+    )
+    if not module_config:
+        return None
     source = module_config.get('data', None)
     if not source:
         return None
@@ -134,8 +140,11 @@ def _apply_ast_modification(module_id, modifier_class):
     modified_tree = modifier.visit(tree)
     modified_source = astor.to_source(modified_tree, source_generator_class=CustomSourceGenerator)
 
-    module_config['data'] = modified_source
-    system.manager.load()
+    sql.execute(
+        "UPDATE modules SET config = json_set(config, '$.data', ?) WHERE id = ?",
+        (modified_source, module_id)
+    )
+    system.manager.modules.load()
 
     return modified_source
 
@@ -301,240 +310,6 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 
     return _apply_ast_modification(module_id, AddFieldModifier)
 
-
-# def modify_class_base(module_id, class_path, new_superclass):
-#     class ClassModifier(ast.NodeTransformer):
-#         def __init__(self, target_path, new_superclass):
-#             self.target_path = target_path
-#             self.current_path = []
-#             self.new_superclass = new_superclass
-#
-#         def visit_ClassDef(self, node):
-#             self.current_path.append(node.name)
-#             if self.current_path == self.target_path:
-#                 new_bases = [ast.Name(id=self.new_superclass, ctx=ast.Load())]
-#                 node.bases = new_bases
-#
-#                 if self.new_superclass == 'ConfigPages' or self.new_superclass == 'ConfigTabs':
-#                     for item in node.body:
-#                         if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-#                             ensure_attribute(item, 'pages', {})
-#                             # comment_attributes(item, ['schema'])
-#                             break
-#                 elif self.new_superclass == 'ConfigDBTree' or self.new_superclass == 'ConfigFields':
-#                     for item in node.body:
-#                         if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-#                             ensure_attribute(item, 'schema', [])  # , reset_value=True)
-#                             # comment_attributes(item, ['pages'])
-#                             break
-#
-#             self.generic_visit(node)
-#             self.current_path.pop()
-#             return node
-#
-#     from gui import system
-#     module_config = system.manager.modules.get(module_id, {})
-#     source = module_config.get('data', None)
-#     if not source:
-#         return None
-#
-#     tree = ast.parse(source)
-#     modifier = ClassModifier(class_path, new_superclass)
-#     modified_tree = modifier.visit(tree)
-#     modified_source = astor.to_source(modified_tree, source_generator_class=CustomSourceGenerator)  # astor.to_source(modified_tree)
-#
-#     # Update the module data with the modified source
-#     module_config['data'] = modified_source
-#     # system.manager.modules[module_id] = module_config
-#     system.manager.load()
-#
-#     return modified_source
-#
-#
-# def modify_class_add_page(module_id, class_path, new_page_name):
-#     class ClassModifier(ast.NodeTransformer):
-#         def __init__(self, target_path, new_page_name):
-#             self.target_path = target_path
-#             self.current_path = []
-#             self.new_page_name = new_page_name
-#             self.safe_page_name = convert_to_safe_case(new_page_name)
-#
-#         def visit_ClassDef(self, node):
-#             self.current_path.append(node.name)
-#             if self.current_path == self.target_path:
-#                 new_page = ast.parse(dedent(f"""
-#                     class Page_{self.safe_page_name}(ConfigWidget):
-#                         def __init__(self, parent):
-#                             super().__init__(parent)
-#                 """))
-#                 node.body.append(new_page.body[0])
-#
-#                 for item in node.body:
-#                     if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-#                         self.modify_init(item)
-#                         break
-#
-#             self.generic_visit(node)
-#             self.current_path.pop()
-#             return node
-#
-#         def modify_init(self, init_node):
-#             for stmt in init_node.body:
-#                 if not (isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Attribute) and stmt.targets[0].attr == 'pages'):
-#                     continue
-#                 if not isinstance(stmt.value, ast.Dict):
-#                     continue
-#
-#                 # Add new page to existing dictionary  # args is  `parent=self`
-#                 new_key = ast.Str(s=self.new_page_name)
-#                 new_value = ast.Call(
-#                     func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr=f'Page_{self.safe_page_name}',
-#                                        ctx=ast.Load()),
-#                     args=[ast.Name(id='self', ctx=ast.Load())],
-#                     keywords=[]
-#                 )
-#                 stmt.value.keys.append(new_key)
-#                 stmt.value.values.append(new_value)
-#                 return
-#
-#             # If we didn't find and modify an existing self.pages, create a new one
-#             new_pages = ast.parse(f"self.pages = {{{self.new_page_name!r}: self.{self.safe_page_name}(self)}}").body[0]
-#
-#             init_node.body.append(new_pages)
-#
-#     from gui import system
-#     module_config = system.manager.modules.get(module_id, {})
-#     source = module_config.get('data', None)
-#     if not source:
-#         return None
-#
-#     tree = ast.parse(source)
-#     modifier = ClassModifier(class_path, new_page_name)
-#     modified_tree = modifier.visit(tree)
-#     modified_source = astor.to_source(modified_tree, source_generator_class=CustomSourceGenerator)
-#
-#     # Update the module data with the modified source
-#     module_config['data'] = modified_source
-#     # system.manager.modules[module_id] = module_config
-#     system.manager.load()
-#
-#     return modified_source
-#
-#
-# def modify_class_delete_page(module_id, class_path, page_name):
-#     class ClassModifier(ast.NodeTransformer):
-#         def __init__(self, target_path, page_name):
-#             self.target_path = target_path
-#             self.current_path = []
-#             self.page_name = page_name
-#
-#         def visit_ClassDef(self, node):
-#             self.current_path.append(node.name)
-#             if self.current_path == self.target_path:
-#                 class_name = None
-#                 for item in node.body:
-#                     if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-#                         class_name = self.modify_init(item)
-#                         break
-#                 if class_name:
-#                     for item in node.body:
-#                         if isinstance(item, ast.ClassDef) and item.name == class_name:
-#                             node.body.remove(item)
-#                             break
-#
-#             self.generic_visit(node)
-#             self.current_path.pop()
-#             return node
-#
-#         def modify_init(self, init_node):
-#             for stmt in init_node.body:
-#                 if not (isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Attribute) and stmt.targets[0].attr == 'pages'):
-#                     continue
-#                 if not isinstance(stmt.value, ast.Dict):
-#                     continue
-#
-#                 for i, key in enumerate(stmt.value.keys):
-#                     if key.s == self.page_name:
-#                         class_name = stmt.value.values[i].func.attr
-#                         del stmt.value.keys[i]
-#                         del stmt.value.values[i]
-#
-#                         return class_name
-#
-#             return None
-#
-#     from gui import system
-#     module_config = system.manager.modules.get(module_id, {})
-#     source = module_config.get('data', None)
-#     if not source:
-#         return None
-#
-#     tree = ast.parse(source)
-#     modifier = ClassModifier(class_path, page_name)
-#     modified_tree = modifier.visit(tree)
-#     modified_source = astor.to_source(modified_tree, source_generator_class=CustomSourceGenerator)
-#
-#     # Update the module data with the modified source
-#     module_config['data'] = modified_source
-#     # system.manager.modules[module_id] = module_config
-#     system.manager.load()
-#
-#     return modified_source
-
-#
-# def modify_class_add_field(module_id, class_path, field_name, field_type):
-#     class ClassModifier(ast.NodeTransformer):
-#         def __init__(self, target_path, field_name, field_type):
-#             self.target_path = target_path
-#             self.current_path = []
-#             self.field_name = field_name
-#             self.field_type = field_type
-#
-#         def visit_ClassDef(self, node):
-#             self.current_path.append(node.name)
-#             if self.current_path == self.target_path:
-#                 for item in node.body:
-#                     if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-#                         self.modify_init(item)
-#                         break
-#
-#             self.generic_visit(node)
-#             self.current_path.pop()
-#             return node
-#
-#         def modify_init(self, init_node):
-#             type_from_alias = field_type_alias_map.get(self.field_type, self.field_type)
-#             new_entry = ast.parse(f"{{'text': {self.field_name!r}, 'type': {type_from_alias}}}")
-#             for stmt in init_node.body:
-#                 if not (isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Attribute) and stmt.targets[0].attr == 'schema'):
-#                     continue
-#                 if not isinstance(stmt.value, ast.List):
-#                     continue
-#
-#                 stmt.value.elts.append(new_entry.body[0].value)
-#                 return
-#
-#             # If we didn't find and modify an existing self.schema, create a new one
-#             new_schema = ast.parse(f"self.schema = [{new_entry.body[0].value}]").body[0]
-#             init_node.body.append(new_schema)
-#
-#     from gui import system
-#     module_config = system.manager.modules.get(module_id, {})
-#     source = module_config.get('data', None)
-#     if not source:
-#         return None
-#
-#     tree = ast.parse(source)
-#     modifier = ClassModifier(class_path, field_name, field_type)
-#     modified_tree = modifier.visit(tree)
-#     modified_source = astor.to_source(modified_tree, source_generator_class=CustomSourceGenerator)
-#
-#     # Update the module data with the modified source
-#     module_config['data'] = modified_source
-#     # system.manager.modules[module_id] = module_config
-#     system.manager.load()
-#
-#     return modified_source
 
 def get_class_path(module, class_name):
     if not module:

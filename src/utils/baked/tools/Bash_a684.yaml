@@ -1,0 +1,32 @@
+uuid: a68400e2-0b95-406d-af58-83e2cb4fc3bd
+name: Bash
+config:
+  _TYPE: workflow
+  name: Bash
+  avatar_path: :/resources/icon-tool-small.png
+  description: j
+  members:
+  - id: '1'
+    linked_id: tools.13
+    loc_x: 100
+    loc_y: 80
+    width: 457.0
+    height: 350.0
+    config:
+      language: Python
+      environment: Local
+      data: 'def '
+      _TYPE: code
+      name: Code block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params:
+  - name: None
+    description: None
+    type: String
+    req: true
+folder_path: Web search/Filesystem

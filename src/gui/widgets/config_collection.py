@@ -22,13 +22,15 @@ from PySide6.QtWidgets import QMessageBox, QInputDialog
 from typing_extensions import override
 
 from gui import system
+
+
+from gui.util import find_main
 from gui.widgets.config_widget import ConfigWidget
-
-from gui.util import find_main_widget
 from utils import sql
-from utils.helpers import display_message, display_message_box, convert_to_safe_case
+from utils.helpers import display_message, display_message_box, convert_to_safe_case, set_module_type
 
 
+@set_module_type('Widgets')
 class ConfigCollection(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -44,6 +46,7 @@ class ConfigCollection(ConfigWidget):
     @override
     def get_config(self):
         config = {}
+        format_block_keys = []
         for page_name, page in self.pages.items():
             if hasattr(self.content, 'tabBar'):
                 is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
@@ -59,12 +62,17 @@ class ConfigCollection(ConfigWidget):
                 continue
 
             page_config = page.get_config()
+            fbk = page_config.pop('_format_block_keys', [])
+            format_block_keys.extend(fbk)
             config.update(page_config)
 
+        if format_block_keys:
+            config['_format_block_keys'] = format_block_keys
         return config
 
     def add_page(self):  # todo dedupe
-        edit_bar, page_editor = self.get_edit_bar()  # getattr(self, 'edit_bar', None)
+        result = self.get_edit_bar()
+        edit_bar, page_editor = result if result else (None, None)
         if not edit_bar:
             return
 
@@ -106,48 +114,45 @@ class ConfigCollection(ConfigWidget):
         if retval != QMessageBox.Yes:
             return
 
-        edit_bar, page_editor = self.get_edit_bar()  # getattr(self, 'edit_bar', None)
-        if not edit_bar:
-            return
+        result = self.get_edit_bar()
+        edit_bar, page_editor = result if result else (None, None)
+        if edit_bar:
+            safe_name = convert_to_safe_case(page_name)
+            from gui.builder import modify_class_delete_page
+            new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
+            if new_class:
+                sql.execute("""
+                    UPDATE modules
+                    SET config = json_set(config, '$.data', ?)
+                    WHERE id = ?
+                """, (new_class, edit_bar.editing_module_id))
 
-        safe_name = convert_to_safe_case(page_name)
-        from gui.builder import modify_class_delete_page
-        new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
-        if new_class:
-            # `config` is a table json column (a dict)
-            # the code needs to go in the 'data' key
-            sql.execute("""
-                UPDATE modules
-                SET config = json_set(config, '$.data', ?)
-                WHERE id = ?
-            """, (new_class, edit_bar.editing_module_id))
-
-            system.manager.load()  # _manager('modules')
-            page_editor.load()
-            page_editor.config_widget.widgets[0].reimport()
+                system.manager.load()
+                page_editor.load()
+                page_editor.config_widget.widgets[0].reimport()
+                self.pages.pop(page_name, None)
+                self.build_schema()
+        else:
+            module_id = sql.get_scalar(
+                "SELECT id FROM modules WHERE name = ?", (page_name,)
+            )
+            if not module_id:
+                return
+            system.manager.modules.delete(module_id)
+            self.pages.pop(page_name, None)
+            self.build_schema()
 
     def edit_page(self, page_name):
         from gui.pages.modules import PageEditor
-        page_modules = system.manager.modules.get_modules_in_folder(
-            module_type='Pages',
-            fetch_keys=('uuid', 'name',)
-        )
-
-        # get the id KEY where the name VALUE is page_name
-        module_id = next((_id for _id, name in page_modules if name == page_name), None)
-        if not module_id:
-            return
 
         page_widget = self.pages[page_name]
-        # setattr(page_widget, 'user_editing', True)
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(True)
-            # page_widget.build_schema()  # !! #
 
-        main = find_main_widget(self)
+        main = find_main()
         if getattr(main, 'module_popup', None):
             main.module_popup.close()
             main.module_popup = None
-        main.module_popup = PageEditor(main, module_id)
+        main.module_popup = PageEditor(main, page_name)
         main.module_popup.load()
-        main.module_popup.show()  # todo dedupe
+        main.module_popup.show()

@@ -1,0 +1,47 @@
+uuid: 82c58055-66be-46cb-a911-89f327249f6e
+name: fields_doc
+config:
+  _TYPE: workflow
+  name: fields_doc
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |
+        # Fields
+
+        Fields are atomic, reusable input field, typically used from a ConfigFields or ConfigTree derived widget.
+
+        - Purpose: Individual form controls (text inputs, combos, buttons, color
+        pickers, etc.)
+        - Examples: Text, Combo, Boolean, FilePicker, ModelField
+        - Key traits:
+        - Extend Qt base widgets (QWidget, QLineEdit, etc.)
+        - Implement get_value() and set_value() methods
+        - Self-contained with their own validation and styling
+        - Have an option_schema defining how they themselves can be configured
+
+        **All field modules:**
+        {% for name, module_data in system.modules.type_controllers['fields'].items() %}
+        - **{{ name | capitalize }}**
+        {% endfor %}
+
+        Common field kwargs (kwargs that can be used with **any** field module):
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+parent_uuid: b3245998-3a81-4fe0-a032-a2c9bf2ce169

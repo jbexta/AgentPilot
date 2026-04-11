@@ -20,6 +20,7 @@ configuration structures that need to be stored as JSON in the configuration
 system while providing an intuitive tree-based editing interface.
 """  # unchecked
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
@@ -48,6 +49,7 @@ class ConfigJsonTree(ConfigTree):
             ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
             row_data_json = self.config.get(f'{ns}data', None)
             if row_data_json is None:
+                self.refresh_visibility()
                 return
 
             if isinstance(row_data_json, str):
@@ -62,6 +64,13 @@ class ConfigJsonTree(ConfigTree):
             for row_dict in data:
                 self.add_new_entry(row_dict)
             self.set_height()
+        QTimer.singleShot(0, self.refresh_visibility)
+
+    @override
+    def update_config(self):
+        self.config.update(self.get_config())
+        super().update_config()
+        self.refresh_visibility()
 
     # @override
     # def update_config(self):
@@ -183,6 +192,7 @@ class ConfigJsonTree(ConfigTree):
                         print(f'Widget type {param_type} not found in modules. Skipping field: {key}')
                         continue
 
+                    item.setText(i, '')
                     self.tree.setItemWidget(item, i, widget)
                     if val and hasattr(widget, 'set_value'):
                         with block_signals(widget):
@@ -257,6 +267,44 @@ class ConfigJsonTree(ConfigTree):
         row_count = self.tree.topLevelItemCount()
         self.setFixedHeight(header_height + (row_height * row_count) + 40)
 
+    def _get_row_dict(self, item):
+        """Extract the current values of a tree row as a dict."""
+        row = {}
+        for j, col_schema in enumerate(self.schema):
+            key = convert_to_safe_case(
+                col_schema.get('key', col_schema['text'].lower()))
+            cell_widget = self.tree.itemWidget(item, j)
+            if cell_widget and hasattr(cell_widget, 'get_value'):
+                row[key] = cell_widget.get_value()
+            else:
+                row[key] = item.text(j)
+        return row
+
+    def refresh_visibility(self):
+        """Show/hide cell widgets based on visibility predicates."""
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            row_dict = self._get_row_dict(item)
+            for j, col_schema in enumerate(self.schema):
+                predicate = col_schema.get(
+                    'visibility_predicate', None)
+                if not predicate or not callable(predicate):
+                    continue
+                visible = predicate(row_dict)
+                cell_widget = self.tree.itemWidget(item, j)
+                if visible and not cell_widget:
+                    widget = get_field_widget(col_schema, parent=self)
+                    if widget:
+                        val = row_dict.get(convert_to_safe_case(
+                            col_schema.get('key',
+                                           col_schema['text'].lower())),
+                            col_schema.get('default', ''))
+                        self.tree.setItemWidget(item, j, widget)
+                        if val and hasattr(widget, 'set_value'):
+                            widget.set_value(val)
+                elif not visible and cell_widget:
+                    self.tree.removeItemWidget(item, j)
+
     @override
     def on_cell_edited(self, item):
         self.update_config()
@@ -267,8 +315,10 @@ class ConfigJsonTree(ConfigTree):
         if on_edit_reload:
             self.load()
 
+        self.refresh_visibility()
+
     def add_item(self, row_dict=None, icon=None):
-        if row_dict is None:
+        if not isinstance(row_dict, dict):
             row_dict = {convert_to_safe_case(col.get('key', col['text'].lower())): col.get('default', '')
                         for col in self.schema}
         self.add_new_entry(row_dict, icon)

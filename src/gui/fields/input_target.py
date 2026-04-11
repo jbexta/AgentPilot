@@ -12,7 +12,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
 from gui.fields.combo import BaseCombo
-from gui.util import find_workflow_widget, CVBoxLayout, find_input_key, get_member_settings_class
+from gui.util import find_workflow_widget, CVBoxLayout, find_attribute, get_member_settings_class
 from gui import system
 from utils.helpers import block_signals
 
@@ -22,7 +22,7 @@ class InputTargetComboBox(QWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         self.parent = parent
-        _, self.target_member_id = find_input_key(self)
+        _, self.target_member_id = find_attribute(self, 'input_key')
 
         self.layout = CVBoxLayout(self)
         self.main_combo = self.TargetTypeComboBox(self)

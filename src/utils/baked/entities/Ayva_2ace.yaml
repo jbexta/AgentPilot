@@ -1,0 +1,52 @@
+uuid: 2ace2283-8513-499e-8c35-1498c1c1e0e1
+name: Ayva
+config:
+  _TYPE: workflow
+  name: Ayva
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 20
+    loc_y: 64
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: user
+      name: You
+  - id: '2'
+    linked_id: null
+    loc_x: 118
+    loc_y: 47
+    width: 450.0
+    height: 350.0
+    config:
+      chat.model:
+        _model_name: claude-opus-4-20250514
+        kind: CHAT
+        provider: litellm
+        model_params:
+          temperature: 0.6
+      chat.display_markdown: true
+      chat.sys_msg: reply in block capitals
+      chat.preload.data: []
+      computer_use.enabled: false
+      computer_use.grace_period: 3.0
+      computer_use.max_iterations: 50
+      voice.model:
+        _model_name: minimax/music-2.5
+        kind: AUDIO
+        provider: wavespeed
+        model_params: {}
+      _format_block_keys:
+      - chat.sys_msg
+      _TYPE: agent
+      name: Agent
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []

@@ -19,7 +19,7 @@ The page extends ConfigDBTree to provide database-backed conversation management
 with intuitive organization and navigation capabilities.
 """
 
-from gui.util import find_main_widget
+from gui.util import find_main
 from gui.widgets.config_db_tree import ConfigDBTree
 
 
@@ -138,7 +138,7 @@ class Page_Contexts(ConfigDBTree):
         self.chat_with_context(context_id)
 
     def chat_with_context(self, context_id):
-        main = find_main_widget(self)
+        main = find_main()
         page_chat = main.main_pages.get('chat')
         if page_chat.workflow and page_chat.workflow.responding:
             return

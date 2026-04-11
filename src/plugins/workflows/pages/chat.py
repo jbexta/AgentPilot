@@ -13,6 +13,7 @@ class Page_Chat(ChattableWorkflowWidget):  # (ChatWidget):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
+            collapsible=True,
             # show_settings=True,
         )
         self.target_when_checked = self.new_chat

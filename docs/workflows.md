@@ -1,0 +1,155 @@
+# Workflow Engine Overview
+
+The Workflow Engine provides a graph-based execution environment for designing infinitely nestable, AI-driven workflows. It provides a robust suite of modules that allow users to design complex, infinitely nestable graph workflows.
+
+The underlying engine handles state management, dependency resolution, message persistence, and asynchronous execution—all while supporting real-time interaction and branching contexts.
+
+
+## 1. Core Architecture (`src/core/members/workflow.py`)
+
+The `Workflow` class is a specialized type of `Member`. This implements the **Composite Pattern**, meaning a Workflow can contain other Members, including other Workflows (Nested Workflows).
+
+### Key Responsibilities:
+1.  **Context Management:**
+    *   Manages a specific `context_id` in the SQLite database.
+    *   Initializes the `MessageHistory` to handle conversation retrieval.
+2.  **Member Orchestration:**
+    *   Dynamically instantiates child members based on the configuration (`load_members`).
+    *   maintains a registry `self.members` mapping IDs to instances.
+3.  **Recursive Input Resolution:**
+
+### Configuration & State
+The workflow state is persisted in the `contexts` table. When loaded, it merges the stored JSON configuration with runtime settings:
+*   **`autorun`**: Whether the workflow executes immediately upon receiving input.
+*   **`members`**: A list of member configurations and their X/Y coordinates.
+*   **`inputs`**: Definitions of connections (edges) between members.
+
+---
+
+## 2. Message System (`src/utils/messages.py`)
+
+The application uses a sophisticated, database-backed message history system that supports branching conversations.
+
+### `MessageHistory`
+This class abstracts the complexity of SQL recursive queries to present a linear or branched chat history.
+
+*   **Branching:** It uses Recursive Common Table Expressions (CTEs) to traverse the `contexts` table (`parent_id` relationships) to construct the conversation thread leading to the current `leaf_id`.
+*   **Context Filtering:**
+    *   `get_llm_messages(calling_member_id)`: Prepares messages specifically for AI ingestion. It handles:
+        *   Role filtering (User, Assistant, System, Tool).
+        *   JSON parsing for Tool Calls and Results.
+        *   Base64 image encoding for Vision models.
+        *   Injecting "Preload" data (system prompts).
+*   **Structure Mapping:**
+    *   If a connection maps a specific JSON key from a source member (e.g., `{ "topic": "coding" }`), `MessageHistory` extracts that specific value and presents it as a message to the target member.
+
+### `Message` Object
+Represents a discrete unit of communication. It tracks:
+*   `role`: (user, assistant, system, tool, etc.)
+*   `content`: The text payload.
+*   `alt_turn`: An integer flag used to group messages into "turns" (execution cycles).
+
+---
+
+## 3. Execution Engine (`src/core/behaviors/default.py`)
+
+The execution logic is decoupled from the data structure and resides in `DefaultBehavior`. It implements a topological execution flow using `asyncio`.
+
+### The Execution Loop (`receive`)
+The engine runs a continuous loop until a stop condition is met (e.g., user input required, final result produced).
+
+1.  **Dependency Resolution (`get_async_members`):**
+    *   Iterates through all members in the workflow.
+    *   Checks if a member is "runnable" by verifying if all its input sources have produced a `turn_output`.
+    *   **Concurrency:** If multiple members are ready simultaneously, they are executed in parallel using `asyncio.gather`.
+
+2.  **Looping Logic:**
+    *   The engine detects "Loopers" (connections marked to allow circular feedback).
+    *   If a looper triggers, the engine resets the `turn_output` and `last_output` of specific members, effectively resetting their state to allow them to run again within the same turn.
+
+3.  **Termination:**
+    *   The loop breaks when no members are runnable.
+    *   It checks `next_expected_is_last_member()` to determine if the final output has been generated.
+
+---
+
+## 4. Visual Editor (`src/gui/widgets/workflow_settings.py`)
+
+The Workflow Editor is a node-based graphical interface built on **Qt Graphics View Framework**.
+
+### Architecture
+*   **`WorkflowSettings` (ConfigWidget):** The main container. It serializes the visual state back into the JSON configuration required by the backend.
+*   **`CustomGraphicsView`:** Handles zooming, panning, and interaction events. Supports a "Mini View" (read-only overview) and an editable canvas.
+
+### Components
+1.  **`DraggableMember` (Nodes):**
+    *   Represents an Agent, Block, or Tool.
+    *   Contains a `MemberProxy` which renders the specific configuration widget for that member (e.g., Model selection, Temperature).
+    *   Handles resizing and visual selection states.
+2.  **`ConnectionLine` (Edges):**
+    *   Draws Bezier curves between nodes.
+    *   **Circular Detection:** Changes visual style and logic if a line creates a loop (`looper`).
+    *   **Dynamic Pathing:** Automatically adjusts curvature based on the relative positions of nodes (left/right logic).
+3.  **`WorkflowButtons` (Toolbar):**
+    *   Provides Copy/Paste functionality (via JSON clipboard serialization).
+    *   Allows "Exploding" a nested workflow (breaking a sub-workflow into its constituent nodes on the current canvas).
+    *   Manages "Group" functionality to collapse multiple nodes into a new sub-workflow.
+
+### Visual Abstraction
+The editor implements a "Compact Mode" logic:
+*   If a workflow contains only 1 Member (or User + Agent), it simplifies the view to hide the node graph, presenting it as a single member.
+*   As soon as a third member or complex connection is added, it toggles to the full Graph View.
+
+---
+
+## 5. Data Flow Summary
+
+1.  **Design Time:** User drags nodes in `WorkflowSettings`. The `get_config()` method serializes positions, connections, and member settings into a JSON object.
+2.  **Runtime Loading:** `Workflow` initializes. It queries SQLite for the JSON config and instantiates `Member` Python objects.
+3.  **Trigger:** A user sends a message via `chat_widget`.
+4.  **Processing:**
+    *   `DefaultBehavior` analyzes the graph.
+    *   It identifies that Member A (e.g., User) has output.
+    *   It sees Member B requires Member A.
+    *   It executes Member B.
+    *   `MessageHistory` records the output to SQLite.
+5.  **Feedback:** The GUI listens for database updates and refreshes the chat bubble stream in real-time.
+
+
+# Members
+
+- **Notif**
+
+- **Iterate**
+
+- **Audio**
+
+- **Query**
+
+- **Probability**
+
+- **Image**
+
+- **Agent**
+
+- **Contact**
+
+- **Claude_code**
+
+- **Node**
+
+- **Video**
+
+- **Text**
+
+- **Workflow**
+
+- **User**
+
+- **Code**
+
+- **Prompt**
+
+- **State**
+
+- **Wait**

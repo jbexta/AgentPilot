@@ -20,10 +20,11 @@ the user experience and accessibility of the Agent Pilot interface.
 
 import json
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 
 from gui import system
-from gui.util import CHBoxLayout, IconButton, safe_single_shot
+from gui.util import CHBoxLayout, IconButton, find_main, safe_single_shot
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from utils.helpers import block_signals, display_message_box, display_message
@@ -91,7 +92,7 @@ class Page_Display_Settings(ConfigJoined):
         self.load()
 
     def delete_theme(self):
-        theme_name = self.widgets[0].theme.currentText()
+        theme_name = self.widgets[0].theme_wgt.currentText()
         if theme_name == 'Custom':
             return
 
@@ -130,9 +131,9 @@ class Page_Display_Settings(ConfigJoined):
                 'bubble_text_color': roles_config['code']['bubble_text_color'],
             },
             'display': {
-                'primary_color': display_page.primary_color.get_value(),
-                'secondary_color': display_page.secondary_color.get_value(),
-                'text_color': display_page.text_color.get_value(),
+                'primary_color': display_page.primary_color_wgt.get_value(),
+                'secondary_color': display_page.secondary_color_wgt.get_value(),
+                'text_color': display_page.text_color_wgt.get_value(),
             },
             'user': {
                 'bubble_bg_color': roles_config['user']['bubble_bg_color'],
@@ -165,10 +166,10 @@ class Page_Display_Settings(ConfigJoined):
             self.all_themes = {theme_name: json.loads(config) for theme_name, config in temp_themes.items()}
 
             # load items into ComboBox
-            with block_signals(self.theme):
-                self.theme.clear()
-                self.theme.addItems(['Custom'])
-                self.theme.addItems(self.all_themes.keys())
+            with block_signals(self.theme_wgt):
+                self.theme_wgt.clear()
+                self.theme_wgt.addItems(['Custom'])
+                self.theme_wgt.addItems(self.all_themes.keys())
 
             safe_single_shot(50, self.setTheme)
             # self.setTheme()
@@ -177,22 +178,20 @@ class Page_Display_Settings(ConfigJoined):
             current_display_config = self.parent.get_current_display_config()
             for theme_name in self.all_themes:
                 if self.all_themes[theme_name] == current_display_config:
-                    # set self.theme (A ComboBox) to the current theme item, NOT setCurrentText
-                    with block_signals(self.theme):
-                        indx = self.theme.findText(theme_name)
-                        self.theme.setCurrentIndex(indx)
+                    with block_signals(self.theme_wgt):
+                        indx = self.theme_wgt.findText(theme_name)
+                        self.theme_wgt.setCurrentIndex(indx)
                     return
-            self.theme.setCurrentIndex(0)
+            self.theme_wgt.setCurrentIndex(0)
 
         def after_init(self):
             try:
-                self.theme.currentIndexChanged.connect(self.changeTheme)
-                pass
+                self.theme_wgt.currentIndexChanged.connect(self.changeTheme)
             except Exception as e:
                 pass
 
         def changeTheme(self):
-            theme_name = self.theme.currentText()
+            theme_name = self.theme_wgt.currentText()
             if theme_name == 'Custom':
                 return
 
@@ -245,7 +244,8 @@ class Page_Display_Settings(ConfigJoined):
             app_config = system.manager.config
             page_settings.load_config(app_config)
             page_settings.load()
-            page_settings.main.apply_stylesheet()
+            main = find_main()
+            main.apply_stylesheet()
 
     class Page_Display_Fields(ConfigFields):
         def __init__(self, parent):
@@ -352,7 +352,15 @@ class Page_Display_Settings(ConfigJoined):
 
         def update_config(self):
             super().update_config()
-            main = self.parent.parent.main
+            if not hasattr(self, '_debounce_timer'):
+                self._debounce_timer = QTimer(self)
+                self._debounce_timer.setSingleShot(True)
+                self._debounce_timer.setInterval(150)
+                self._debounce_timer.timeout.connect(self._apply_display)
+            self._debounce_timer.start()
+
+        def _apply_display(self):
+            main = find_main()
             main.apply_stylesheet()
             main.apply_margin()
             main.page_chat.message_collection.refresh_waiting_bar()

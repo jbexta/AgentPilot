@@ -27,7 +27,7 @@ class ModelsManager(BaseManager):
     def load(self):
         model_res = sql.get_results("""
             SELECT
-                json_extract(m.config, '$.model_name') AS model_name,
+                COALESCE(json_extract(m.config, '$._model_name'), json_extract(m.config, '$.model_name')) AS model_name,
                 m.name AS alias,
                 m.config AS model_config,
                 a.config AS api_config,
@@ -61,7 +61,7 @@ class ModelsManager(BaseManager):
         self.model_aliases[model_key] = alias
 
     def get_model(self, model_obj):  # provider, kind, model_name):
-        provider, kind, model_name = model_obj['provider'], model_obj['kind'], model_obj['model_name']
+        provider, kind, model_name = model_obj['provider'], model_obj['kind'], model_obj['_model_name']
         model = self.get((provider, kind, model_name), None)
         if model is None:
             raise ValueError(f"Model '{model_name}' not found.")

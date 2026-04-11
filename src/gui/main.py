@@ -1,9 +1,8 @@
 
 import asyncio
-from datetime import datetime
+from decimal import Decimal
 import json
 import os
-from pathlib import Path
 import sys
 import uuid
 
@@ -15,22 +14,24 @@ from PySide6.QtGui import QIcon, QTextDocument, Qt
 from typing_extensions import override
 
 # from core.connectors.h5 import append_h5_dataset, create_h5_dataset, tea_kinds
-from src.core.connectors.h5 import DATA_DIR, PriceFile
+from src.core.connectors.h5 import DATA_DIR, PriceFile, create_h5_file, get_h5_dataset_last_item_cell, get_h5_path, normalize_timestamp, sanitize_filename, sanitize_string
 from src.core.connectors.mysql import MysqlConnector
 from src.core.connectors.sqlite import SqliteConnector
 from src.utils import sql
-from src.utils.sql import define_table, get_db_path
+from src.utils.sql import get_db_path
 from utils.sql_upgrade import upgrade_script
 from utils import telemetry  # , sql
 from utils.helpers import display_message_box, flatten_list, get_avatar_paths_from_config, display_message
 from gui.style import ACCENT_COLOR_1, get_stylesheet
 from gui.widgets.config_pages import ConfigPages
-from gui.util import CustomMenu, IconButton, clear_layout, find_main_widget, CVBoxLayout, safe_single_shot, set_selected_pages
+from gui.util import CustomMenu, IconButton, clear_layout, CVBoxLayout, safe_single_shot, set_selected_pages, FramelessResizeMixin
 # from plugins.calligrapher.src.main import test_calligrapher
 
 from gui import system
 
 os.environ["QT_OPENGL"] = "software"
+
+loop = None
 
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
@@ -153,7 +154,13 @@ class TOSDialog(QDialog):
         self.setMinimumSize(300, 350)
         self.resize(300, 350)
 
-        self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
 
         layout = QVBoxLayout(self)
 
@@ -219,97 +226,6 @@ class TitleButtonBar(CustomMenu):
         self.window().close()
 
 
-#     # def toggleNotifications(self):
-#     #     pass
-#     #     # self.main.notification_manager.setVisible(self.notif_button.isChecked())
-
-#     # class NotificationIconButton(ToggleIconButton):
-#     #     """Toggle button with a notification number bubble"""
-#     #     def __init__(self, **kwargs):
-#     #         super().__init__(**kwargs)
-#     #         self.setFixedSize(20, 20)
-#     #         self.bubble_number = 67697
-
-#     #     def set_bubble_number(self, n):
-#     #         """Set the number to display in the notification bubble"""
-#     #         self.bubble_number = n
-#     #         self.update()  # Trigger a repaint
-
-#     #     def paintEvent(self, event):
-#     #         """Override paint event to draw the bubble"""
-#     #         super().paintEvent(event)
-
-#     #         if self.bubble_number > 0:
-#     #             painter = QPainter()
-#     #             if not painter.begin(self):
-#     #                 return
-
-#     #             try:
-#     #                 painter.setRenderHint(QPainter.Antialiasing)
-
-#     #                 # Define bubble size and position
-#     #                 bubble_size = 20
-#     #                 bubble_x = self.width() - bubble_size - 2
-#     #                 bubble_y = 2
-
-#     #                 # Draw the red circle
-
-#     #                 painter.setBrush(QColor(ACCENT_COLOR_1))  # Red color
-#     #                 painter.setPen(Qt.NoPen)
-#     #                 painter.drawEllipse(bubble_x, bubble_y, bubble_size, bubble_size)
-
-#     #                 # Draw the number text
-#     #                 painter.setPen(Qt.white)
-#     #                 font = QFont()
-#     #                 font.setPointSize(8)
-#     #                 font.setBold(True)
-#     #                 painter.setFont(font)
-
-#     #                 # Format the number (show 99+ for numbers > 99)
-#     #                 text = str(self.bubble_number) if self.bubble_number <= 99 else "99+"
-
-#     #                 # Draw text centered in the bubble
-#     #                 text_rect = PySide6.QtCore.QRect(bubble_x, bubble_y, bubble_size, bubble_size)
-#     #                 painter.drawText(text_rect, Qt.AlignCenter, text)
-#     #             finally:
-#     #                 painter.end()
-
-    #     # def paintEvent(self, event):
-    #     #     """Override paint event to draw the bubble"""
-    #     #     super().paintEvent(event)
-
-    #     #     if self.bubble_number > 0:
-    #     #         painter = QPainter(self)
-    #     #         painter.setRenderHint(QPainter.Antialiasing)
-
-    #     #         # Define bubble size and position
-    #     #         bubble_size = 20
-    #     #         bubble_x = self.width() - bubble_size - 2
-    #     #         bubble_y = 2
-
-    #     #         # Draw the red circle
-                
-    #     #         painter.setBrush(QColor(ACCENT_COLOR_1))  # Red color
-    #     #         painter.setPen(Qt.NoPen)
-    #     #         painter.drawEllipse(bubble_x, bubble_y, bubble_size, bubble_size)
-
-    #     #         # Draw the number text
-    #     #         painter.setPen(Qt.white)
-    #     #         font = QFont()
-    #     #         font.setPointSize(8)
-    #     #         font.setBold(True)
-    #     #         painter.setFont(font)
-
-    #     #         # Format the number (show 99+ for numbers > 99)
-    #     #         text = str(self.bubble_number) if self.bubble_number <= 99 else "99+"
-
-    #     #         # Draw text centered in the bubble
-    #     #         text_rect = PySide6.QtCore.QRect(bubble_x, bubble_y, bubble_size, bubble_size)
-    #     #         painter.drawText(text_rect, Qt.AlignCenter, text)
-
-    #     #         painter.end()
-
-
 class MainPages(ConfigPages):
     def __init__(self, parent):
         super().__init__(
@@ -337,7 +253,7 @@ class MainPages(ConfigPages):
         )
         page_definitions = system.manager.modules.get_modules_in_folder(
             module_type='Pages',
-            fetch_keys=('uuid', 'name', 'class',),
+            fetch_keys=('id', 'name', 'class',),
         )
         page_definitions = [  # filter out pages that are not main or pinned
             (module_id, module_name, page_class)
@@ -362,10 +278,13 @@ class MainPages(ConfigPages):
                 new_pages[page_name] = self.pages[page_name]
         for module_id, module_name, page_class in page_definitions:
             try:
-                # new_pages[module_name] = page_class(parent=self)
+                existing_page = self.pages.get(module_name, None)
+                if existing_page and type(existing_page) is page_class:
+                    new_pages[module_name] = existing_page
+                    continue
+
                 page = page_class(parent=self)
                 setattr(page, 'module_id', module_id)
-                existing_page = self.pages.get(module_name, None)
                 if existing_page and getattr(existing_page, 'user_editing', False):
                     setattr(page, 'user_editing', True)
 
@@ -395,14 +314,13 @@ class MainPages(ConfigPages):
     
         system.manager.modules.add(name=text, module_type='Pages')
     
-        main = find_main_widget(self)
-        main.main_pages.build_schema()
+        self.build_schema()
         # main.page_settings.build_schema()
-        main.main_pages.settings_sidebar.toggle_page_pin(text, True)
-        page_btn = main.main_pages.settings_sidebar.page_buttons.get(text, None)
+        self.settings_sidebar.toggle_page_pin(text, True)
+        page_btn = self.settings_sidebar.page_buttons.get(text, None)
         if page_btn:
             page_btn.click()
-            main.main_pages.edit_page(text)
+            self.edit_page(text)
 
 
 class NotificationWidget(QWidget):
@@ -591,312 +509,405 @@ class NotificationManager(QWidget):
         self.adjustSize()
 
 
-def migrate_tables():
+# def convert_forex():
+#     # Directory: `/home/jb/Downloads/fx_full_1min_6q0at16` contains .txt files with forex data
+#     # Each file contains comma separated 1 minute data for a single forex pair
+#     # The columns are: date, time, open, high, low, close, volume
+#     # Convert the data to .h5 file
+#     # Each file should not be loaded into memory, but rather processed line by line
+#     for file in os.listdir('/home/jb/Downloads/fx_full_1min_6q0at16'):
+#         if not file.endswith('.txt'):
+#             continue
 
-    main_db_path = get_db_path()
-    fin_db_path = os.path.join(os.path.dirname(main_db_path), 'finance.db')
-    # create the finance.db sqlite3 database if it doesn't exist
-    if os.path.exists(fin_db_path):
-        os.remove(fin_db_path)
+#         filename = file.split('.')[0]
+#         market_id = filename.split('_')[0]
+#         if len(market_id) != 6:
+#             raise NotImplementedError(f"Market ID {market_id} is not 6 characters long")
+#         tf_path = get_h5_path('FX', market_id)
+#         if not os.path.exists(tf_path):
+#             os.makedirs(os.path.dirname(tf_path), exist_ok=True)
+#             create_h5_file(
+#                 path=tf_path, 
+#                 metadata={'api': 'FX', 'market': market_id},
+#                 with_dataset='ohlc/60',
+#             )
 
-    other_conn = SqliteConnector(db_path=fin_db_path)
+#         price_file = PriceFile(tf_path)
+#         price_file.base_interval = 60
+#         with price_file:
 
-    other_conn.execute("""
-        CREATE TABLE "apis" (
-            "id"	INTEGER,
-            "name"	TEXT NOT NULL,
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
-    other_conn.execute("""
-        CREATE TABLE "assets" (
-            "id"	INTEGER,
-            "api_id"	INTEGER NOT NULL,
-            "api_asset_id"	TEXT NOT NULL,
-            "name"	TEXT NOT NULL,
-            "symbol"	TEXT NOT NULL,
-            "kind"	TEXT DEFAULT NULL,
-            "group_to"	INTEGER DEFAULT NULL,
-            "metadata"	TEXT NOT NULL DEFAULT '{}',
-            "last_update"	TEXT NOT NULL DEFAULT '{}',
-            "last_price"	NUMERIC DEFAULT 0,
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
-    other_conn.execute("""
-        CREATE TABLE "markets" (
-            "id"	INTEGER,
-            "api_id"	INTEGER NOT NULL,
-            "market_id"	TEXT NOT NULL,
-            "base_asset"	TEXT DEFAULT NULL,
-            "quote_asset"	TEXT DEFAULT NULL,
-            "base_symb"	TEXT NOT NULL,
-            "quote_symb"	TEXT NOT NULL,
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
-    other_conn.execute("""
-        CREATE TABLE "trades" (
-            "id"	INTEGER,
-            "unix"	INTEGER NOT NULL,
-            "trade_id"	TEXT NOT NULL,
-            "exchange"	TEXT NOT NULL,
-            "asset_sold"	INTEGER NOT NULL,
-            "amt_sold"	NUMERIC NOT NULL,
-            "asset_received"	INTEGER NOT NULL,
-            "amt_received"	NUMERIC NOT NULL,
-            "fee_asset"	INTEGER NOT NULL,
-            "fee_amt"	NUMERIC NOT NULL,
-            "category"	TEXT NOT NULL DEFAULT '',
-            "symb_asset_sold"	TEXT DEFAULT '',
-            "symb_asset_received"	TEXT DEFAULT '',
-            "symb_fee_asset"	TEXT DEFAULT '',
-            "notes"	TEXT NOT NULL DEFAULT '',
-            "ignored"	INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
-    other_conn.execute("""
-        CREATE TABLE "depwiths" (
-            "id"	INTEGER,
-            "unix"	INTEGER NOT NULL,
-            "depwith"	INTEGER NOT NULL,
-            "user_id"	INTEGER NOT NULL,
-            "ins_shares"	INTEGER NOT NULL,
-            "ins_amt"	NUMERIC NOT NULL,
-            "tot_pot"	NUMERIC NOT NULL,
-            "ignore"	INTEGER NOT NULL,
-            "questionable"	INTEGER NOT NULL,
-            "asset_symb"	TEXT NOT NULL,
-            "asset_id"	INTEGER DEFAULT NULL,
-            "asset_amt"	NUMERIC DEFAULT 0,
-            "note"	TEXT NOT NULL DEFAULT '',
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
-    other_conn.execute("""
-        CREATE TABLE "files" (
-            "id"	INTEGER,
-            "file_id"	TEXT NOT NULL,
-            "file_path"	TEXT NOT NULL,
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
+#             current_size = price_file.file['ohlc/60'].shape[0]
 
-    other_conn.execute("""
-        CREATE TABLE "users" (
-            "id"	INTEGER,
-            "name"	TEXT NOT NULL,
-            "shares"	INTEGER NOT NULL,
-            PRIMARY KEY("id" AUTOINCREMENT)
-        )
-    """)
+#             ohlc_batch = []
+#             BATCH_SIZE = 60000
+            
+#             def write_batch():
+#                 nonlocal current_size, ohlc_batch
+#                 if ohlc_batch:
+#                     price_file.append_batch(ohlc_batch)
+#                     current_size = price_file.file['ohlc/60'].shape[0]
+#                     print(f'FX: Wrote batch: {len(ohlc_batch)} ohlc, total size: {current_size}')
+#                     ohlc_batch = []
+
+#         # with h5py.File(tf_path, 'a') as f:
+#             with open(os.path.join('/home/jb/Downloads/fx_full_1min_6q0at16', file), 'r') as f:
+#                 for line in f:
+#                     data = line.split(',')
+
+#                     date = data[0]  # in the format YYYYMMDD
+#                     year = int(date[:4])
+#                     month = int(date[4:6])
+#                     day = int(date[6:])
+#                     time = data[1] # in the format HH:MM:SS, we only need HH:MM
+#                     hour = int(time[:2])
+#                     minute = int(time[3:5])
+#                     unix = int(datetime(year, month, day, hour, minute).timestamp())
+#                     opn = float(data[2])
+#                     high = float(data[3])
+#                     low = float(data[4])
+#                     close = float(data[5])
+#                     volume = float(data[6])
+
+#                     ohlc_batch.append([unix, opn, high, low, close, volume, 0])
+                    
+#                     if len(ohlc_batch) >= BATCH_SIZE:
+#                         write_batch()
+
+#                 write_batch()
+#                 # f['ohlc/60'].append([unix, opn, high, low, close, volume])
+
+# def upsert_fx_assets():
+#     fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
+#     connection = SqliteConnector(db_path=fin_db)
+#     fx_api = FinanceAPI(connection, 1)
+#     existing_assets = fx_api.get_existing_assets()
+#     existing_markets = fx_api.get_existing_markets()
+
+#     new_markets = {}
+#     new_assets = set()
+#     for file in os.listdir('/home/jb/Downloads/fx_full_1min_6q0at16'):
+#         if not file.endswith('.txt'):
+#             continue
+
+#         filename = file.split('.')[0]
+#         market_id = filename.split('_')[0]
+
+#         base_asset = market_id[:3]
+#         quote_asset = market_id[3:]
+
+#         if base_asset not in existing_assets:
+#             new_assets.add(base_asset)
+#         if quote_asset not in existing_assets:
+#             new_assets.add(quote_asset)
+
+#         if market_id not in existing_markets:
+#             new_markets[market_id] = (base_asset, quote_asset)
     
-    # DEPWITHS
-    mysql_conn = MysqlConnector()
-    depwiths_rows = mysql_conn.get_results("""
-        SELECT 
-            dte,
-            depWith,
-            user,
-            insShares,
-            insAmt,
-            old_totPot,
-            asset_symb,
-            asset,
-            asset_amt,
-            `ignore`,
-            questionable,
-            note
-        FROM mfDepsWiths
-        WHERE mf_depwith_group = ''
-    """)
-    c_depwiths_rows = [
-        (
-            row[0].timestamp(),
-            row[1],
-            row[2],
-            row[3],
-            row[4],
-            row[5],
-            row[6],
-            row[7],
-            row[8],
-            row[9],
-            row[10],
-            row[11],
-        )
-        for row in depwiths_rows
-    ]
-    other_conn.execute(f"""
-        INSERT INTO depwiths (
-            unix, 
-            depwith, 
-            user_id, 
-            ins_shares, 
-            ins_amt, 
-            tot_pot, 
-            asset_symb, 
-            asset_id, 
-            asset_amt, 
-            `ignore`, 
-            questionable, 
-            note
-        )
-        VALUES {', '.join(['(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'] * len(c_depwiths_rows))}
-    """, flatten_list(c_depwiths_rows))
+#     if new_assets:
+#         values_clause = ', '.join(['(?, ?, ?, ?, ?)'] * len(new_assets))
+#         query = f"INSERT INTO assets (api_id, name, symbol, api_asset_id, kind) VALUES {values_clause}"
+#         params = []
+#         for asset in new_assets:
+#             params.extend([1, asset, asset, asset, 'FOREX'])
+#         connection.execute(query, params)
+#         # display_message(f"Binance: Added {len(new_assets)} assets")
+#         print(f'FX: Added {len(new_assets)} assets')
+    
+#     new_asset_ids = connection.get_results(f"""
+#         SELECT api_asset_id, id
+#         FROM assets
+#         WHERE api_id = ?
+#     """, (1,), return_type='dict')
 
-    # TRADES
-    trades_rows = mysql_conn.get_results("""
-        SELECT 
-            timestamp_opened,
-            trade_id,
-            exchange,
-            asset_sold,
-            amt_sold,
-            asset_received,
-            amt_received,
-            fee_asset,
-            fee_amt,
-            category,
-            notes,
-            symb_asset_sold,
-            symb_asset_received,
-            symb_fee_asset,
-            ignored
-        FROM trades
-        WHERE user_group = 2
-    """)
-    c_trades_rows = [
-        (
-            row[0].timestamp(),
-            row[1],
-            row[2],
-            row[3],
-            row[4],
-            row[5],
-            row[6],
-            row[7],
-            row[8],
-            row[9],
-            row[10],
-            row[11],
-            row[12],
-            row[13],
-            row[14],
-        )
-        for row in trades_rows
-    ]
-    other_conn.execute(f"""
-        INSERT INTO trades (
-            unix, 
-            trade_id, 
-            exchange, 
-            asset_sold, 
-            amt_sold, 
-            asset_received, 
-            amt_received, 
-            fee_asset, 
-            fee_amt, 
-            category, 
-            notes, 
-            symb_asset_sold, 
-            symb_asset_received, 
-            symb_fee_asset, 
-            ignored
-        )
-        VALUES {', '.join(['(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'] * len(c_trades_rows))}
-    """, flatten_list(c_trades_rows))
+#     # new_markets = {symbol.symbol: (symbol.base_asset, symbol.quote_asset)
+#     #             for symbol in data.symbols
+#     #             if symbol.symbol not in existing_markets}
 
-    # USERS
-    users_rows = mysql_conn.get_results("""
-        SELECT 
-            id,
-            name,
-            shares
-        FROM users
-        WHERE user_group = 2
-    """)
-    other_conn.execute(f"""
-        INSERT INTO users (
-            id, 
-            name, 
-            shares
-        )
-        VALUES {', '.join(['(?, ?, ?)'] * len(users_rows))}
-    """, flatten_list(users_rows))
+#     if new_markets:
+#         # display_message(f"Binance: Adding {len(new_markets)} markets")
+#         print(f'FX: Adding {len(new_markets)} markets')
+#         items = list(new_markets.items())
+#         batch_size = 499
+#         for i in range(0, len(items), batch_size):
+#             batch = items[i:i+batch_size]
+#             values_clause = ', '.join(['(?, ?, ?, ?, ?, ?)'] * len(batch))
+#             query = f"INSERT INTO api_markets (api_id, market_id, base_asset, quote_asset, base_symb, quote_symb) VALUES {values_clause}"
+#             params = []
+#             for market, (base, quote) in batch:
+#                 base_asset_id = new_asset_ids.get(base, None)
+#                 quote_asset_id = new_asset_ids.get(quote, None)
+#                 params.extend([1, market, base_asset_id, quote_asset_id, base, quote])
+#             connection.execute(query, params)
 
-    # # ASSETS
-    assets_rows = mysql_conn.get_results("""
+#     pass
+
+# def convert_coingecko_files():
+#     coingecko_dir = '/media/jb/DATA/PRICE/COINGECKO/14400'
+#     for file in os.listdir(coingecko_dir):
+#         # rename to remove `_usd_line.h5`
+#         if not file.endswith('_line_14400.h5'):
+#             continue
+#         new_file = file.replace('_line_14400.h5', '.h5')
+#         os.rename(os.path.join(coingecko_dir, file), os.path.join(coingecko_dir, new_file))
+
+def get_total_at_unix(unix):
+    asset_balances: dict[int, Decimal] = get_asset_balances_at_unix(unix)
+    asset_prices: dict[int, Decimal] = get_asset_prices_at_unix(unix, asset_balances.keys())
+    asset_totals: dict[int, Decimal] = {asset: asset_balances[asset] * asset_prices[asset] for asset in asset_balances.keys()}
+    return sum(asset_totals.values())
+    
+
+def get_asset_balances_at_unix(unix):
+    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
+    connection = SqliteConnector(db_path=fin_db)
+    result = connection.get_results(f"""
         SELECT 
             a.id,
             a.api_id,
-            a.api_asset_id,
+            a.symbol,
             a.name,
-            a.symb,
-            '', -- UPPER(t.`type`),
-            a.group_id,
-            a.metadata,
-            a.last_update
+            a.kind as asset_type,
+            COALESCE(
+                COALESCE(mf.depwith_amount, 0) + 
+                COALESCE(t.trade_amount, 0), 0
+            ) AS total_amount
+            -- a.last_price,
+            -- COALESCE(
+            --    COALESCE(mf.depwith_amount, 0) + 
+            --    COALESCE(t.trade_amount, 0), 0
+            -- ) * a.last_price AS total_value
         FROM assets a
-    """)
-    # batches of 10_000
-    if assets_rows:
-        for i in range(0, len(assets_rows), 10_000):
-            batch = assets_rows[i:i+10_000]
-            if not batch:
-                continue
-            other_conn.execute(f"""
-                INSERT INTO assets (
-                    id,
-                    api_id,
-                    api_asset_id,
-                    name,
-                    symbol,
-                    kind,
-                    group_to,
-                    metadata,
-                    last_update,
-                    last_price
-                )
-                VALUES {', '.join(['(?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'] * len(batch))}
-            """, flatten_list(batch))
+        LEFT JOIN (
+            SELECT 
+                asset_id,
+                SUM(
+                    CASE 
+                        WHEN depwith = 0 THEN asset_amt 
+                        WHEN depwith = 1 THEN -asset_amt 
+                        ELSE 0 
+                    END
+                ) AS depwith_amount
+            FROM depwiths 
+            WHERE unix < ?
+            GROUP BY asset_id
+        ) mf ON a.id = mf.asset_id
+        LEFT JOIN (
+            SELECT 
+                asset_id,
+                SUM(amount) AS trade_amount
+            FROM (
+                SELECT asset_sold AS asset_id, -amt_sold AS amount
+                FROM trades 
+                WHERE ignored = 0 AND unix < ?
+                UNION ALL
+                SELECT asset_received AS asset_id, amt_received AS amount
+                FROM trades 
+                WHERE ignored = 0 AND unix < ?
+                UNION ALL
+                SELECT fee_asset AS asset_id, -fee_amt AS amount
+                FROM trades 
+                WHERE ignored = 0 AND fee_amt > 0 AND unix < ?
+            ) trade_movements
+            GROUP BY asset_id
+        ) t ON a.id = t.asset_id
+        WHERE total_amount != 0
+    """, (unix,unix,unix,unix,))
+    return {row[0]: Decimal(row[5]) for row in result}
 
-    pass
 
-    # table_col_map = {
-    #     'mfDepsWiths': {
-    #         'new_name': 'depwiths',
-    #         'columns': {
-    #             'unix': 'unix',
-    #             'depWith': 'depWith',
-    #             'user': 'user',
-    #             'ins_shares': 'ins_shares',
-    #             'ins_amt': 'ins_amt',
-    #             'tot_pot': 'tot_pot',
-    #         }
-    # }
+def get_asset_prices_at_unix(unix, assets):
+    prices = {}
+    convert_to = 2
+    for asset in assets:
+        prices[asset] = convert_asset_price(asset, convert_to, unix)
+    return prices
 
-class Main(QMainWindow):
+
+def find_linked_assets(asset_id):
+    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
+    connection = SqliteConnector(db_path=fin_db)
+    return connection.get_results(f"""
+        WITH RECURSIVE linked_assets AS (
+            SELECT id, group_to FROM assets 
+            WHERE id = ?
+
+            UNION
+
+            SELECT a.id, a.group_to
+            FROM assets a
+            INNER JOIN linked_assets la ON (a.id = la.group_to OR a.group_to = la.id)
+        )
+        SELECT DISTINCT id FROM linked_assets;
+        """, (asset_id,), return_type='list')
+
+
+def convert_asset_price(convert_asset_id, target_asset_id, unix):
+    if convert_asset_id == target_asset_id:
+        return 1.0
+
+    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
+    connection = SqliteConnector(db_path=fin_db)
+
+    convert_links = find_linked_assets(convert_asset_id)
+    target_links = find_linked_assets(target_asset_id)
+
+    # Prepare placeholders for the IN clauses
+    conv_placeholders = ', '.join(['?'] * len(convert_links))
+    target_placeholders = ', '.join(['?'] * len(target_links))
+
+    # Construct the query
+    query = f"""
+        SELECT a.name, am.market_id, am.base_asset, am.quote_asset 
+        FROM api_markets am
+        LEFT JOIN apis a ON am.api_id = a.id
+        WHERE 
+            (base_asset IN ({conv_placeholders}) AND quote_asset IN ({target_placeholders}))
+            OR 
+            (quote_asset IN ({conv_placeholders}) AND base_asset IN ({target_placeholders}))
+    """
+
+    params = convert_links + target_links + convert_links + target_links
+    
+    markets = connection.get_results(query, params)
+
+    if len(markets) != 1:
+        raise NotImplementedError(f"Multiple markets found for {convert_asset_id} to {target_asset_id}")
+
+    market_file = get_market_price_file(markets[0][0], markets[0][1])
+    pf = PriceFile(market_file)
+    price = pf.binary_search_unix_price(unix)
+
+    return price
+
+
+def get_market_price_file(api, market):
+    return f'/media/jb/DATA/PRICE/{api}/{api}_{market}.h5'
+
+
+def upsert_coingecko_assets():
+    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
+    connection = SqliteConnector(db_path=fin_db)
+    # cg_api = CoingeckoAPI(connection)
+
+    existing_assets = connection.get_results("""
+        SELECT 
+            id, 
+            api_asset_id
+        FROM assets 
+        WHERE api_id = ?
+    """, (31,), return_type='dict')
+    # existing_markets = cg_api.get_existing_markets()
+    connection.execute("DELETE FROM api_markets WHERE api_id = 31")
+
+    # new_assets = set()
+    new_markets = {}
+
+    for file in os.listdir('/media/jb/DATA/PRICE/COINGECKO'):
+        # remove 'COINGECKO_' from the beginning ONLY
+        market_id = file[len('COINGECKO_'):-3]
+        base_asset = market_id[:-4]  # remove '_usd'
+        quote_asset = 'USD'
+
+        new_markets[market_id] = (base_asset, quote_asset)
+    
+    all_assets = connection.get_results("""
+        SELECT 
+            api_asset_id,
+            id
+        FROM assets 
+        WHERE api_id = ?
+    """, (31,), return_type='dict')
+    
+    if new_markets:
+        # display_message(f"Binance: Adding {len(new_markets)} markets")
+        print(f'FX: Adding {len(new_markets)} markets')
+        items = list(new_markets.items())
+        batch_size = 499
+        for i in range(0, len(items), batch_size):
+            batch = items[i:i+batch_size]
+            values_clause = ', '.join(['(?, ?, ?, ?, ?, ?)'] * len(batch))
+            query = f"INSERT INTO api_markets (api_id, market_id, base_asset, quote_asset, base_symb, quote_symb) VALUES {values_clause}"
+            params = []
+            for market, (base, quote) in batch:
+                base_asset_id = all_assets[base]
+                quote_asset_id = 53
+                params.extend([31, market, base_asset_id, quote_asset_id, base, quote])
+            connection.execute(query, params)
+
+
+def insert_slopify_artists(artist_names):
+    """Insert a list of artist names into slopify_artists.
+
+    Parameters
+    ----------
+    artist_names : list[str]
+        Artist names to insert.
+    """
+    existing_artists = sql.get_results("SELECT LOWER(name) FROM slopify_artists", return_type='list')
+    existing_artists_count = len([name for name in artist_names if name.lower() in existing_artists])
+    
+    new_artists = [name for name in artist_names if name.lower() not in existing_artists]
+    for name in new_artists:
+        if not name:
+            continue
+        config = {
+            'Info': {'name': name},
+            'Generation': {},
+        }
+        sql.execute(
+            "INSERT INTO slopify_artists (name, config)"
+            " VALUES (?, ?)",
+            (name, json.dumps(config)),
+        )
+    print(f'Inserted {len(new_artists)} artists')
+    if existing_artists_count > 0:
+        print(f'{existing_artists_count} artists already exist')
+
+
+
+class Main(FramelessResizeMixin, QMainWindow):
+
     def __init__(self):
         super().__init__()
 
-        # migrate_tables()
-        # sys.exit(0)
 
-        # # scan_file_ids()
+        # # # check_cg_filepaths()
+        # # # sys.exit(0)
+
+        # # # # # # use yt-dlp to download the following videos:
+        # # # # # # https://www.youtube.com/watch?v=BEvt5dzxVW0
+        # # # # # yt_manager = YouTubeManager()
+        # # # # # yt_manager.download_video('https://www.youtube.com/watch?v=BEvt5dzxVW0', '/home/jb/Desktop/BEvt5dzxVW0.mp4')
+        
+        # # # # # convert_forex()
+        # # # # # upsert_fx_assets()
+
+        # # # totpot = get_total_at_unix(1635449600)
+        # # # print(totpot)
+
+        # # # # convert_coingecko_files()
+        # # upsert_coingecko_assets()
         # # sys.exit(0)
+        # # # # migrate_tables()
+        # # # # # # sys.exit(0)
 
-        self._mousePressed = False
-        self._mousePos = None
-        self._mouseGlobalPos = None
-        self._resizing = False
-        self._resizeMargins = 10  # Margin in pixels to detect resizing
+        # # # # # scan_file_ids()
+        # # # # # sys.exit(0)
+
+        # # return
+
+        # from scrape_polo_depwiths import get_depwith
+        # results = get_depwith()
+        # for r in results:
+        #     print(list(r.values()))
+        # return
+
+        self.init_frameless_resize(margin=10)
 
         self.setWindowTitle('AgentPilot')
         self.setWindowIcon(QIcon(':/resources/icon.png'))
 
-        self.main = self  # workaround for bubbling up
+        # self.main = self  # workaround for bubbling up
 
         self.threadpool = QThreadPool()
 
@@ -924,7 +935,7 @@ class Main(QMainWindow):
         self.tray.show()
 
         safe_single_shot(2000, system.manager.daemons.start_all_daemons)
-    
+
     def init_app(self):
         clear_layout(self.layout)
 
@@ -948,9 +959,9 @@ class Main(QMainWindow):
         system.manager.load()
 
         if 'AP_DEV_MODE' in os.environ.keys():
-            from utils.reset import bootstrap
+            from utils.reset import bootstrap_app
             # reset_table(table_name='modules')
-            bootstrap()
+            bootstrap_app()
 
         get_stylesheet()  # init stylesheet
 
@@ -1005,12 +1016,13 @@ class Main(QMainWindow):
             set_selected_pages(self.main_pages, page_path)
         self.main_pages.load()
 
+
         # # system.manager.modules.test_modules()
         # QTimer.singleShot(100, system.manager.modules.test_modules)
 
     @property  # todo remove
     def page_chat(self):
-        return self.main.main_pages.get('chat')
+        return self.main_pages.get('chat')
 
     def get_uuid(self):
         from utils import sql
@@ -1134,6 +1146,12 @@ class Main(QMainWindow):
         if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'page_path'"):
             sql.execute("INSERT INTO settings (field, value) VALUES ('page_path', '{}')")
         
+        # rename block types: text_block -> text, code_block -> code, prompt_block -> prompt
+        self.patch_config_recursive(
+            tables=['contexts', 'entities', 'blocks', 'tools', 'tasks'],
+            renames={'text_block': 'text', 'code_block': 'code', 'prompt_block': 'prompt'},
+        )
+
         sql.ensure_column_in_tables(
             tables=['models'],
             column_name='metadata',
@@ -1171,6 +1189,48 @@ class Main(QMainWindow):
         #                         (folder_name.upper(), module_id))
         #     # delete locked folders
         #     sql.execute("DELETE FROM folders WHERE type = 'modules' and locked = 1")
+
+    def patch_config_recursive(self, tables, renames):
+        """Recursively rename `_TYPE` values in config JSON across tables.
+
+        Parameters
+        ----------
+        tables : list[str]
+            Database tables to patch.
+        renames : dict[str, str]
+            Mapping of old _TYPE values to new ones.
+        """
+        from utils import sql
+
+        def _patch(config):
+            if not isinstance(config, dict):
+                return config
+            if config.get('_TYPE') in renames:
+                config['_TYPE'] = renames[config['_TYPE']]
+            for member in config.get('members', []):
+                if isinstance(member, dict):
+                    _patch(member.get('config', {}))
+            return config
+
+        for table in tables:
+            try:
+                rows = sql.get_results(
+                    f"SELECT id, config FROM {table} "
+                    f"WHERE config IS NOT NULL"
+                )
+            except Exception:
+                continue
+            for row_id, config_str in rows:
+                try:
+                    config = json.loads(config_str)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                patched = json.dumps(_patch(config))
+                if patched != config_str:
+                    sql.execute(
+                        f"UPDATE {table} SET config = ? WHERE id = ?",
+                        (patched, row_id),
+                    )
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):
@@ -1268,22 +1328,31 @@ class Main(QMainWindow):
         self.title_bar.raise_()
 
     def apply_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet())
-        # pixmaps
-        for child in self.findChildren(IconButton):
-            child.setIconPixmap()
-        pass
-        # trees
-        for child in self.findChildren(QTreeWidget):
-            child.apply_stylesheet()
-        pass
-        # charts
-        from gui.widgets.chart_widget import ChartWidget
-        options = PySide6.QtCore.Qt.FindChildOptions.FindChildrenRecursively
-        for child in self.findChildren(ChartWidget, options=options):
-            child.apply_stylesheet()
-        pass
-            
+        old_text_color = getattr(self, '_cached_text_color', None)
+        new_stylesheet = get_stylesheet()
+        if getattr(self, '_cached_stylesheet', None) != new_stylesheet:
+            self._cached_stylesheet = new_stylesheet
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            QApplication.instance().setStyleSheet(new_stylesheet)
+            QApplication.restoreOverrideCursor()
+        from gui.style import TEXT_COLOR as new_text_color
+        self._cached_text_color = new_text_color
+        text_color_changed = old_text_color != new_text_color
+
+        if text_color_changed:
+            # pixmaps
+            for child in self.findChildren(IconButton):
+                child.setIconPixmap()
+            # trees
+            for child in self.findChildren(QTreeWidget):
+                if hasattr(child, 'apply_stylesheet'):
+                    child.apply_stylesheet()
+            # charts
+            from gui.widgets.chart_widget import ChartWidget
+            options = PySide6.QtCore.Qt.FindChildOptions.FindChildrenRecursively
+            for child in self.findChildren(ChartWidget, options=options):
+                child.apply_stylesheet()
+
         text_color = system.manager.config.get('display.text_color', '#c4c4c4')
         # if self.page_chat:
         #     self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
@@ -1314,21 +1383,6 @@ class Main(QMainWindow):
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)  # Keep it frameless
         self.show()
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._mousePressed = True
-            self._mousePos = event.pos()
-            self._mouseGlobalPos = event.globalPos()
-            self._resizing = self.isMouseOnEdge(event.pos())
-            self.updateCursorShape(event.pos())
-
-    def mouseMoveEvent(self, event):
-        if self._mousePressed:
-            if self._resizing:
-                self.resizeWindow(event.globalPos())
-            else:
-                self.moveWindow(event.globalPos())
-
     def mouseReleaseEvent(self, event):
         if self._resizing:
             # save window state to database
@@ -1341,111 +1395,72 @@ class Main(QMainWindow):
                 UPDATE settings
                 SET value = json(?)
                 WHERE field = 'window_size'""", (json.dumps(window_size),))
-        self._mousePressed = False
-        self._resizing = False
-        self._mousePos = None
-        self._mouseGlobalPos = None
-        self.setCursor(Qt.ArrowCursor)
+        super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.test_running = False
         super().keyPressEvent(event)
 
-    def isMouseOnEdge(self, pos):
-        rect = self.rect()
-        return (pos.x() < self._resizeMargins or pos.x() > rect.width() - self._resizeMargins or
-                pos.y() < self._resizeMargins or pos.y() > rect.height() - self._resizeMargins)
-
-    def moveWindow(self, globalPos):
-        if self._mouseGlobalPos is None:
-            return
-        diff = globalPos - self._mouseGlobalPos
-        self.move(self.pos() + diff)
-        self._mouseGlobalPos = globalPos
+    def _move_window(self, global_pos):
+        super()._move_window(global_pos)
         self.notification_manager.update_position()
 
-    def resizeWindow(self, globalPos):
-        diff = globalPos - self._mouseGlobalPos
-        newRect = self.geometry()  # Use geometry() instead of rect() to include the window's position
+    def run_demo(self):
+        """Switch to a disposable demo DB, reinitialize, and run the demo."""
+        import shutil
+        from utils import sql
+        from utils.reset import reset_application
 
-        if self._mousePos.x() < self._resizeMargins:
-            newRect.setLeft(newRect.left() + diff.x())
-        elif self._mousePos.x() > self.width() - self._resizeMargins:
-            newRect.setRight(newRect.right() + diff.x())
+        current_db = sql.get_db_path()
+        already_in_demo = current_db.endswith('demo_data.db')
+        if not already_in_demo:
+            self._real_db_path = current_db
+            demo_db_path = os.path.join(
+                os.path.dirname(current_db), 'demo_data.db'
+            )
+            self._demo_db_path = demo_db_path
 
-        if self._mousePos.y() < self._resizeMargins:
-            newRect.setTop(newRect.top() + diff.y())
-        elif self._mousePos.y() > self.height() - self._resizeMargins:
-            newRect.setBottom(newRect.bottom() + diff.y())
+            shutil.copyfile(current_db, demo_db_path)
+            sql.set_db_filepath(demo_db_path)
 
-        self.setGeometry(newRect)
-        self._mousePos = self.mapFromGlobal(globalPos)
-        self._mouseGlobalPos = globalPos
+        reset_application(force=True, preserve_audio_msgs=True, reset_models_=False)
+        sql.execute(
+            'UPDATE settings SET value = "1" '
+            'WHERE field = "accepted_tos"'
+        )
 
-    # # @qasync.asyncSlot()
-    def run_test(self):
-        # from gui.demo import DemoRun  # nable
-        # self.demo_runnable = DemoRun(self)  # nable(self)
+        system.manager.daemons.stop_all_daemons()
+        self.init_app()
+        # self.show()
 
-        self.demo_app = QApplication(sys.argv)
-        self.demo_app.setAttribute(Qt.AA_EnableHighDpiScaling)
-        self.demo_app.setStyle("Fusion")  # Fixes macos white line issue
-        self.demo_window = Main()
-        
         from gui.demo import DemoRunnable
-        self.demo_runnable = DemoRunnable(self.demo_window)  # nable(self)
-        # await self.demo_runnable.run()
-        self.demo_window.threadpool.start(self.demo_runnable)
+        self._demo_runnable = DemoRunnable(
+            self, on_finished=self._restore_after_demo
+        )
+        self.threadpool.start(self._demo_runnable)
+
+    def _restore_after_demo(self):
+        """Restore the user's real DB and reinitialize."""
+        from utils import sql
+
+        sql.set_db_filepath(self._real_db_path)
         self.test_running = False
-    
-    # # @qasync.asyncSlot()
-    # def run_test(self):
-    #     self.reset_db()
-    #     self.load()
-    #     pass
-    #     # self.run_test()
+        self.init_app()
+        safe_single_shot(
+            2000, system.manager.daemons.start_all_daemons
+        )
 
-    #     # delete test_data.db
-    #     if os.path.exists('./test_data.db'):
-    #         os.remove('./test_data.db')
+        try:
+            os.remove(self._demo_db_path)
+        except OSError:
+            pass
 
-    # def reset_db(self):
-    #     user_db_path = sql.get_db_path()
-    #     test_db_path = os.path.join(os.path.dirname(user_db_path), 'test_data.db')
-    #     shutil.copyfile(user_db_path, test_db_path)
+    def stop_demo(self):
+        """Signal the running demo to cancel."""
+        if hasattr(self, '_demo_runnable'):
+            self._demo_runnable._cancelled = True
 
-    #     sql.set_db_filepath(test_db_path)
-
-    #     reset_db = True
-    #     if reset_db:
-    #         tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
-    #         if tos_val == '1':
-    #             reset_application(force=True, preserve_audio_msgs=True, bootstrap=False)
-    #             # print("DATABASE RESET.")
-
-    #         tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
-    #         if tos_val == '0':
-    #             sql.execute('UPDATE settings SET value = "1" WHERE field = "accepted_tos"')
-
-
-    def updateCursorShape(self, pos):
-        rect = self.rect()
-        left = pos.x() < self._resizeMargins
-        right = pos.x() > rect.width() - self._resizeMargins
-        top = pos.y() < self._resizeMargins
-        bottom = pos.y() > rect.height() - self._resizeMargins
-
-        if (left and top) or (right and bottom):
-            self.setCursor(Qt.SizeFDiagCursor)
-        elif (left and bottom) or (right and top):
-            self.setCursor(Qt.SizeBDiagCursor)
-        elif left or right:
-            self.setCursor(Qt.SizeHorCursor)
-        elif top or bottom:
-            self.setCursor(Qt.SizeVerCursor)
-        else:
-            self.setCursor(Qt.ArrowCursor)
 
     def resizeEvent(self, event):
         self.notification_manager.update_position()
@@ -1488,6 +1503,7 @@ def launch():
         app.setAttribute(Qt.AA_EnableHighDpiScaling)
         app.setStyle("Fusion")
 
+        global loop
         loop = qasync.QEventLoop(app)
         asyncio.set_event_loop(loop)
 

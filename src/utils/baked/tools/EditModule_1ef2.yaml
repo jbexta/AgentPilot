@@ -1,0 +1,25 @@
+uuid: 1ef278c9-95ce-4374-a410-91f227c0dab2
+name: EditModule
+config:
+  _TYPE: workflow
+  name: EditModule
+  avatar_path: :/resources/icon-tool-small.png
+  description: ''
+  members:
+  - id: '1'
+    linked_id: tools.22
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      _TYPE: code
+      name: Code Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+folder_path: Modules

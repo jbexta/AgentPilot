@@ -1,0 +1,28 @@
+uuid: de68d0f1-75a6-4b4d-b7f3-98b1f9a6951c
+name: fields-doc
+config:
+  _TYPE: workflow
+  name: fields-doc
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      data: ''
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

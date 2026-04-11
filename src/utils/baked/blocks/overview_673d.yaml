@@ -1,0 +1,92 @@
+uuid: 673d84a8-fd6b-4f41-b585-87fd53026401
+name: overview
+config:
+  _TYPE: workflow
+  name: overview
+  avatar_path: :/resources/icon-block.png
+  description: ''
+  members:
+  - id: '5'
+    linked_id: null
+    loc_x: 51
+    loc_y: 66
+    width: 450.0
+    height: 350.0
+    config:
+      data: |
+        # Project Overview
+
+        This application is a modular desktop platform built with Python, PySide6 and qAsync. At its core, it features a dynamic architecture where modules—ranging from backend services to interactive GUI widgets—can be loaded and modified, even at runtime. This design empowers both developers and users to customize functionality and adapt the user interface to their evolving needs.
+
+        Beyond its modular foundation, the application ships with a powerful and extensible workflow engine, a task scheduler, project manager and block library. Together, these tools provide a robust environment for building AI agents and interactive user interfaces with ease.
+
+        ## Dependencies
+        - Uses Poetry for dependency management (pyproject.toml)
+        - Python 3.11 required
+        - Key dependencies: PySide6, qasync, jinja2, litellm, instructor
+
+        ## Architecture Overview
+
+        The application follows a modular, plugin-based architecture centered around a `SystemManager`:
+
+        - **SystemManager** (`src/gui/main.py`): Central orchestrator that dynamically loads all Manager modules, one of which is the `ModuleManager`.
+
+        - **ModuleManager** (`src/core/managers/modules.py`): A special `manager` module that loads and maintains all modules, even other `manager` modules.
+
+        All modules fall under a specific type, each of these types are defined as `controller` modules under `src/core/controllers/`.
+        Note that because Controllers are themselves a type of module, they have their own `controller` module (`src/core/controllers/core/controllers.py`)
+
+        The types of modules (Controllers) built in to the app are listed below:
+
+        ### Core module types:
+        {% for name, controller in system.modules.type_controllers.items() if controller.load_to_path.startswith("core.") %}
+        - **{{ name | capitalize }}**: {% if controller.description and controller.description != "None" %}{{ controller.description }} {% else %} _No description available._ {% endif %}
+        {% endfor %}
+
+        ### GUI module types:
+        {% for name, controller in system.modules.type_controllers.items() if controller.load_to_path.startswith("gui.") %}
+        - **{{ name | capitalize }}**: {% if controller.description and controller.description != "None" %} {{ controller.description }} {% else %} _No description available._ {% endif %}
+        {% endfor %}
+
+        ### {{ gui_architecture }}
+
+        ### {{ plugins }}
+        { workflows }
+
+        ## Database and Persistence
+
+        - SQLite database (`data.db`) stores contexts, messages, configurations
+        - Message history with branching support
+        - Workflow state persistence and resumption
+
+        ## Important Implementation Details
+
+        ### Module Loading
+        - **Dynamic module loading**: `ModuleManager` handles runtime loading/unloading
+        - **Multi-type module support**: 12+ module types with automatic discovery
+        - **Configuration hashing**: Change detection for module updates
+        - **Type controllers**: `ModulesController` manages each module type
+        - **Plugin organization**: Plugins contain collections of related modules
+        - Modules can be edited while application is running (if enabled)
+        - Plugin system allows extending functionality without core changes
+
+        ### Configuration Management
+        - Configurations are JSON-based, stored in database
+        - Hierarchical config system supports complex nested structures
+        - UI automatically generates configuration interfaces from schemas
+
+        ### File Organization
+        - `src/core/`: Core system logic and managers
+        - `src/gui/`: User interface components
+        - `src/plugins/`: Modular plugin implementations
+        - `src/utils/`: Shared utilities and helpers
+      _TYPE: text
+      name: Text block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+folder_path: Documentation

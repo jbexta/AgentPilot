@@ -26,7 +26,6 @@ from typing_extensions import override
 
 from gui.widgets.config_pages import ConfigPages
 
-from gui.util import find_main_widget
 from utils import sql
 from utils.helpers import display_message
 
@@ -40,7 +39,7 @@ class Page_Settings(ConfigPages):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.main = find_main_widget(self)
+        # self.main = find_main_widget(self)
 
         self.data_source = {
             'table_name': 'settings',
@@ -77,204 +76,23 @@ class Page_Settings(ConfigPages):
         new_pages = {}
         for module_id, module_name, page_class in page_definitions:
             try:
-                new_pages[module_name] = page_class(parent=self)
-                setattr(new_pages[module_name], 'module_id', module_id)
                 existing_page = self.pages.get(module_name, None)
+                if existing_page and type(existing_page) is page_class:
+                    new_pages[module_name] = existing_page
+                    continue
+
+                page = page_class(parent=self)
+                setattr(page, 'module_id', module_id)
                 if existing_page and getattr(existing_page, 'user_editing', False):
-                    setattr(new_pages[module_name], 'user_editing', True)
+                    setattr(page, 'user_editing', True)
+                new_pages[module_name] = page
 
             except Exception as e:
                 display_message(f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
         self.pages = new_pages
         super().build_schema()
-
-    # class Page_Todo_Settings(ConfigDBTree):
-    #     def __init__(self, parent):
-    #         define_table('todo')
-    #         super().__init__(
-    #             parent=parent,
-    #             table_name='todo',
-    #             query="""
-    #                 SELECT
-    #                     name,
-    #                     id,
-    #                     COALESCE(json_extract(config, '$.priority'), 'Normal') AS priority,
-    #                     folder_id
-    #                 FROM todo
-    #                 ORDER BY 
-    #                     CASE 
-    #                         WHEN priority = 'High' THEN 1
-    #                         WHEN priority = 'Normal' THEN 2
-    #                         WHEN priority = 'Low' THEN 3
-    #                         ELSE 4
-    #                     END""",
-    #             schema=[
-    #                 {
-    #                     'text': 'Item',
-    #                     'key': 'name',
-    #                     'type': str,
-    #                     'stretch': True,
-    #                 },
-    #                 {
-    #                     'text': 'id',
-    #                     'key': 'id',
-    #                     'type': int,
-    #                     'visible': False,
-    #                 },
-    #                 {
-    #                     'text': 'Priority',
-    #                     'key': 'priority',
-    #                     'type': ('High','Normal','Low',),  # , 'Prompt based',),
-    #                     'is_config_field': True,
-    #                     'change_callback': self.load,
-    #                     # 'reload_on_change': True,
-    #                     'width': 125,
-    #                 },
-    #             ],
-    #             add_item_options={'title': 'Add to-do', 'prompt': 'Enter a name for the item:'},
-    #             del_item_options={'title': 'Delete to-do', 'prompt': 'Are you sure you want to delete this item?'},
-    #             folder_key='todo',
-    #             readonly=False,
-    #             layout_type='vertical',
-    #             tree_header_hidden=True,
-    #             config_widget=self.Todo_Config_Widget(parent=self),
-    #             searchable=True,
-    #             default_item_icon=':/resources/icon-tasks-small.png',
-    #         )
-    #         self.icon_path = ":/resources/icon-todo.png"
-    #         self.splitter.setSizes([400, 1000])
-
-    #     class Todo_Config_Widget(ConfigFields):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.schema = [
-    #                 # {
-    #                 #     'text': 'Description',
-    #                 #     'type': str,
-    #                 #     'default': '',
-    #                 #     'num_lines': 10,
-    #                 #     'stretch_x': True,
-    #                 #     'stretch_y': True,
-    #                 #     'placeholder': 'Description',
-    #                 #     'gen_block_folder_name': 'todo',
-    #                 #     'label_position': None,
-    #                 # },
-    #             ]
-
-    # # class Page_Files_Settings(ConfigTabs):
-    # #     def __init__(self, parent):
-    # #         super().__init__(parent=parent)
-    # #         self.IS_DEV_MODE = True
-    # #         self.main = find_main_widget(self)
-    # #         self.pages = {
-    # #             'Filesystem': self.Page_Filesystem(parent=self),
-    # #             'Extensions': self.Page_Extensions(parent=self),
-    # #             # 'Folders': self.Page_Folders(parent=self),
-    # #         }
-
-    # #     class Page_Filesystem(ConfigDBTree):
-    # #         def __init__(self, parent):
-    # #             super().__init__(
-    # #                 parent=parent,
-    # #                 table_name='files',
-    # #                 query="""
-    # #                     SELECT
-    # #                         name,
-    # #                         id,
-    # #                         folder_id
-    # #                     FROM files
-    # #                     ORDER BY pinned DESC, ordr, name COLLATE NOCASE""",
-    # #                 schema=[
-    # #                     {
-    # #                         'text': 'Files',
-    # #                         'key': 'file',
-    # #                         'type': str,
-    # #                         'label_position': None,
-    # #                         'stretch': True,
-    # #                     },
-    # #                     {
-    # #                         'text': 'id',
-    # #                         'key': 'id',
-    # #                         'type': int,
-    # #                         'visible': False,
-    # #                     },
-    # #                 ],
-    # #                 add_item_options={'title': 'NA', 'prompt': 'NA'},
-    # #                 del_item_options={'title': 'NA', 'prompt': 'NA'},
-    # #                 tree_header_hidden=True,
-    # #                 readonly=True,
-    # #                 layout_type='horizontal',
-    # #                 config_widget=self.File_Config_Widget(parent=self),
-    # #                 folder_key='filesystem',
-    # #                 folders_groupable=True,
-    # #             )
-
-    # #         def add_item(self, column_vals=None, icon=None):
-    # #             file_dialog = QFileDialog()
-    # #             file_dialog.setFileMode(QFileDialog.ExistingFile)
-    # #             file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
-    # #             file_dialog.setFileMode(QFileDialog.Directory)
-    # #             path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
-
-    # #             if path:
-    # #                 self.add_path(path)
-
-    # #         def add_ext_folder(self):
-    # #             file_dialog = QFileDialog()
-    # #             file_dialog.setFileMode(QFileDialog.Directory)
-    # #             file_dialog.setOption(QFileDialog.ShowDirsOnly, True)
-    # #             path = file_dialog.getExistingDirectory(self, "Choose Directory", "")
-    # #             if path:
-    # #                 self.add_path(path)
-
-    # #         def add_path(self, path):
-    # #             base_directory = os.path.dirname(path)
-    # #             directories = []
-    # #             while base_directory:
-    # #                 directories.append(os.path.basename(base_directory))
-    # #                 next_directory = os.path.dirname(base_directory)
-    # #                 base_directory = next_directory if next_directory != base_directory else None
-
-    # #             directories = reversed(directories)
-    # #             parent_id = None
-    # #             for directory in directories:
-    # #                 parent_id = super().add_folder(directory, parent_id)
-
-    # #             name = os.path.basename(path)
-    # #             config = json.dumps({'path': path, })
-    # #             sql.execute(f"INSERT INTO `files` (`name`, `folder_id`) VALUES (?, ?)", (name, parent_id,))
-    # #             last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
-    # #             self.load(select_id=last_insert_id)
-    # #             return True
-
-    # #         def dragEnterEvent(self, event):
-    # #             # Check if the event contains file paths to accept it
-    # #             if event.mimeData().hasUrls():
-    # #                 event.acceptProposedAction()
-
-    # #         def dragMoveEvent(self, event):
-    # #             # Check if the event contains file paths to accept it
-    # #             if event.mimeData().hasUrls():
-    # #                 event.acceptProposedAction()
-
-    # #         def dropEvent(self, event):
-    # #             # Get the list of URLs from the event
-    # #             urls = event.mimeData().urls()
-
-    # #             # Extract local paths from the URLs
-    # #             paths = [url.toLocalFile() for url in urls]
-
-    # #             for path in paths:
-    # #                 self.add_path(path)
-
-    # #             event.acceptProposedAction()
-
-    # #         class File_Config_Widget(ConfigFields):
-    # #             def __init__(self, parent):
-    # #                 super().__init__(parent=parent)
-    # #                 self.label_width = 175
-    # #                 self.schema = []
+        self.load_config()
 
     # #     class Page_Extensions(ConfigDBTree):
     # #         def __init__(self, parent):

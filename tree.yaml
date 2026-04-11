@@ -1,0 +1,427 @@
+# AgentPilot Feature Tree
+# Version: 0.6.0
+# Generated from codebase walk starting at src/gui/main.py
+
+core:
+  system_manager:
+    description: Central orchestrator that loads and coordinates all managers
+    module_manager:
+      description: Dynamic module loading system with plugin discovery
+      filesystem_discovery: Recursive pkgutil-based module scanning
+      db_modules: Virtual module loading via exec (VirtualModuleLoader)
+      baking: Write DB modules to filesystem and vice versa
+      type_controllers: Per-type module registration and class extraction
+      hot_reload: Live reimport of modules without restart
+    config_manager:
+      description: Application-wide JSON config (settings table)
+      auto_save: Dict-like access with auto-persist on mutation
+      flat_keys: Dot-notation config keys (e.g. display.primary_color)
+    daemon_manager:
+      description: Background async daemon lifecycle management
+      start_stop: Individual and batch daemon control
+      asyncio_tasks: Daemons run as asyncio tasks
+
+  database:
+    sqlite:
+      description: Primary data store with thread-safe locking
+      define_table: Standard table schema (id, uuid, name, kind, config, metadata, parent_id, folder_id, ordr)
+      return_types: rows, list, dict, hdict, tuple
+      json_support: Automatic JSON parsing in get_scalar
+    mysql:
+      description: Connection-pooled MySQL connector
+      pool: Configurable pool size (default 30)
+      retry: Exponential backoff (max 3 retries)
+    hdf5:
+      description: HDF5 time-series price data connector
+      price_file: Context manager for h5py files
+      dataset_types: ma_analytics, line, trades, ohlc
+      intervals: 14 timeframes from 1m to 1Y
+      aggregation: Vectorized NumPy interval generation
+      binary_search: Fast timestamp-based price lookup
+
+  plugin_system:
+    description: Auto-discovery of plugins from src/plugins/
+    structure: Mirrors core layout (pages, widgets, members, providers, etc.)
+    registration: Modules registered via @set_module_type decorator
+
+gui:
+  framework:
+    description: Three-tier schema-driven UI architecture
+
+    fields:
+      description: Atomic reusable input widgets with get_value/set_value
+      text: Single and multiline text input
+      integer: Spinbox with min/max/step
+      float: Float spinbox with min/max/step
+      boolean: Checkbox toggle
+      combo: Dropdown with static or dynamic options
+      color_picker: Color selection widget
+      font: Font family picker
+      file_picker: File browser dialog
+      path_picker: Directory browser
+      image: Circular or rectangular image selector
+      model: AI model picker with kind filtering (CHAT, IMAGE, VIDEO, AUDIO, TEXT)
+      button: Action button with callback
+      button_toggle: Collapsible section toggle
+      popup_button: Button that opens a popup config
+      module: Dynamic module type selector
+      venv: Virtual environment selector
+      input_source: Workflow input source picker
+      input_target: Workflow input target picker
+      member_type_menu: Workflow member type selector
+      project_type_menu: Project type selector
+      list: List editor field
+      media_upload: Media file upload with preview
+      condition_popup_button: CEL condition editor popup
+
+    widgets:
+      description: Mid-level configurable components
+      config_widget: Base class with load_config/get_config/save_config
+      config_fields: Schema-driven form builder
+      config_joined: Combines multiple widgets (vertical/horizontal)
+      config_tabs: Tabbed widget container
+      config_pages: Navigation sidebar with page switching
+      config_db_tree: Database-backed tree with config panel (CRUD, search, folders)
+      config_ext_tree: External/filesystem-backed tree
+      config_json_tree: JSON-backed tree widget
+      config_json_db_tree: JSON-keyed DB tree
+      config_table: Database-backed table view
+      config_collection: Collection management widget
+      config_side_tabs: Side-tabbed layout
+      config_tree: Base tree widget
+      config_voice_tree: Voice model tree
+      chart_widget: PyQtGraph candlestick chart with X-axis zoom
+      file_tree: Lazy-loading file system browser with bookmarks and file operations
+      multi_preview: Horizontal media preview grid with async polling
+      collections_widget: Draggable media asset tree for video studio
+
+    pages:
+      description: Top-level navigation targets (main sidebar or settings)
+      settings: Settings hub aggregating all settings-type pages
+      system: Core app config (language, dev mode, default models, auto-title)
+      display: Theme customization (colors, fonts, bubble display, spacing)
+      modules: Module management with status, baking, live reload, code editor
+      files: File explorer page (FileTree wrapper)
+      images: Image studio page
+      videos: Video studio page
+      youtube: YouTube channel management with video sync
+      addons: Addon packaging, import/export, sharing to agentpilot.ai
+      evals: Evaluation set management (scaffolded)
+      roles: Chat bubble display roles (commented out)
+
+  studios:
+    description: Full-featured media editors opened by file type
+    image_studio:
+      description: Photoshop-style layer-based image editor
+      layers: Add, delete, duplicate, merge, flatten
+      blend_modes: Normal, Multiply, Screen, Overlay, Darken, Lighten, Add, Subtract
+      tools: Select, Move, Brush, Eraser, Fill, Eyedropper, Text, Rectangle, Ellipse, Line, Transform
+      brush_settings: Size, opacity, hardness
+      color_pickers: Foreground and background
+      zoom: In, out, fit, ctrl+wheel
+      project_format: .isp with layer PNG files
+      export: PNG, JPEG
+      extensions: png, jpg, jpeg, bmp, gif, tiff, webp
+    video_studio:
+      description: Kdenlive-style non-linear video editor
+      timeline: Multi-track timeline canvas with drag-and-drop
+      preview: Video preview panel with playback controls
+      track_controls: Per-track control panel
+      collections: Media asset browser with scenes and characters folders
+      project_settings: Resolution (1920x1080 default), FPS (30 default)
+      rendering: FFmpeg-based frame-by-frame export with audio mixing
+      extensions: All video and audio formats
+    text_studio:
+      description: Multi-tab code/text editor
+      tabs: Closable, movable editor tabs
+      syntax_highlighting: Pluggable highlighters (Python, JSON, XML, CEL)
+      line_numbers: Auto-width line number gutter
+      find_replace: Case sensitive, whole words, regex, wrap-around
+      view: Zoom in/out/reset, word wrap, line numbers toggle
+      status_bar: Cursor position, selection info, encoding, line endings
+      extensions: txt, py, js, html, css, json, xml, md, sql, yaml, yml, ini, toml, cfg, conf, log, csv, tsv
+    h5_studio:
+      description: HDF5 file viewer and editor
+      tree_view: Lazy-loaded group/dataset hierarchy
+      dataset_viewer: Paginated table (100-10000 rows/page) with cell editing
+      metadata_panel: Shape, size, and attribute display
+      data_types: Scalar, 1D, 2D, >2D arrays, compound/structured dtypes
+      extensions: h5
+
+  media_previews:
+    image: Image preview widget
+    video: Video preview with playback
+    audio: Audio preview with playback
+
+  syntax_highlighters:
+    python: Python syntax highlighting
+    json: JSON syntax highlighting
+    xml: XML syntax highlighting
+    cel: CEL expression highlighting
+
+  styling:
+    description: Dynamic Qt stylesheet generation from theme config
+    color_scheme: Primary, secondary, text, accent_1, accent_2, link colors
+    auto_contrast: Text color auto-adjusts when too close to background
+    theme_management: Save, load, delete custom themes
+
+  popup:
+    description: Frameless popup for workflow member configuration
+    fields: Output role, output placeholder, hide bubbles
+
+  builder:
+    description: AST-based code transformation for module editing
+    modify_base_class: Change a class superclass
+    add_delete_page: Insert/remove nested page classes
+    add_field: Append schema field entries
+    code_generation: astor-based round-trip source formatting
+
+plugins:
+  workflows:
+    description: Core AI workflow system
+
+    pages:
+      chat: Main chat interface (ChattableWorkflowWidget)
+      agents: Entity management for agents and contacts with inline chat
+      models: API/provider and model management with sync and test generation
+      tools: Tool management with visual workflow editor per tool
+      blocks: Reusable block management with workflow editor and chat
+      contexts: Conversation history browser with search, archive, and navigation
+      environments: Execution environment configuration (Docker, integrated)
+
+    members:
+      conversation:
+        agent: LLM-based AI participant with streaming, system messages, and structured outputs
+        user: Human participant (pauses workflow for input)
+        contact: External/third-party participant
+      flow:
+        node: Simple routing/connection point (input passthrough)
+        iterate: Loop/iteration over collections
+        probability: Random branching (uniform or gaussian distribution)
+        condition: CEL expression evaluation for conditional routing
+      media:
+        image: Image generation or file loading
+        video: Video generation or file loading
+        audio: Audio generation or file loading
+        voice: Voice synthesis (stub)
+      system:
+        notification: Desktop/in-app notification sender
+        set_variable: Variable assignment in workflow scope (stub)
+        wait: Configurable delay (seconds, minutes, hours)
+        query: SQL query execution within workflow
+      blocks:
+        code: Code execution in managed environment (AST-wrapped Python)
+        prompt: LLM prompt processing through a model
+        text: Static or template-substituted text output
+      workflow: Nested sub-workflow composition
+
+    providers:
+      litellm: Unified LLM provider via LiteLLM (100+ providers)
+      fal: Fal AI for async media generation (image, video, audio)
+      replicate: Replicate prediction API
+      sonauto: Sonauto AI for music generation
+      wavespeed: Wavespeed AI for model inference
+
+    behaviors:
+      default: Core execution engine with parallel/sequential member execution
+
+    environments:
+      safe_integrated: RestrictedPython sandboxed in-process execution
+      docker: Docker container execution (stub)
+
+    managers:
+      agents: Agent entity management
+      apis: API provider management
+      blocks: Block management with Jinja2 placeholder resolution
+      environments: Execution environment management
+      models: Model registry and execution
+      providers: Provider lifecycle management
+      roles: User role management
+      tools: Tool management with parameter schema generation
+      venvs: Python virtual environment management (filesystem-based)
+
+    workflow_designer:
+      description: Visual graph editor for workflow composition
+      canvas: QGraphicsScene/QGraphicsView (2000x2000px)
+      draggable_members: Drag-and-drop member placement
+      connection_lines: Visual input/output connections
+      compact_mode: Condensed view for agent config panels
+      member_config: Inline member configuration panel
+
+    chat_interface:
+      description: Combined chat and workflow widget
+      message_collection: Branching conversation display with streaming
+      attachment_bar: File attachment support
+      chat_input: Text input with send controls
+      workflow_toggle: Split-panel workflow editor visibility
+
+    bubbles:
+      description: Chat message rendering
+      assistant: AI response bubble
+      user: Human message bubble
+      code: Code block with syntax highlighting
+      image: Inline image display
+      video: Inline video display
+      audio: Inline audio playback
+      tool: Tool call/result display
+      result: Generic result bubble
+
+    primitives:
+      text: String type with text field widget
+      boolean: Bool type with checkbox widget
+      integer: Int type with spinbox widget
+      float: Float type with float spinbox widget
+
+  projects:
+    description: Project management with file browsing and task tracking
+    pages:
+      projects: Project list with type-specific config panels
+    project_types:
+      general: File tree, concepts, and project tasks
+      application: Self-referential AgentPilot codebase project with export
+    managers:
+      projects: Project CRUD with auto-bootstrap of application project
+    utils:
+      sync: Codebase export to temp_src, hash-based change detection, DB sync
+
+  tasks:
+    description: Scheduled task system with calendar UI
+    pages:
+      tasks: Calendar view with task dots, scheduled task tree with workflow editor
+    daemons:
+      tasks: rrule-based scheduling with asyncio task management
+    features:
+      natural_language: AI-powered time expression to rrule conversion
+      calendar_view: Custom calendar with per-day task indicators
+      workflow_execution: Each task runs a full workflow on trigger
+
+  finance:
+    description: Portfolio and asset management with price data
+    pages:
+      finance: Tabbed view (Portfolio, Assets, Users, Trades, DepWiths, Settings)
+    apis:
+      binance: Binance Spot API for crypto trading data
+      coingecko: CoinGecko API for crypto market data with HDF5 storage
+      twelvedata: TwelveData API for stocks and financial instruments
+    operations:
+      ema: Exponential Moving Average indicator
+      sma: Simple Moving Average indicator
+      extrema: Extrema detection (stub)
+    features:
+      portfolio_chart: Pie chart placeholder
+      asset_tracking: Balance computation from deposits/withdrawals/trades
+      user_shares: Multi-user fund share tracking
+      trade_history: Full trade log with exchange filtering
+      deposit_withdrawals: Deposit/withdrawal tracking with balance snapshots
+      candlestick_chart: PyQtGraph OHLC chart from HDF5 data
+
+  claude_code:
+    description: Claude Code SDK integration as workflow member
+    members:
+      claude_code: LLM member using Claude SDK with configurable tools
+    widgets:
+      settings: Model picker, max turns, system message, builtin/custom tool toggles
+    features:
+      builtin_tools: Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
+      custom_tools: Attach tools from the tools DB
+      codebase_sync: Auto-sync changes from temp_src back to DB modules
+
+  computer_use:
+    description: AI-driven computer control
+    browser: Playwright-based browser automation with visual click feedback
+    desktop: PyAutoGUI-based desktop control with resolution scaling
+    overlay: Fullscreen translucent overlay with edge glow (cross-platform click-through)
+    settings: Enable toggle, grace period, max iterations
+
+  slopify:
+    description: AI music generation and playback
+    features:
+      song_generation: AI-powered song creation via workflow
+      music_player: QMediaPlayer-based playback with queue
+      artist_sync: Artist song library synchronization (lyricsgenius)
+      side_tabs: Navigation tabs for generate/queue/playback
+
+  job_hunter:
+    description: Job search aggregation and application tracking
+    search:
+      jsearch: RapidAPI aggregator (LinkedIn, Indeed, Glassdoor)
+      adzuna: Adzuna (12+ countries)
+      the_muse: The Muse (free, no key)
+      jobicy: Jobicy (remote only, free)
+      remotive: Remotive (remote only, free)
+      remote_ok: RemoteOK (remote only, free)
+      reed: Reed (UK-focused)
+      usajobs: USAJobs (US government)
+      careerjet: CareerJet (global)
+    application_tracking:
+      statuses: saved, applied, interview, rejected, offer, failed
+      detail_view: URL, salary, ATS type, description, cover letter, notes
+    auto_apply:
+      greenhouse: Multipart form submission
+      smartrecruiters: JSON candidate payload with base64 resume
+      lever: Multipart form submission
+    features:
+      cover_letter: AI-generated cover letters via LLM
+      deduplication: URL-based result deduplication
+      salary_filter: Client-side min/max salary filtering
+      parallel_search: Concurrent search across all enabled APIs
+
+  genetics:
+    description: Genetic algorithm experimentation platform
+    engine:
+      population: Configurable population size
+      selection: Tournament selection
+      crossover: Configurable crossover
+      mutation: Configurable mutation rate
+      elitism: Top 5% preservation
+    ga_types:
+      travelling_salesman: TSP with 20 random cities, Euclidean distance fitness
+    visualization:
+      control_panel: Start, stop, reset controls
+      fitness_chart: Generation-over-generation fitness plot
+      population_view: Best solution visualization
+
+  studio:
+    description: Media operation and effect modules for studios
+    operations:
+      image: AI image operations (remix, outpaint, etc.)
+      video: AI video operations (remix, extend, transcribe)
+      audio:
+        transcribe: Audio-to-SRT via ffmpeg chunking + STT model
+        inpaint: AI audio inpainting with timeline flag selection
+      text: AI text operations (summarize, translate)
+      3d: AI 3D operations (generate, remix)
+    effects:
+      audio:
+        pitch: Pitch shifting via sample rate scaling
+      image:
+        greyscale: Channel averaging to greyscale
+
+  news_feed:
+    description: RSS/Atom feed reader
+    pages:
+      feeds: Feed management with unread counts and error indicators
+      feed_reader: Article browsing interface
+    managers:
+      feeds: Feed CRUD with auto-cleanup of old items
+    parser:
+      formats: RSS 2.0, Atom
+      namespaces: atom, Dublin Core, content, media
+      date_parsing: 6 common formats (RFC 822, ISO 8601 variants)
+    features:
+      unread_tracking: Per-item read/unread state
+      starred_items: Bookmark important articles
+      auto_update: Configurable update interval per feed
+      folder_organization: Feeds grouped in folders with icons
+
+utilities:
+  sql: SQLite abstraction with global filepath, context managers for copy/redirect
+  media: QMediaPlayer audio playback singleton
+  media_export: FFmpeg-based timeline rendering with audio mixing and video compositing
+  youtube: yt-dlp YouTube channel info and video management
+  helpers: Media type detection, BaseManager, receive_workflow, set_module_type decorator
+  filesystem: File system utilities
+  config: Configuration utilities
+  telemetry: Usage telemetry
+  reset: Application reset utilities
+  resources: Qt resource compilation (icons, images)

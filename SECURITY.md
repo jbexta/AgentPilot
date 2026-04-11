@@ -1,0 +1,152 @@
+# Security Guide
+
+This document describes the security model, known risks, and
+recommended practices for building and running AgentPilot.
+
+## Reporting Vulnerabilities
+
+If you discover a security issue, please report it privately by
+opening a GitHub security advisory on this repository. Do not file
+a public issue. We will acknowledge receipt within 72 hours.
+
+## Architecture Overview
+
+AgentPilot orchestrates LLM-powered agents that can execute tools,
+run code in Docker environments, and interact with external APIs.
+This creates a broad attack surface that developers and users must
+understand.
+
+### Trust Boundaries
+
+- **User input** — Chat messages, workflow configurations, uploaded
+  media. Treated as untrusted.
+- **LLM output** — Model responses, tool call arguments, generated
+  code. Treated as untrusted.
+- **Plugins** — Third-party code loaded from `src/plugins/`. Runs
+  with full application privileges.
+- **External services** — Provider APIs, Docker containers, database
+  connections. Communicate over the network.
+
+## Credential & Secret Management
+
+- Never commit real API keys, tokens, or passwords to the repository.
+- Use **dummy environment variables** in example files (e.g.,
+  `.env.example`) with clearly fake placeholder values.
+- Real secrets should be injected at runtime via a secrets manager
+  or secure environment configuration.
+- The local `data.db` may contain API keys stored by the user. Treat
+  it as sensitive — do not share, commit, or back up to public
+  locations.
+
+## Plugin Security
+
+Plugins are auto-discovered from `src/plugins/` and loaded at
+startup with full application privileges. There is no sandboxing.
+
+- Only install plugins from sources you trust.
+- Review plugin code before adding it to your installation.
+- Be aware that a malicious plugin can read the database, access
+  stored credentials, make network requests, and execute arbitrary
+  code.
+
+## Code Execution & Environments
+
+Agents can generate and execute code. This is inherently dangerous.
+
+- Use the Docker environment backend when running untrusted or
+  LLM-generated code. Never execute untrusted code directly on the
+  host.
+- Limit container capabilities, network access, and mounted volumes
+  to the minimum required.
+- Treat all LLM-generated tool calls as untrusted input — validate
+  arguments before execution.
+
+## Prompt Injection
+
+LLM agents are susceptible to prompt injection via user messages,
+tool outputs, retrieved documents, and any other text the model
+processes.
+
+- Do not rely on LLM output for security decisions (authentication,
+  authorization, access control).
+- Validate and sanitize tool call arguments independently of the
+  model's stated intent.
+- Be cautious when agents process content from external sources
+  (web pages, files, API responses), as these may contain injected
+  instructions.
+
+## Data Storage
+
+- `data.db` (SQLite) stores configurations, workflow definitions,
+  and conversation history. It may contain API keys entered by the
+  user.
+- Keep the database file permissions restrictive (`600` or
+  equivalent).
+- Do not expose the database over a network or shared filesystem.
+- Back up the database to encrypted storage if persistence is needed.
+
+## Network Security
+
+- All provider API calls should use TLS. Verify that provider URLs
+  use `https://`.
+- Be aware that agents may be instructed (via prompt injection or
+  user input) to make requests to arbitrary URLs. Where possible,
+  restrict outbound network access.
+- Docker environments should use isolated networks unless external
+  access is explicitly required.
+
+## Supply Chain & Build Security
+
+### Hash Pinning
+
+Pin all dependencies with cryptographic hashes. Use
+`pip-compile --generate-hashes` or equivalent tooling to produce a
+lockfile with SHA-256 hashes for every package. Verify hashes on
+every install to prevent tampered or substituted packages.
+
+### Build Offline
+
+After locking dependencies, perform builds in a network-disabled
+environment. This ensures no unexpected network calls occur during
+installation, eliminating the risk of fetching unverified resources
+at build time.
+
+### Dummy Environment Variables
+
+CI/CD pipelines and build scripts must never use real credentials.
+Use dummy values for any required environment variables during build
+and test stages.
+
+### Time Fast-Forward Testing
+
+Before publishing a release, test the application with the system
+clock set significantly forward (months or years). This catches
+issues with certificate expiry, token lifetimes, cache invalidation,
+and time-dependent logic that would otherwise surface only in
+production.
+
+### Wait 24 Hours
+
+After tagging a release, wait at least 24 hours before announcing
+or distributing it. This window allows time to:
+
+- Monitor for upstream dependency compromises or advisories.
+- Catch CI/CD anomalies or failed post-release checks.
+- Review published artifacts with fresh eyes.
+- Allow automated security scanners to flag issues.
+
+If any concerns arise during this period, yank the release before
+it reaches a wider audience.
+
+## Recommended Practices for Users
+
+1. Store API keys using environment variables, not hardcoded in
+   configuration files.
+2. Run AgentPilot in a dedicated user account with limited system
+   privileges.
+3. Use Docker environments for any workflow that executes generated
+   code.
+4. Regularly update dependencies and review security advisories.
+5. Do not expose the AgentPilot interface to untrusted networks.
+6. Review agent workflows before running them, especially those
+   sourced from others.

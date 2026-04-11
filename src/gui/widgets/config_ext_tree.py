@@ -24,12 +24,13 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override
 
-from utils.helpers import block_signals
-from gui.util import find_main_widget, safe_single_shot
+from utils.helpers import block_signals, set_module_type
+from gui.util import find_main, safe_single_shot
 
 from gui.widgets.config_json_tree import ConfigJsonTree
 
 
+@set_module_type('Widgets')
 class ConfigExtTree(ConfigJsonTree):
     fetched_rows_signal = Signal(list)
 
@@ -57,7 +58,7 @@ class ConfigExtTree(ConfigJsonTree):
     def load(self, rows=None):
         rows = self.config.get(f'{self.conf_namespace}.data', [])
         self.insert_rows(rows)
-        main = find_main_widget(self)
+        main = find_main()
         load_runnable = self.LoadRunnable(self)
         main.threadpool.start(load_runnable)
 
@@ -101,7 +102,7 @@ class ConfigExtTree(ConfigJsonTree):
     class LoadRunnable(QRunnable):
         def __init__(self, parent):
             super().__init__()
-            main = find_main_widget(parent)
+            main = find_main()
             self.page_chat = main.page_chat
 
         def run(self):

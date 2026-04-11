@@ -1,0 +1,98 @@
+uuid: eb2621a6-d2a0-43fd-abaf-a5a9de6a1725
+name: coding-style
+config:
+  _TYPE: workflow
+  name: coding-style
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |
+        # Python Coding Style Guide
+
+        ## General Conventions
+
+        -   **Language**: Python 3.x
+        -   **Indentation**: 4 spaces (no tabs)
+        -   **Line Length**: 79 characters (PEP8 default)
+        -   **Encoding**: UTF-8
+        -   **Principles**:
+            -   **DRY**: Don’t Repeat Yourself — extract shared logic.
+            -   **KISS**: Keep It Simple, Stupid — prefer clarity over cleverness.
+            -   **YAGNI**: You Aren’t Gonna Need It — implement only what is required.
+            -   **SOC**: Separation of Concerns — keep responsibilities distinct.
+            -   **SRP**: Single Responsibility Principle — each class, module, or function should do one thing.
+            -   **OCP**: Open/Closed Principle — open to extension, closed to modification.
+            -   **LSP**: Liskov Substitution Principle — subclasses should be substitutable for their base.
+            -   **Convention over Configuration**: Prefer defaults and shared patterns to reduce boilerplate.
+            -   **Boy Scout Rule**: Leave the code cleaner than you found it.
+
+        ## Naming Conventions
+
+        -   **Classes**: `PascalCase`
+        -   **Functions & Methods**: `snake_case`
+        -   **Attributes & Variables**: `snake_case`
+
+        ## Imports
+
+        -   Group and order imports as follows:
+            1.  Standard library imports
+            2.  Third-party imports
+            3.  Local application imports
+        -   Use absolute imports over relative imports.
+
+        ## Comments & Documentation
+
+        -   Prefer **self-documenting code** over comments.
+        -   Use **docstrings** for all public modules, classes, functions,
+            and methods.
+        -   NumPy docstring format.
+        -   Document **why**, not just **what**, especially when design
+            principles (e.g., OCP, SRP) influenced decisions.
+
+        ## Error Handling
+
+        -   Let errors propagate unless there’s a clear recovery strategy.
+        -   Use `try/except` sparingly and precisely — don’t hide errors.
+        -   Avoid defining custom exceptions.
+
+        ## PySide6
+
+        This section defines conventions for PySide6 with `qasync` for asyncio event loop management.
+
+        **Signals & Asynchronous Code**
+
+        -   Prefer `@qasyncSlot()` decorators with **async/await** instead of `@Slot()` when defining slots that may perform asynchronous operations.
+        -   Use lambda expressions for signal connections if the call is trivial.
+        -   Never block the main thread — always offload long-running or I/O-bound tasks via `async`/`await`.
+
+        **Styling**
+
+        -   The global stylesheet is defined in **`src/gui/style.py`**.
+            Do not hardcode widget styles in other `.py` files or use inline `setStyleSheet()` calls unless absolutely necessary.
+
+        **Widget Structure & Layouts**
+
+        -   Each widget class should have UI definition and layout setup in `__init__`.
+        -   If creating a layout for a widget, use `self.layout = QVBoxLayout(self)` instead of `self.setLayout(layout)`.
+        -   Prefer creating layouts without content margins or spacing using `CVBoxLayout` or `CHBoxLayout`.
+        -   Favor **composition over inheritance** — only subclass Qt widgets when extending or specializing behavior.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+parent_id: null
+folder_path: Documentation

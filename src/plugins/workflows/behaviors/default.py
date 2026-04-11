@@ -30,6 +30,10 @@ class DefaultBehavior:
     def __init__(self, workflow):
         self.workflow = workflow
 
+    def stop(self):
+        """Signal the workflow to stop."""
+        self.workflow.stop_requested = True
+
     async def start(self, from_member_id: str = None, feed_back: bool = False):
         async for key, chunk in self.receive(from_member_id, feed_back):
             pass
@@ -99,7 +103,12 @@ class DefaultBehavior:
 
                     except StopIteration:  # todo still needed?
                         raise NotImplementedError()
-                
+
+                for member_id in runnable_member_ids:
+                    member = self.workflow.members[member_id]
+                    if member.turn_output is None:
+                        member.turn_output = ''
+
                 self.workflow.message_history.refresh_messages()
                 if self.workflow.chat_widget:
                     self.workflow.chat_widget.message_collection.refresh(block_autorun=True)

@@ -12,7 +12,6 @@ ACCENT_COLOR_2 = '#ff6aab73'
 
 def get_stylesheet():
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR, ACCENT_COLOR_1, ACCENT_COLOR_2
-    # system = main.system
 
     system_config = system.manager.config  # system.config.dict if system else {}
 
@@ -63,11 +62,11 @@ QWidget {{
     border-radius: 5px;
     {'''border: 1px solid red;''' if is_dev_mode else ''}
 }}
-QWidget[class="track-control"] {{
-    border-top: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.3)};
+QWidget.track-control {{
+    border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.3)};
 }}
 QWidget.central {{
-    border-top-left-radius: 30px;
+    border-top-left-radius: 24px;
     border-bottom-left-radius: 10px;
     border-bottom-right-radius: 0px;
 }}
@@ -200,9 +199,6 @@ QPushButton.branch-buttons.hover {{
     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
-QScrollBar {{
-    width: 0px;
-}}
 QSpinBox {{
     color: {TEXT_COLOR};
 }}
@@ -323,6 +319,44 @@ QTableView::item:selected {{
 }}
 QTreeView, QListView, QTableView {{
     color: {TEXT_COLOR};
+}}
+QScrollBar:vertical {{
+    width: 6px;
+    background: transparent;
+}}
+QScrollBar::handle:vertical {{
+    background: rgba(255, 255, 255, 0.15);
+    min-height: 20px;
+    border-radius: 3px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: rgba(255, 255, 255, 0.25);
+}}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {{
+    height: 0px;
+    background: transparent;
+}}
+QScrollBar:horizontal {{
+    height: 6px;
+    background: transparent;
+}}
+QScrollBar::handle:horizontal {{
+    background: rgba(255, 255, 255, 0.15);
+    min-width: 20px;
+    border-radius: 3px;
+}}
+QScrollBar::handle:horizontal:hover {{
+    background: rgba(255, 255, 255, 0.25);
+}}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {{
+    width: 0px;
+    background: transparent;
 }}
 QSplitter::handle:vertical {{
     border-top: 1px solid {LIGHT_TEXT_COLOR};   /* exact 1px line */

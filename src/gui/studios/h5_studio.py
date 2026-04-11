@@ -15,9 +15,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from gui.util import (
-    CustomMenu, find_attribute, find_main_widget, CVBoxLayout, CHBoxLayout, BaseTreeWidget
-)
+from gui.util import find_main, CVBoxLayout, CHBoxLayout, BaseTreeWidget
 from gui.widgets.config_tabs import ConfigTabs
 from gui.widgets.chart_widget import ChartWidget
 from core.connectors.h5 import PriceFile
@@ -42,7 +40,7 @@ class H5Studio(ConfigTabs):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.main = find_main_widget(self)
+        self.main = find_main()
         self.h5_file = None
 
         self.pages = {

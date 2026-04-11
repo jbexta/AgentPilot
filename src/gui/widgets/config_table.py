@@ -19,17 +19,18 @@ appearance for table-based widgets.
 """
 
 import datetime
+import json
 from decimal import Decimal
-from PySide6.QtGui import QColor, QPalette, Qt
-from PySide6.QtWidgets import (QLabel, QWidget, QSizePolicy, QSplitter, QHeaderView, 
-                               QTableView, QAbstractItemView)
+from PySide6.QtGui import QColor, QCursor, QPalette, Qt
+from PySide6.QtWidgets import (QLabel, QMenu, QWidget, QSizePolicy, QSplitter, QHeaderView,
+                               QTableView, QAbstractItemView, QStyledItemDelegate)
 from PySide6.QtCore import QAbstractTableModel, QItemSelectionModel, QModelIndex, QSortFilterProxyModel
 
-from gui.util import FilterWidget, CVBoxLayout, TreeButtons
+from gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_widget import ConfigWidget
 from core.connectors.sqlite import SqliteConnector
-from utils.helpers import apply_alpha_to_hex, display_message
+from utils.helpers import apply_alpha_to_hex, display_message, set_module_type
 from utils import sql
 
 
@@ -41,13 +42,17 @@ class BaseTableModel(QAbstractTableModel):
         self._data = []
         self._headers = []
         self.schema = []
-    
+        self._decorations = {}
+        self._foreground_colors = {}
+
     def set_data(self, data, headers=None, schema=None):
         """Set the table data"""
         self.beginResetModel()
         self._data = data or []
         self._headers = headers or []
         self.schema = schema or []
+        self._decorations = {}
+        self._foreground_colors = {}
         self.endResetModel()
     
     def rowCount(self, parent=QModelIndex()):
@@ -59,7 +64,13 @@ class BaseTableModel(QAbstractTableModel):
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid() or index.row() >= len(self._data):
             return None
-        
+
+        if role == Qt.DecorationRole:
+            return self._decorations.get((index.row(), index.column()), None)
+
+        if role == Qt.ForegroundRole:
+            return self._foreground_colors.get(index.row())
+
         if role == Qt.DisplayRole or role == Qt.EditRole:
             row_data = self._data[index.row()]
             if index.column() < len(row_data):
@@ -74,6 +85,17 @@ class BaseTableModel(QAbstractTableModel):
                 return value
         
         return None
+
+    def setData(self, index, value, role=Qt.EditRole):
+        if not index.isValid():
+            return False
+
+        if role == Qt.DecorationRole:
+            self._decorations[(index.row(), index.column())] = value
+            self.dataChanged.emit(index, index, [Qt.DecorationRole])
+            return True
+
+        return False
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
@@ -93,6 +115,16 @@ class BaseTableModel(QAbstractTableModel):
         return None
 
 
+class ForegroundPreservingDelegate(QStyledItemDelegate):
+    """Delegate that preserves custom ForegroundRole colors on selected rows."""
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        fg = index.data(Qt.ForegroundRole)
+        if fg is not None:
+            option.palette.setColor(QPalette.HighlightedText, fg)
+
+
 class BaseTableWidget(QTableView):
     """Base table widget with common functionality"""
     
@@ -103,9 +135,8 @@ class BaseTableWidget(QTableView):
         self.parent = parent
         
         # Configure selection behavior
-        if full_row_select:
-            self.setSelectionBehavior(QAbstractItemView.SelectRows)
-            self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
@@ -118,7 +149,10 @@ class BaseTableWidget(QTableView):
         
         # Enable sorting by default
         self.setSortingEnabled(True)
-        
+
+        # Preserve custom foreground colors on selected rows
+        self.setItemDelegate(ForegroundPreservingDelegate(self))
+
         # Apply styling
         self.apply_stylesheet()
     
@@ -188,7 +222,10 @@ class BaseTableWidget(QTableView):
         
         headers = [col.get('text', '') for col in schema] if schema else []
         self.model.set_data(processed_data, headers, schema)
-        
+
+        # Clear any proxy model sorting to preserve original data order (e.g., from SQL ORDER BY)
+        self.proxy_model.sort(-1)
+
         # Select the specified item
         if select_id is not None:
             self.select_item_by_id(select_id)
@@ -204,6 +241,21 @@ class BaseTableWidget(QTableView):
                 return row_data[0]  # Assume first column is ID
         return None
     
+    def get_selected_item_ids(self):
+        """Get IDs of all selected items."""
+        ids = []
+        for index in self.selectionModel().selectedRows():
+            source_index = self.proxy_model.mapToSource(index)
+            row_data = self.model.get_row_data(source_index.row())
+            if row_data and len(row_data) > 0:
+                ids.append(row_data[0])
+        return ids
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.RightButton and hasattr(self.parent, 'show_context_menu'):
+            self.parent.show_context_menu()
+        super().mouseReleaseEvent(event)
+
     def select_item_by_id(self, item_id):
         """Select an item by its ID"""
         # from PyQt6.QtCore import QItemSelectionModel
@@ -220,6 +272,7 @@ class BaseTableWidget(QTableView):
                 break
 
 
+@set_module_type('Widgets')
 class ConfigTable(ConfigWidget):
     """Base class for a table widget without folder capabilities"""
     
@@ -251,14 +304,15 @@ class ConfigTable(ConfigWidget):
         self.add_item_options = kwargs.get('add_item_options', None)
         self.del_item_options = kwargs.get('del_item_options', None)
         self.full_row_select = kwargs.get('full_row_select', False)
-        
+        self.extra_tree_buttons = kwargs.get('extra_tree_buttons', [])
+
         self.layout = CVBoxLayout(self)
 
         self.table_container = QWidget()
         self.table_layout = CVBoxLayout(self.table_container)
         
-        self.status_label = QLabel("")
-        self.table_layout.addWidget(self.status_label)
+        # self.status_label = QLabel("")
+        # self.table_layout.addWidget(self.status_label)
         
         if self.filterable:
             self.filter_widget = FilterWidget(parent=self, **kwargs)
@@ -266,7 +320,7 @@ class ConfigTable(ConfigWidget):
             self.table_layout.addWidget(self.filter_widget)
         
         if self.show_table_buttons:
-            self.table_buttons = TreeButtons(parent=self)
+            self.table_buttons = TreeButtons(parent=self, extra_buttons=self.extra_tree_buttons)
             self.table_layout.addWidget(self.table_buttons)
         
         self.table = BaseTableWidget(parent=self, full_row_select=self.full_row_select)
@@ -311,7 +365,7 @@ class ConfigTable(ConfigWidget):
             print("ConfigTable.load: No query provided")
             return
 
-        self.status_label.setText("Loading data...")
+        # self.status_label.setText("Loading data...")
         try:
             data = self.db_connector.get_results(self.query, self.query_params)
             
@@ -327,10 +381,10 @@ class ConfigTable(ConfigWidget):
                     data[i] = tuple(row)
             
             self.table.load(data, schema=self.schema)
-            self.status_label.setText(f"Loaded {len(data)}")
+            # self.status_label.setText(f"Loaded {len(data)}")
             
         except Exception as e:
-            self.status_label.setText(f"Error loading table: {str(e)}")
+            # self.status_label.setText(f"Error loading table: {str(e)}")
             display_message(f"Failed to load table data: {str(e)}", "Database Error")
     
     def check_infinite_load(self, value):
@@ -353,15 +407,18 @@ class ConfigTable(ConfigWidget):
         if item_id and self.config_widget:
             self.toggle_config_widget(config_type='item')
 
-            # json_config = self.db_connector.get_scalar(f"""
-            #     SELECT
-            #         `config`
-            #     FROM `{self.table_name}`
-            #     WHERE id = %s
-            # """, (item_id,), load_json=True)
-            json_config = {
-                'asset_id': item_id,
-            }
+            # todo clean
+            is_config_in_table = self.db_connector.get_scalar(
+                f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE name = 'config'"
+            ) > 0
+            if self.table_name and is_config_in_table:
+                json_config = self.db_connector.get_scalar(
+                    f"SELECT `config` FROM `{self.table_name}`"
+                    " WHERE id = ?",
+                    (item_id,), load_json=True,
+                )
+            else:
+                json_config = {'item_id': item_id}
             self.config_widget.load_config(json_config)
             self.config_widget.load()
           
@@ -384,6 +441,21 @@ class ConfigTable(ConfigWidget):
         else:
             self.toggle_config_widget(None)
     
+    def save_config(self):
+        """Save the config widget's config to the database."""
+        if not self.table_name or not self.config_widget:
+            return
+        item_id = self.get_selected_item_id()
+        if item_id is None:
+            return
+        config = self.config_widget.get_config()
+        save_table_config(
+            ref_widget=self,
+            table_name=self.table_name,
+            item_id=item_id,
+            value=json.dumps(config),
+        )
+
     def add_item(self):
         """Add a new item to the table"""
         pass
@@ -396,13 +468,31 @@ class ConfigTable(ConfigWidget):
         """Rename the selected item"""
         pass
 
+    def show_context_menu(self):
+        """Show the right-click context menu."""
+        menu = QMenu(self)
+
+        btn_delete = menu.addAction('Delete')
+        btn_delete.triggered.connect(self.delete_item)
+
+        self.on_context_menu(menu)
+        menu.exec_(QCursor.pos())
+
+    def on_context_menu(self, menu):
+        """Hook for subclasses to add items to the context menu."""
+        pass
+
     def add_folder(self, name=None, parent_folder=None):
         pass
-    
+
     def get_selected_item_id(self):
         """Get the ID of the currently selected item"""
         return self.table.get_selected_item_id()
-    
+
+    def get_selected_item_ids(self):
+        """Get IDs of all selected items."""
+        return self.table.get_selected_item_ids()
+
     def select_item_by_id(self, item_id):
         """Select an item by its ID"""
         self.table.select_item_by_id(item_id)

@@ -1,0 +1,28 @@
+uuid: 02471cb3-145b-4f75-8eac-e26694ec2fef
+name: managers
+config:
+  _TYPE: workflow
+  name: managers
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      data: ''
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+parent_uuid: 69bb8dbe-4c09-46de-a181-1fdf3f77484f

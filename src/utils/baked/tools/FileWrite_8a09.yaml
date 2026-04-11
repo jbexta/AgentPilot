@@ -1,0 +1,6 @@
+uuid: 8a09835b-59ab-441c-9b76-2f94a95df7d7
+name: FileWrite
+config:
+  _TYPE: code
+  name: FileEdit
+folder_path: Web search/Filesystem

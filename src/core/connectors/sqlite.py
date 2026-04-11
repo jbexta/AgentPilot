@@ -1,4 +1,4 @@
-
+##
 import json
 import sqlite3
 import threading
@@ -12,10 +12,14 @@ sql_thread_lock = threading.Lock()
 
 class SqliteConnector:
     def __init__(self, db_path=None):
-        self.db_path = db_path
-        if not self.db_path:
-            from utils.sql import get_db_path
-            self.db_path = get_db_path()
+        self._db_path = db_path
+
+    @property
+    def db_path(self):
+        if self._db_path:
+            return self._db_path
+        from utils.sql import get_db_path
+        return get_db_path()
 
     def execute(self, query, params=None):
         with sql_thread_lock:

@@ -22,7 +22,6 @@ consistency with the Agent Pilot interface and supporting workflows that
 require file system access.
 """
 
-import json
 import os
 import sys
 import shutil
@@ -36,11 +35,10 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 
-from gui.util import clear_layout, find_main_widget, IconButton, ToggleIconButton, CHBoxLayout, CVBoxLayout, get_selected_pages
+from gui.util import clear_layout, IconButton, ToggleIconButton, CHBoxLayout, CVBoxLayout
 from gui import system
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_widget import ConfigWidget
-from utils import sql
 from utils.helpers import display_message, display_message_box, set_module_type
 
 
@@ -324,7 +322,6 @@ class FileTree(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent
-        self.main = find_main_widget(self)
 
         # Get configuration parameters first
         self.files_in_tree = kwargs.get('files_in_tree', True)
@@ -383,9 +380,6 @@ class FileTree(ConfigWidget):
         self.layout = CVBoxLayout(self)
 
         self.file_view = self.FileView(self)
-        # Toolbar
-        self.toolbar = self.FileToolbar(self)
-        self.layout.addWidget(self.toolbar)
 
         # Main content area
         self.horizontal_splitter = QSplitter(Qt.Horizontal)
@@ -473,8 +467,12 @@ class FileTree(ConfigWidget):
                     self.current_path = parent
                     if add_to_history:
                         self.add_to_history(parent)
-                    self.file_view.load_directory(parent)
-                    self.file_view.select_item(path.name)
+                    if self.files_in_tree:
+                        self.nav_panel.set_current_path(path)
+                    else:
+                        self.file_view.load_directory(parent)
+                        self.file_view.select_item(path.name)
+                    self.set_current_file(path)
                 return
 
             self.current_path = path
@@ -488,8 +486,7 @@ class FileTree(ConfigWidget):
             self.update_toolbar_state()
 
             if update_page_path:
-                page_path = get_selected_pages(self.main.main_pages)
-                sql.execute("UPDATE settings SET value = ? WHERE `field` = 'page_path'", (json.dumps(page_path),))
+                QTimer.singleShot(0, self.update_page_map)
 
         except PermissionError:
             display_message(f"Permission denied: {path}", "Error")
@@ -532,9 +529,9 @@ class FileTree(ConfigWidget):
 
     def update_toolbar_state(self):
         """Update toolbar button states based on current state."""
-        self.toolbar.back_btn.setEnabled(self.history_index > 0)
-        self.toolbar.forward_btn.setEnabled(self.history_index < len(self.history) - 1)
-        self.toolbar.up_btn.setEnabled(self.current_path.parent != self.current_path)
+        self.nav_panel.back_btn.setEnabled(self.history_index > 0)
+        self.nav_panel.forward_btn.setEnabled(self.history_index < len(self.history) - 1)
+        self.nav_panel.up_btn.setEnabled(self.current_path.parent != self.current_path)
 
     def handle_item_activation(self, item_name: str):
         """Handle double-click or enter on a file/directory item."""
@@ -620,7 +617,7 @@ class FileTree(ConfigWidget):
             menu.addSeparator()
 
             new_folder_action = menu.addAction("New Folder")
-            new_folder_action.triggered.connect(self.toolbar.create_new_folder)
+            new_folder_action.triggered.connect(self.nav_panel.create_new_folder)
 
             refresh_action = menu.addAction("Refresh")
             refresh_action.triggered.connect(self.file_view.refresh)
@@ -630,15 +627,31 @@ class FileTree(ConfigWidget):
         menu.exec_(global_pos)
 
     class FilePreview(QWidget):
-        """Loads and builds a studio depending on the file type."""
+        """Tabbed container that loads studios based on file type."""
         def __init__(self, parent):
             super().__init__(parent)
             self.parent = parent
             self.layout = CVBoxLayout(self)
-            # self.filepath = None
-            self.studio = None
+            self.open_files = {}  # {filepath: studio_widget}
+
+            self.tab_widget = QTabWidget()
+            self.tab_widget.setTabsClosable(True)
+            self.tab_widget.setMovable(True)
+            self.tab_widget.tabCloseRequested.connect(self.close_tab)
+            self.tab_widget.currentChanged.connect(
+                lambda: QTimer.singleShot(0, parent.update_page_map))
+            self.layout.addWidget(self.tab_widget)
 
         def set_filepath(self, filepath: str):
+            """Open a file in a tab, or focus existing tab."""
+            # Check if already open
+            if filepath in self.open_files:
+                index = self.tab_widget.indexOf(self.open_files[filepath])
+                if index >= 0:
+                    self.tab_widget.setCurrentIndex(index)
+                    return
+
+            # Find studio for extension
             studios = system.manager.modules.get_modules_in_folder(
                 'Studios',
                 fetch_keys=('name', 'class',)
@@ -646,150 +659,36 @@ class FileTree(ConfigWidget):
             ext_studios = {}
             for _, studio_class in studios:
                 if studio_class and hasattr(studio_class, 'associated_extensions'):
-                    ext_studios.update({ext.lower().lstrip('.'): studio_class for ext in studio_class.associated_extensions})
+                    ext_studios.update({
+                        ext.lower().lstrip('.'): studio_class
+                        for ext in studio_class.associated_extensions
+                    })
             ext = os.path.splitext(filepath)[1].lower().lstrip('.')
-
             studio_class = ext_studios.get(ext)
             if not studio_class:
-                clear_layout(self.layout)
-                self.studio = None
                 return
 
-            is_same = isinstance(self.studio, studio_class)
-            if is_same:
-                # self.studio.clear_project()
-                self.studio.open_file(filepath)
-                # return
+            # Create studio and open file
+            studio = studio_class(self)
+            studio.open_file(filepath)
+            filename = os.path.basename(filepath)
+            tab_index = self.tab_widget.addTab(studio, filename)
+            self.tab_widget.setCurrentIndex(tab_index)
+            self.open_files[filepath] = studio
 
-            elif not is_same:
-                clear_layout(self.layout)
-                self.studio = studio_class(self)
-                self.studio.open_file(filepath)
-                self.layout.addWidget(self.studio)
-
-            # self.filepath = filepath
-            self.load()
+        def close_tab(self, index):
+            """Close a tab and clean up."""
+            widget = self.tab_widget.widget(index)
+            filepath = next(
+                (fp for fp, w in self.open_files.items() if w is widget),
+                None,
+            )
+            if filepath:
+                del self.open_files[filepath]
+            self.tab_widget.removeTab(index)
 
         def load(self):
             pass
-
-    class FileToolbar(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.parent = parent
-            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            self.setup_ui()
-
-        def setup_ui(self):
-            self.layout = CHBoxLayout(self)
-            self.layout.setContentsMargins(5, 5, 5, 5)
-
-            # Navigation buttons
-            self.back_btn = IconButton(
-                parent=self,
-                icon_path=":/resources/icon-left-arrow.png",
-                tooltip="Back"
-            )
-            self.forward_btn = IconButton(
-                parent=self,
-                icon_path=":/resources/icon-right-arrow.png",
-                tooltip="Forward"
-            )
-            self.up_btn = IconButton(
-                parent=self,
-                icon_path=":/resources/icon-up-arrow.png",
-                tooltip="Up"
-            )
-
-            self.back_btn.clicked.connect(self.parent.navigate_back)
-            self.forward_btn.clicked.connect(self.parent.navigate_forward)
-            self.up_btn.clicked.connect(self.parent.navigate_up)
-
-            self.layout.addWidget(self.back_btn)
-            self.layout.addWidget(self.forward_btn)
-            self.layout.addWidget(self.up_btn)
-
-            # Separator
-            separator = QFrame()
-            separator.setFrameShape(QFrame.VLine)
-            separator.setFrameShadow(QFrame.Sunken)
-            self.layout.addWidget(separator)
-
-            # View options
-            self.view_combo = QComboBox()
-            self.view_combo.addItems(["List", "Grid", "Details"])
-            self.view_combo.setCurrentText("Details")
-            self.view_combo.currentTextChanged.connect(self.change_view_mode)
-
-            self.layout.addWidget(self.view_combo)
-
-            # Search
-            self.search_field = QLineEdit()
-            self.search_field.setPlaceholderText("Search files...")
-            self.search_field.textChanged.connect(self.parent.file_view.filter_items)
-
-            # Files in tree toggle button
-            self.files_in_tree_btn = ToggleIconButton(
-                parent=self,
-                icon_path_checked=":/resources/icon-tree.png",
-                icon_path_unchecked=":/resources/icon-list.png",
-                tooltip="Toggle files in tree view",
-                is_checked=self.parent.files_in_tree
-            )
-            self.files_in_tree_btn.clicked.connect(self.toggle_files_in_tree)
-            self.layout.addWidget(self.files_in_tree_btn)
-
-            self.layout.addStretch()
-            self.layout.addWidget(QLabel("Search:"))
-            self.layout.addWidget(self.search_field)
-
-            # File operations
-            self.new_folder_btn = IconButton(
-                parent=self,
-                icon_path=":/resources/icon-new-folder.png",
-                tooltip="New Folder"
-            )
-            # self.new_folder_btn = QPushButton("New Folder")
-            self.new_folder_btn.clicked.connect(self.create_new_folder)
-            self.layout.addWidget(self.new_folder_btn)
-
-        def change_view_mode(self, mode: str):
-            """Change the file view mode."""
-            self.parent.file_view.set_view_mode(mode)
-
-        def create_new_folder(self):
-            """Create a new folder in the current directory."""
-            name, ok = QInputDialog.getText(
-                self, "New Folder", "Enter folder name:"
-            )
-            if ok and name.strip():
-                folder_path = self.parent.current_path / name.strip()
-                try:
-                    folder_path.mkdir(exist_ok=False)
-                    self.parent.file_view.load_directory(self.parent.current_path)
-                except FileExistsError:
-                    display_message(f"Folder '{name}' already exists", "Error")
-                except Exception as e:
-                    display_message(f"Error creating folder: {str(e)}", "Error")
-
-        def toggle_files_in_tree(self):
-            """Toggle the files_in_tree setting and refresh the navigation panel."""
-            self.parent.files_in_tree = not self.parent.files_in_tree
-
-            # Update the navigation panel filter
-            if self.parent.files_in_tree:
-                # Show both directories and files
-                self.parent.nav_panel.dir_model.setFilter(QDir.AllEntries | QDir.NoDotAndDotDot)
-                # Hide the file view container
-                self.parent.file_view_container.hide()
-            else:
-                # Show only directories
-                self.parent.nav_panel.dir_model.setFilter(QDir.Dirs | QDir.NoDotAndDotDot)
-                # Show the file view container
-                self.parent.file_view_container.show()
-
-            # Refresh the current navigation
-            self.parent.navigate_to(self.parent.current_path, add_to_history=False)
 
     class NavigationPanel(QWidget):
         location_changed = Signal(Path)
@@ -802,11 +701,64 @@ class FileTree(ConfigWidget):
         def setup_ui(self):
             self.layout = CVBoxLayout(self)
 
+            # Toolbar row
+            toolbar_row = CHBoxLayout()
+            toolbar_row.setContentsMargins(0, 0, 0, 0)
+
+            self.back_btn = IconButton(
+                parent=self,
+                icon_path=":/resources/icon-arrow-left.png",
+                tooltip="Back"
+            )
+            self.forward_btn = IconButton(
+                parent=self,
+                icon_path=":/resources/icon-arrow-right.png",
+                tooltip="Forward"
+            )
+            self.up_btn = IconButton(
+                parent=self,
+                icon_path=":/resources/icon-arrow-up.png",
+                tooltip="Up"
+            )
+            self.back_btn.clicked.connect(self.parent.navigate_back)
+            self.forward_btn.clicked.connect(self.parent.navigate_forward)
+            self.up_btn.clicked.connect(self.parent.navigate_up)
+
+            self.files_in_tree_btn = ToggleIconButton(
+                parent=self,
+                icon_path_checked=":/resources/icon-tree.png",
+                icon_path_unchecked=":/resources/icon-list.png",
+                tooltip="Toggle files in tree view",
+                is_checked=self.parent.files_in_tree
+            )
+            self.files_in_tree_btn.clicked.connect(self.toggle_files_in_tree)
+
+            self.new_folder_btn = IconButton(
+                parent=self,
+                icon_path=":/resources/icon-new-folder.png",
+                tooltip="New Folder"
+            )
+            self.new_folder_btn.clicked.connect(self.create_new_folder)
+
+            toolbar_row.addWidget(self.back_btn)
+            toolbar_row.addWidget(self.forward_btn)
+            toolbar_row.addWidget(self.up_btn)
+            toolbar_row.addStretch()
+            toolbar_row.addWidget(self.files_in_tree_btn)
+            toolbar_row.addWidget(self.new_folder_btn)
+            self.layout.addLayout(toolbar_row)
+
+            # Search field
+            self.search_field = QLineEdit()
+            self.search_field.setPlaceholderText("Search files...")
+            self.search_field.textChanged.connect(self.parent.file_view.filter_items)
+            self.layout.addWidget(self.search_field)
+
             if self.parent.show_bookmarks:
                 # Bookmarks section
                 bookmarks_label = QLabel("Bookmarks")
                 bookmarks_label.setStyleSheet("font-weight: bold; margin: 5px 0px;")
-                
+
                 # Directory tree section
                 tree_label = QLabel("Computer")
                 tree_label.setStyleSheet("font-weight: bold; margin: 15px 0px 5px 0px;")
@@ -835,8 +787,6 @@ class FileTree(ConfigWidget):
 
             self.dir_tree.setContextMenuPolicy(Qt.CustomContextMenu)
             self.dir_tree.customContextMenuRequested.connect(self.show_context_menu)
-            # self.dir_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            
 
             # Hide columns except name
             for i in range(1, self.dir_model.columnCount()):
@@ -857,7 +807,7 @@ class FileTree(ConfigWidget):
             dir_tree_layout.addWidget(self.dir_tree)
             # dir_tree_layout.addStretch(1)
             self.splitter.addWidget(dir_tree_widget)
-            
+
             if self.parent.show_bookmarks:
                 # Bookmarks widget container
                 bookmarks_widget = QWidget()
@@ -938,6 +888,34 @@ class FileTree(ConfigWidget):
         def show_context_menu(self, position: QPoint):
             index = self.dir_tree.indexAt(position)
             self.parent.show_context_menu_for_path(self.dir_tree, position, index)
+
+        def toggle_files_in_tree(self):
+            """Toggle the files_in_tree setting and refresh the navigation panel."""
+            self.parent.files_in_tree = not self.parent.files_in_tree
+
+            if self.parent.files_in_tree:
+                self.dir_model.setFilter(QDir.AllEntries | QDir.NoDotAndDotDot)
+                self.parent.file_view_container.hide()
+            else:
+                self.dir_model.setFilter(QDir.Dirs | QDir.NoDotAndDotDot)
+                self.parent.file_view_container.show()
+
+            self.parent.navigate_to(self.parent.current_path, add_to_history=False)
+
+        def create_new_folder(self):
+            """Create a new folder in the current directory."""
+            name, ok = QInputDialog.getText(
+                self, "New Folder", "Enter folder name:"
+            )
+            if ok and name.strip():
+                folder_path = self.parent.current_path / name.strip()
+                try:
+                    folder_path.mkdir(exist_ok=False)
+                    self.parent.file_view.load_directory(self.parent.current_path)
+                except FileExistsError:
+                    display_message(f"Folder '{name}' already exists", "Error")
+                except Exception as e:
+                    display_message(f"Error creating folder: {str(e)}", "Error")
 
         def clear_views(self):
             """Clear and reset the navigation panel views."""
@@ -1287,6 +1265,10 @@ class FileTree(ConfigWidget):
                     )
 
                 self.refresh()
+                # Refresh nav panel (QFileSystemModel has DontWatchForChanges)
+                root_path = str(self.parent.root_directory)
+                self.parent.nav_panel.dir_model.setRootPath('')
+                self.parent.nav_panel.dir_model.setRootPath(root_path)
 
         def show_properties(self, file_path: Path):
             """Show file/directory properties dialog."""
@@ -1381,6 +1363,13 @@ class FilePropertiesDialog(QDialog):
 
     def __init__(self, file_path: Path, parent=None):
         super().__init__(parent)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
         self.file_path = file_path
         self.setWindowTitle(f"Properties - {file_path.name}")
         self.setModal(True)

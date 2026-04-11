@@ -1,0 +1,141 @@
+uuid: 6fb92ab3-74cf-4be4-8d4d-6087a245221b
+name: module-doc-old
+config:
+  _TYPE: workflow
+  name: module-doc-old
+  avatar_path: :/resources/icon-block.png
+  description: ''
+  members:
+  - id: '2'
+    linked_id: null
+    loc_x: 117
+    loc_y: 52
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Module typess
+        AgentPilot is highly modular and extensible, allowing anyone to override and extend almost every aspect of the app.
+
+        This guide will walk you through the process of creating different types of modules.
+
+        ## Core Modules
+
+        ### Managers
+        Manager modules are initialized on startup, these often load and save data to a specific database table.
+
+        [➡️ Create a Manager module](#creating-a-manager-module)
+
+        <details>
+            <summary>
+                <b>Methods and attributes</b>
+            </summary>
+
+        Attributes:
+        - [Attr 1, type, description, default etc]
+
+        Methods:
+        - [Method 1, returns, description, default etc]
+        </details>
+
+        Usages:<br>
+        - ConfigDBTree<br>
+        - - ConfigTable
+
+        Available in
+
+
+        ### Connectors
+        Connector modules handle connections to databases.
+
+        ### Providers
+        Provider modules serve models from a dedicated service.
+
+        ### Environments
+        Environment modules define an execution environment.
+
+        ### Behaviors
+        Behavior modules define how a workflow is executed.
+
+        ### Members
+        Member modules define available members in a workflow.
+        ### Daemons
+        modules that run background tasks or periodic jobs.
+
+        ## GUI Modules
+        ### Bubbles
+        modules defining how each role is displayed in the chat page.
+        ### Widgets
+        QWidget modules that can be embedded within pages or linked as a Member settings widget.
+        ### Fields
+        QWidget modules used within the ConfigFields widget module.
+        ### Pages
+        QWidget modules that can be composed of Widget modules.
+
+
+        # Creating a 'Manager' module
+        To create a manager module, add a new file under `src/system` with the name of your module, for example `my_manager.py`.
+
+        This file must contain a class definition that inherits from `BaseManager`.
+
+        Note: If more than one class is declared in the file, then you must mark your manager class with the decorator `@set_module_type('Managers')`.
+
+        The `BaseManager` class provides a base for managing data, including loading, saving, adding, and deleting items from a database table.
+        Methods and attributes of the `BaseManager` class can be overridden to customize the behavior of the system.manager.
+
+        <details>
+            <summary>
+                <b>Methods and attributes</b>
+            </summary>
+
+        Base methods:
+        - `__init__(self, *args, **kwargs)`: The constructor method, called when the module is initialized.
+        - `load(self)`*: Load the state of the system.manager.
+        - `add(self, *args, **kwargs)`: Add an item to the system.manager.
+        - `delete(self, *args, **kwargs)`: Delete an item from the system.manager.
+
+        Attributes:
+        - `table_name`: The name of the database table to use for storing data.
+        - `query`: The SQL query to use for loading data from the database.
+        - `query_params`: The parameters to use for the SQL query, can be lambdas or functions that return a value.
+        - `load_columns`: The columns to load from the database, if not specified, defaults to `['id', 'config']`.
+        - `folder_key`: The key to use for folders, if not specified, defaults to `None` and folders will be disabled.
+        - `key_column`:
+        - `default_kindd`:
+        - `default_fields`:
+        - `add_item_options`:
+        - `del_item_options`:
+        - `store_data`: Whether to store data in the database, defaults to `True`.
+        - `config_is_workflow`: Whether the config is a workflow_settings, defaults to `False`.
+
+        </details>
+
+        <details>
+            <summary>
+                <b>Examples</b>
+            </summary>
+
+        - AgentManager
+        - APIManager
+        - BlockManager
+        - ConfigManager
+        - DaemonManager
+        - ModuleManager
+        - RoleManager
+        - TaskManager
+        - ToolManager
+        - VenvManager
+
+        </details>
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+parent_uuid: 673d84a8-fd6b-4f41-b585-87fd53026401

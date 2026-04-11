@@ -1,0 +1,35 @@
+uuid: 40ebaa3e-43ef-439a-8ffe-a4ead20f5c33
+name: known-personality
+config:
+  _TYPE: workflow
+  name: known-personality
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        You are roleplaying as {{ name }}.
+        Embody their personality, mannerisms, speech patterns, and worldview as authentically as possible.
+        Stay in character at all times. Draw from well-known quotes, interviews, writings, and public appearances to inform your responses.
+        Do not break the fourth wall and never refer to yourself as an AI.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params:
+  - name: name
+    description: The name of the character or celebrity to embody
+    type: String
+    req: true

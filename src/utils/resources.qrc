@@ -7,11 +7,11 @@
         <file>resources/icon.ico</file>
         <file>resources/icon-agent.png</file>
         <file>resources/icon-agent-solid.png</file>
+        <file>resources/icon-audio.png</file>
         <file>resources/icon-back.png</file>
         <file>resources/icon-chat.png</file>
         <file>resources/icon-contexts.png</file>
         <file>resources/icon-dots.png</file>
-        <file>resources/icon-left-arrow.png</file>
         <file>resources/icon-new.png</file>
         <file>resources/icon-mic.png</file>
         <file>resources/icon-minus.png</file>
@@ -20,7 +20,9 @@
         <file>resources/icon-pin-on.png</file>
         <file>resources/icon-pull.png</file>
         <file>resources/icon-push.png</file>
-        <file>resources/icon-right-arrow.png</file>
+        <file>resources/icon-arrow-left.png</file>
+        <file>resources/icon-arrow-right.png</file>
+        <file>resources/icon-arrow-up.png</file>
         <file>resources/icon-run-solid.png</file>
         <file>resources/icon-run.png</file>
         <file>resources/icon-send.png</file>
@@ -112,5 +114,13 @@
         <file>resources/icon-effects.png</file>
         <file>resources/icon-extend.png</file>
         <file>resources/icon-gene.png</file>
+        <file>resources/icon-volume.png</file>
+        <file>resources/icon-volume-off.png</file>
+        <file>resources/icon-prev-track.png</file>
+        <file>resources/icon-next-track.png</file>
+        <file>resources/icon-play.png</file>
+        <file>resources/icon-pause.png</file>
+        <file>resources/icon-condition.png</file>
+        <file>resources/icon-probability.png</file>
     </qresource>
 </RCC>

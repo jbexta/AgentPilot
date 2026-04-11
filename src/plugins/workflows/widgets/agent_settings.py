@@ -25,7 +25,7 @@ from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_json_tree import ConfigJsonTree
 from gui.widgets.config_tabs import ConfigTabs
 from gui.widgets.config_json_db_tree import ConfigJsonDBTree
-from gui.widgets.config_voice_tree import ConfigVoiceTree
+from plugins.computer_use.widgets.computer_use_settings import ComputerUseSettings
 
 
 class AgentSettings(ConfigTabs):
@@ -36,6 +36,7 @@ class AgentSettings(ConfigTabs):
             'Messages': self.Page_Chat_Messages(parent=self),
             'Preload': self.Page_Chat_Preload(parent=self),
             'Tools': self.Page_Chat_Tools(parent=self),
+            'Computer Use': ComputerUseSettings(parent=self),
             'Voice': self.Page_Chat_Voice(parent=self),
         }
 
@@ -48,6 +49,7 @@ class AgentSettings(ConfigTabs):
                     'text': 'Model',
                     'type': 'model',
                     'model_kind': 'CHAT',
+                    'popup_params': True,
                     'width': 200,
                     'default': '',
                     'row_key': 0,
@@ -182,6 +184,16 @@ class AgentSettings(ConfigTabs):
                 },
             ]
 
-    class Page_Chat_Voice(ConfigVoiceTree):
+    class Page_Chat_Voice(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.conf_namespace = 'voice'
+            self.schema = [
+                {
+                    'text': 'Model',
+                    'type': 'model',
+                    'model_kind': 'AUDIO',
+                    'width': 200,
+                    'default': '',
+                },
+            ]

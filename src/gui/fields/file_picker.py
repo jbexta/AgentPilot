@@ -6,7 +6,7 @@ an interactive file selection interface. It includes a text input for manual ent
 and a browse button for file dialogs. Integrates with the configuration system for file path settings.
 """
 
-from PySide6.QtWidgets import QSizePolicy, QWidget, QLineEdit, QPushButton, QFileDialog, QHBoxLayout
+from PySide6.QtWidgets import QSizePolicy, QWidget, QLineEdit, QFileDialog, QHBoxLayout
 
 from gui.util import IconButton
 
@@ -17,7 +17,9 @@ class FilePicker(QWidget):
         self.parent = parent
         width = kwargs.get('width', None)
         placeholder = kwargs.get('placeholder', 'Select or enter path...')
-        
+        self.file_filter = kwargs.get('file_filter', 'All Files (*)')
+        self.mode = kwargs.get('mode', 'open')
+
         # Create layout
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -61,13 +63,27 @@ class FilePicker(QWidget):
 
     def browse_path(self):
         current_path = self.path_input.text()
-        
-        path, _ = QFileDialog.getOpenFileName(
-            self, 
-            'Select File', 
-            current_path,
-            'All Files (*)'
-        )
-        
+
+        if self.mode == 'directory':
+            path = QFileDialog.getExistingDirectory(
+                self,
+                'Select Directory',
+                current_path
+            )
+        elif self.mode == 'save':
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                'Save File',
+                current_path,
+                self.file_filter
+            )
+        else:
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                'Select File',
+                current_path,
+                self.file_filter
+            )
+
         if path:
             self.path_input.setText(path)

@@ -1,0 +1,25 @@
+uuid: a6c61814-a536-432d-9173-535e52a755a3
+name: FileRead
+config:
+  _TYPE: workflow
+  name: FileRead
+  avatar_path: :/resources/icon-tool-small.png
+  description: ''
+  members:
+  - id: '1'
+    linked_id: tools.12
+    loc_x: 100
+    loc_y: 80
+    width: 457.0
+    height: 350.0
+    config:
+      _TYPE: code
+      name: Code Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+folder_path: Web search/Filesystem

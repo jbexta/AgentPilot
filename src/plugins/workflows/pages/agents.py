@@ -1,5 +1,7 @@
+from utils import sql
+from gui.util import find_main
 from gui.widgets.config_db_tree import ConfigDBTree
-from plugins.workflows.widgets.chat_widget import ChattableWorkflowWidget
+from plugins.workflows.widgets.workflow_settings import WorkflowSettings
 
 
 class Page_Entities(ConfigDBTree):
@@ -54,14 +56,34 @@ class Page_Entities(ConfigDBTree):
             readonly=True,
             searchable=True,
             filterable=True,
-            has_chat=True,
             kind='AGENT',
             kind_list=['AGENT', 'CONTACT'],
             folder_key={'AGENT': 'agents', 'CONTACT': 'contacts'},
         )
         self.splitter.setSizes([400, 1000])
+        self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
 
-    class Entity_Config_Widget(ChattableWorkflowWidget):
+    def on_item_double_clicked(self, item, column):
+        entity_id = self.tree.get_selected_item_id()
+        if entity_id is None:
+            return
+        entity_uuid = sql.get_scalar(
+            "SELECT uuid FROM entities WHERE id = ?", (entity_id,)
+        )
+        if not entity_uuid:
+            return
+        main = find_main()
+        page_chat = main.main_pages.pages.get('chat')
+        if page_chat is None:
+            return
+        page_chat.new_context(
+            entity_id=entity_uuid,
+            entity_table='entities',
+            kind='CHAT',
+        )
+        main.main_pages.goto_page('chat')
+
+    class Entity_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,

@@ -27,6 +27,7 @@ from utils.helpers import set_module_type
 @set_module_type(module_type='Members')
 class Node(Member):
     workflow_insert_mode = 'single'
+    allow_condition = False
     OUTPUT = None
 
     def __init__(self, **kwargs):

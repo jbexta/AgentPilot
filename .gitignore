@@ -1,3 +1,15 @@
 __pycache__/
 data.db
+demo_data.db*
+finance.db
+/src/plugins/finance
+*.tar.gz
 .env
+.vscode/
+/collections/
+/audio/
+/images/
+/music/
+/video/
+/videos/
+data.db

@@ -23,18 +23,16 @@ from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QTextCursor, QTextOption, Qt, QDesktopServices
 
 from gui import system
-from gui.util import CustomMenu, IconButton, find_main_widget, find_workflow_widget
-from utils.helpers import apply_alpha_to_hex, display_message, display_message_box
+from gui.util import IconButton, find_chat_widget
+from utils.helpers import apply_alpha_to_hex
 from utils import sql
 
 import mistune
-from urllib.parse import quote
 
 
 class MessageBubble(QTextEdit):
     def __init__(self, parent, message, **kwargs):
         super().__init__(parent=parent)
-        self.main = parent.parent.main
         self.parent = parent
         self.msg_id: int = None
         self.member_id: str = None
@@ -362,14 +360,15 @@ class MessageBubble(QTextEdit):
         margins = self.contentsMargins()
 
         # --- Step 1: Determine the maximum available width for the bubble's text.
-        main = find_main_widget(self)
+        chat_widget = find_chat_widget(self)
+        # main = find_main_widget(self)
         max_text_width = 400  # A sensible default width.
 
-        if main and hasattr(main, 'main_pages'):
+        if chat_widget:  #  and hasattr(main, 'main_pages'):
             try:
                 # This calculation can be fragile during UI setup.
                 # We subtract a bit more to account for layout spacing, scrollbars, etc.
-                available_width = main.width() - main.main_pages.settings_sidebar.width() - 60
+                available_width = chat_widget.width()  # - main.main_pages.settings_sidebar.width() - 60
                 if available_width > 0:
                     max_text_width = available_width
             except AttributeError:
@@ -466,7 +465,7 @@ class MessageBubble(QTextEdit):
         def __init__(self, branch_entry, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.main = parent.main
+
             message_bubble = self.parent
             self.bubble_id = message_bubble.msg_id
 
@@ -508,40 +507,42 @@ class MessageBubble(QTextEdit):
             self.btn_next.move(half_av_width + 4, 0)
 
         def back(self):
-            page_chat = self.main.main_pages.get('chat')
+            chat_widget = find_chat_widget(self)
+
             if self.bubble_id in self.branch_entry:
                 return
             else:
-                page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
+                chat_widget.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == 0:
                     self.reload_following_bubbles()
                     return
                 next_msg_id = self.child_branches[current_index - 1]
-                page_chat.workflow.activate_branch_with_msg(next_msg_id)
+                chat_widget.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def next(self):
-            page_chat = self.main.main_pages.get('chat')
+            chat_widget = find_chat_widget(self)
+
             if self.bubble_id in self.branch_entry:
                 activate_msg_id = self.child_branches[0]
-                page_chat.workflow.activate_branch_with_msg(activate_msg_id)
+                chat_widget.workflow.activate_branch_with_msg(activate_msg_id)
             else:
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == len(self.child_branches) - 1:
                     return
-                page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
+                chat_widget.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 next_msg_id = self.child_branches[current_index + 1]
-                page_chat.workflow.activate_branch_with_msg(next_msg_id)
+                chat_widget.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def reload_following_bubbles(self):
-            page_chat = self.main.main_pages.get('chat')
-            page_chat.message_collection.remove_messages_since(self.bubble_id)
-            page_chat.workflow.message_history.load()
-            page_chat.message_collection.refresh()
+            chat_widget = find_chat_widget(self)
+            chat_widget.message_collection.remove_messages_since(self.bubble_id)
+            chat_widget.workflow.message_history.load()
+            chat_widget.message_collection.refresh()
 
         def update_buttons(self):
             pass

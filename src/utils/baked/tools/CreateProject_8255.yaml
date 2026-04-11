@@ -1,0 +1,6 @@
+uuid: 82559984-78a7-43a2-9caf-e3dd3956f588
+name: CreateProject
+config:
+  _TYPE: code
+  name: CreateProject
+folder_path: Projects

@@ -1,0 +1,61 @@
+uuid: f7cffa6b-c4c5-46ea-8463-e2e804e47963
+name: song_gen
+config:
+  _TYPE: workflow
+  name: song_gen
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '3'
+    linked_id: null
+    loc_x: 243
+    loc_y: 77
+    width: 450.0
+    height: 350.0
+    config:
+      model:
+        _model_name: v3
+        kind: AUDIO
+        provider: sonauto
+        model_params:
+          prompt: '{{ artist }}, {{ prompt_gen_sonauto(artist, song_desc) }}'
+          lyrics: '{% if lyrics is defined %}{{ lyrics }}{% else %}{{ lyrics_gen(artist, song_desc) }}{% endif %}'
+          instrumental: false
+          prompt_strength: 2.0
+          output_format: mp3
+          output_bit_rate: 256
+      mode: Model
+      preview.results:
+      - filepath: /home/jb/CursorProjects/AgentPilot/music/audio_a78a862b-31f3-40b5-a2da-8efa3d8a280b_0.mp3
+      preview.pending: []
+      _format_block_keys:
+      - - model
+        - model_params
+        - prompt
+      - - model
+        - model_params
+        - lyrics
+      _TYPE: audio
+      name: Audio
+  inputs: []
+  options:
+    filter_role: instruction
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params:
+  - name: artist
+    description: ''
+    type: String
+    req: true
+  - name: song_desc
+    description: ''
+    type: String
+    req: true
+  - name: lyrics
+    description: ''
+    type: String
+    req: false
+parent_id: null
+folder_path: Music

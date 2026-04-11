@@ -77,22 +77,14 @@ class Agent(LlmMember):
         # }
 
     async def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
-        raw_sys_msg = self.config.get('chat.sys_msg', '')
-
         builtin_blocks = {
             'char_name': self.name,
             'full_name': self.name,
             'response_type': 'response',
             'verb': '',
         }
-        if self.member_id == '4':
-            pass
-
-        formatted_sys_msg = await system.manager.blocks.format_string(
-            raw_sys_msg,
-            ref_workflow=self.workflow,
-            additional_blocks=builtin_blocks,
-        )
+        formatted_sys_msg = await self.format_config_value(
+            'chat.sys_msg', additional_blocks=builtin_blocks)
 
         message_str = ''
         if msgs_in_system:

@@ -83,12 +83,11 @@ class InputSettings(ConfigJoined):
                     'num_lines': 2,
                     'stretch_x': True,
                     'stretch_y': True,
-                    'highlighter': 'python',
-                    'fold_mode': 'python',
+                    'highlighter': 'cel',
                     'monospaced': True,
                     'label_position': None,
                     'visibility_predicate': lambda fields: fields.config.get('conditional', False),
-                    'default': 'return True',
+                    'default': 'true',
                 },
             ]
 

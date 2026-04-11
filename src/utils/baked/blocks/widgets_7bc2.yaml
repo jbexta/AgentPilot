@@ -1,0 +1,186 @@
+uuid: 7bc2cb45-2a53-4298-ac86-b8007253fd28
+name: widgets
+config:
+  _TYPE: workflow
+  name: widgets
+  avatar_path: :/resources/icon-block.png
+  description: ''
+  members:
+  - id: '1'
+    linked_id: blocks.129
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        ConfigWidget System Analysis
+
+        The ConfigWidget system in AgentPilot is a comprehensive configuration
+        management framework that provides schema-driven UI generation, database
+        persistence, and hierarchical configuration propagation.
+
+        Core Architecture
+
+        Base `ConfigWidget` Class
+        (/home/jb/CursorProjects/AgentPilot/src/gui/widgets/config_widget.py)
+
+        Key Attributes:
+        - config (dict): Current configuration state
+        - schema (list): Defines UI structure and field metadata
+        - conf_namespace (str): Configuration namespace for key prefixing
+        - propagate_config (bool): Controls whether config changes bubble up to parent
+        - user_editable (bool): Determines if widget can be edited by users
+
+        Core Methods Analysis
+
+        1. load_config(json_config=None) (Lines 73-134)
+
+        Purpose: Loads configuration data from multiple sources with fallback
+        hierarchy
+
+        Data Sources (Priority Order):
+        1. Data Source: Database table with specific lookup criteria
+        2. Direct JSON: Passed as parameter
+        3. Parent Config: Inherits from parent widget with namespace filtering
+
+        Key Logic:
+        - Supports database lookups via data_source attribute containing:
+        - table_name: Database table
+        - item_id or lookup_column/lookup_value: Record identification
+        - data_column: Column containing JSON config (default: 'config')
+        - Recursive loading of child widgets (config_widget, widgets, pages)
+        - Namespace filtering when conf_namespace is set
+
+        2. get_config() (Lines 136-210)
+
+        Purpose: Extracts current configuration state from all child components
+
+        Configuration Sources:
+        - Direct self.config dictionary
+        - Child config_widget configurations
+        - Tree widget field values with schema validation
+        - Includes _TYPE metadata for typed configurations
+
+        Tree Integration:
+        - Reads values from selected tree items based on schema definitions
+        - Supports is_config_field schema property for ConfigDBTree
+        - Uses convert_to_safe_case() for key normalization
+
+        3. update_config() (Lines 212-217)
+
+        Purpose: Propagates configuration changes up the widget hierarchy
+
+        Behavior:
+        - Calls own save_config() if available
+        - Bubbles up to parent's update_config() if propagate_config=True
+
+        4. save_config() (Lines 219-246)
+
+        Purpose: Persists configuration to database when data_source is defined
+
+        Process:
+        1. Extracts configuration via get_config()
+        2. Serializes to JSON
+        3. Updates database using save_table_config() utility
+        4. Reloads configuration to ensure consistency
+
+        Specialized Implementations
+
+        ConfigDBTree
+        (/home/jb/CursorProjects/AgentPilot/src/gui/widgets/config_db_tree.py)
+
+        Key Features:
+        - Database-driven tree widget with CRUD operations
+        - Manager integration for data operations
+        - Schema-based column generation
+        - Folder hierarchy support
+        - Item pinning and baking functionality
+
+        ConfigCollection
+        (/home/jb/CursorProjects/AgentPilot/src/gui/widgets/config_collection.py)
+
+        Purpose: Base class for multi-page/multi-component configuration widgets
+
+        Configuration Aggregation:
+        - get_config() (Lines 44-63): Merges configurations from all visible pages
+        - Respects page visibility and propagation settings
+        - Supports both tabbed and sidebar-based page management
+
+        Configuration Propagation Chain
+
+        User Interaction
+          ↓
+        Field Widget (update_config)
+          ↓
+        ConfigWidget (update_config)
+          ↓
+        Parent Widget (update_config)
+          ↓
+        ConfigDBTree/Root (save_config)
+          ↓
+        Database Persistence
+
+        Schema-Driven Architecture
+
+        Schema Structure:
+        {
+          'text': 'Display Name',
+          'key': 'config_key',
+          'type': (str, int, bool, tuple),
+          'is_config_field': bool,  # For tree widgets
+          'default': 'default_value',
+          # ... additional metadata
+        }
+
+        Schema Processing:
+        - build_schema(): Constructs UI based on schema definitions
+        - Dynamic field generation with type-appropriate widgets
+        - Supports nested configuration widgets
+
+        Database Integration
+
+        Persistence Layer:
+        - save_table_config() utility function handles database updates
+        - Supports JSON serialization of complex configurations
+        - Metadata tracking for versioning and hashing
+        - Auto-baking support for configuration distribution
+
+        Edit Mode System
+
+        User Editing Features:
+        - toggle_widget_edit(): Controls edit mode state
+        - EditBar integration for live configuration editing
+        - Breadcrumb navigation for nested configurations
+        - Visual feedback for editable states
+
+        Key Design Patterns
+
+        1. Template Method: Base methods with specialized overrides
+        2. Observer: Configuration changes propagate through hierarchy
+        3. Strategy: Different data sources and persistence strategies
+        4. Composite: Tree-like configuration widget composition
+        5. Bridge: Database abstraction via connectors and managers
+
+        Data Flow Summary
+
+        1. Loading: load_config() → load() → UI population
+        2. User Input: Field changes → update_config() → propagation chain
+        3. Persistence: save_config() → database update → reload cycle
+        4. Synchronization: Parent-child configuration consistency maintained
+
+        This system provides a robust, extensible framework for complex
+        application configuration management with database persistence,
+        hierarchical organization, and real-time updates.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+parent_uuid: b3245998-3a81-4fe0-a032-a2c9bf2ce169

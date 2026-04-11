@@ -1,0 +1,74 @@
+uuid: 9bf6d9c2-40e2-430b-b9f2-213f357e9ee9
+name: expression-to-time
+config:
+  _TYPE: workflow
+  name: expression-to-time
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 110
+    loc_y: 89
+    width: 450.0
+    height: 350.0
+    config:
+      prompt_model:
+        _model_name: gpt-5.2-chat-latest
+        kind: CHAT
+        provider: litellm
+        model_params: {}
+      data: |-
+        You are tasked with converting a human language expression of time into a valid rrule (recurrence rule) string. An rrule string is used to define recurring events in calendar applications, following the iCalendar RFC 5545 specification.
+
+        To convert an expression of time into an rrule string, follow these steps:
+
+        1. Analyze the time expression carefully, identifying key components such as frequency (e.g., daily, weekly, monthly), specific days, times, intervals, and any exceptions or limits.
+
+        2. Use the following guidelines to convert common time patterns to rrule components:
+           - For frequency: Use FREQ=DAILY, FREQ=WEEKLY, FREQ=MONTHLY, or FREQ=YEARLY
+           - For specific days: Use BYDAY=MO,TU,WE,TH,FR for weekdays, BYDAY=SA,SU for weekends, or individual day codes (MO, TU, WE, TH, FR, SA, SU)
+           - For intervals: Use INTERVAL=n where n is the number of frequency units between occurrences
+           - For specific dates: Use BYMONTHDAY=n where n is the day of the month
+           - For specific months: Use BYMONTH=n where n is the month number (1-12)
+           - For ordinal occurrences: Use BYDAY=nDAY where n is the ordinal (-1 for last, 1 for first, etc.) and DAY is the day code
+           - For start date: Use DTSTART=YYYYMMDD
+           - For end date or count: Use UNTIL=YYYYMMDD or COUNT=n
+
+        3. Combine the relevant components into a valid rrule string, separating each component with a semicolon (;).
+
+        4. If the time expression cannot be accurately converted to an rrule string, explain why and provide the closest possible approximation.
+
+        <expression_conversion_example>
+        <current_datetime>
+        08-05-2025  11:37
+        </current_datetime>
+        <time_expression>
+        Tomorrow at 7am
+        </time_expression>
+        <answer>
+        [Only the valid rrule string]
+        </answer>
+        </expression_conversion_example>
+
+        Here is the time expression you need to convert:
+        <time_expression>
+        {{ expression }}
+        </time_expression>
+
+        Write only the rrule string inside the <answer> tag.
+      _TYPE: prompt
+      name: Prompt Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params:
+  - name: expression
+    description: ''
+    type: String
+    req: true
+parent_id: null
+folder_path: Time expressions

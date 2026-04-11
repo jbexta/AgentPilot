@@ -5,6 +5,7 @@ from fnmatch import fnmatch
 import os
 import re
 from typing import Any, AsyncIterable, Dict, List, Optional
+import uuid
 
 import pyautogui
 
@@ -20,6 +21,7 @@ from utils.helpers import convert_model_json_to_obj, convert_to_safe_case, set_m
 class Member:
     default_role = 'block'
     allow_async = True
+    allow_condition = True
 
     def __init__(self, **kwargs):
         self.main = kwargs.get('main')
@@ -33,6 +35,7 @@ class Member:
 
         self.last_output: Optional[str] = None
         self.turn_output: Optional[str] = None
+        # self.condition_passed: bool = True
 
         self.receivable_function = None
 
@@ -58,20 +61,65 @@ class Member:
     #
     #     return all_blocks
 
-    async def get_content(self, run_sub_blocks=True):  # todo dupe code 777
-        content = self.config.get('data', '')
+    async def format_config_value(self, key, default='',
+                                   additional_blocks=None):
+        """Get a config value, applying Jinja2 rendering."""
+        value = self.config.get(key, default)
+        if value:
+            value = await gui_system.manager.blocks.format_string(
+                value,
+                ref_workflow=self.workflow,
+                additional_blocks=additional_blocks,
+            )
+        return value
 
+    async def _format_dict(self, d, additional_blocks=None):
+        """Format all _format_block_keys in a dict, returning a clean copy."""
+        format_keys = d.get('_format_block_keys', [])
+        result = {k: v for k, v in d.items()
+                  if k != '_format_block_keys'}
+        for key in format_keys:
+            if isinstance(key, str):
+                value = result.get(key, '')
+                if value:
+                    result[key] = (
+                        await gui_system.manager.blocks.format_string(
+                            value,
+                            ref_workflow=self.workflow,
+                            additional_blocks=additional_blocks,
+                        ))
+            elif isinstance(key, list) and len(key) > 1:
+                target = result
+                for part in key[:-1]:
+                    if part not in target \
+                            or not isinstance(target[part], dict):
+                        target = None
+                        break
+                    target[part] = dict(target[part])
+                    target = target[part]
+                if target is not None:
+                    final_key = key[-1]
+                    value = target.get(final_key, '')
+                    if value:
+                        target[final_key] = (
+                            await gui_system.manager.blocks
+                            .format_string(
+                                value,
+                                ref_workflow=self.workflow,
+                                additional_blocks=additional_blocks,
+                            ))
+        return result
+
+    async def get_computed_config(self, additional_blocks=None):
+        """Return a copy of the config with all format_blocks fields rendered."""
+        return await self._format_dict(self.config, additional_blocks)
+
+    async def get_content(self, run_sub_blocks=True):
         if run_sub_blocks:
-            block_type = self.config.get('_TYPE', 'text_block')
-            nestable_block_types = ['text_block', 'prompt_block']
-            if block_type in nestable_block_types:
-                # # Check for circular references
-                # if name in visited:
-                #     raise RecursionError(f"Circular reference detected in blocks: {name}")
-                # visited.add(name)
-                content = await gui_system.manager.blocks.format_string(content, ref_workflow=self.workflow)  # additional_blocks=member_blocks_dict)
-
-        return content  # system.manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
+            content = await self.format_config_value('data')
+        else:
+            content = self.config.get('data', '')
+        return content
 
     def full_member_id(self):
         # bubble up to the top level workflow collecting member ids, return as a string joined with "." and reversed
@@ -116,6 +164,47 @@ class Member:
                 #     self.workflow.chat_widget.new_sentence(key, self.full_member_id(), chunk)
         else:
             yield 'SYS', 'SKIP'  # todo not needed anymore?
+
+    def get_filepath(self, ext):
+        """
+        Convert text to a filepath for saving audio.
+        If the filename already exists, try with more words or append a number.
+        """
+
+        # Remove special characters and keep only alphanumeric characters
+        model_params = self.config.get('model', {}).get('model_params', {})
+        prompt = model_params.get('prompt', str(uuid.uuid4()))
+        prompt = re.sub(r'[^a-zA-Z0-9 ]', '', prompt)
+        words = prompt.split()
+
+        # Start with 3 words
+        word_limit = 3
+
+        app_path = get_application_path()
+        base_dir = os.path.join(app_path, self.default_role)
+
+        # Ensure directory exists
+        os.makedirs(base_dir, exist_ok=True)
+
+        # Try increasing word count if file exists
+        while word_limit <= len(words):
+            file_name = '_'.join(words[:word_limit])
+            file_path = os.path.join(base_dir, f"{file_name}.{ext}")
+
+            if not os.path.exists(file_path):
+                return file_path
+
+            word_limit += 1
+
+        # If all words are used, append numbers
+        file_name = '_'.join(words) if words else self.default_role
+        counter = 2
+
+        while True:
+            file_path = os.path.join(base_dir, f"{file_name}_{counter}.{ext}")
+            if not os.path.exists(file_path):
+                return file_path
+            counter += 1
 
 
 class LlmMember(Member):
@@ -335,7 +424,7 @@ class LlmMember(Member):
         model_json = self.config.get(self.model_config_key, gui_system.manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
 
-        if model_obj['model_name'].startswith('gpt-4o-realtime'):
+        if model_obj['_model_name'].startswith('gpt-4o-realtime'):
             pass  # todo
             # # Initialize the realtime client
             # if not self.realtime_client:
@@ -374,10 +463,23 @@ class LlmMember(Member):
         model_obj = convert_model_json_to_obj(model_json)
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
 
+        if self.config.get('computer_use.enabled', False):
+            if not getattr(self, '_computer_use_browser', None):
+                from plugins.computer_use.utils.desktop import (
+                    ComputerUseDesktop,
+                )
+                grace = self.config.get(
+                    'computer_use.grace_period', 3.0
+                )
+                self._computer_use_browser = ComputerUseDesktop(
+                    grace_period=grace,
+                )
+                await self._computer_use_browser.launch()
+
         messages = await self.get_messages()
         system_msg = await self.system_message()
 
-        if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo
+        if model_obj['_model_name'].startswith('gpt-4o-realtime'):  # temp todo
             # raise NotImplementedError('Realtime models are not implemented yet.')
             stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages, system_msg=system_msg)
         else:
@@ -481,14 +583,172 @@ class LlmMember(Member):
             yield 'text', message
 
         if len(collected_tools) > 0:
-            yield 'tools', collected_tools
+            if self.config.get('computer_use.enabled', False):
+                computer_tools = [
+                    t for t in collected_tools
+                    if t.get('function', {}).get('name') == 'computer'
+                ]
+                regular_tools = [
+                    t for t in collected_tools
+                    if t.get('function', {}).get('name') != 'computer'
+                ]
+                if computer_tools:
+                    async for role, chunk in self._handle_computer_use(
+                        model, messages, computer_tools, tools
+                    ):
+                        yield role, chunk
+                if regular_tools:
+                    yield 'tools', regular_tools
+            else:
+                yield 'tools', collected_tools
+
+    async def _handle_computer_use(
+        self, model, messages, computer_tool_calls, all_tools
+    ):
+        """Execute computer use actions inline and continue the loop."""
+        browser = self._computer_use_browser
+        max_iter = self.config.get('computer_use.max_iterations', 50)
+
+        from plugins.computer_use.widgets.overlay import (
+            ComputerUseOverlay,
+        )
+        overlay = ComputerUseOverlay()
+        browser.overlay = overlay
+        overlay.show_overlay()
+        browser.start_esc_listener()
+
+        try:
+            async for key, chunk in self._computer_use_loop(
+                browser, model, messages, computer_tool_calls,
+                all_tools, max_iter,
+            ):
+                yield key, chunk
+        finally:
+            browser.stop_esc_listener()
+            overlay.hide_overlay()
+            overlay.deleteLater()
+            browser.overlay = None
+
+    async def _computer_use_loop(
+        self, browser, model, messages, computer_tool_calls,
+        all_tools, max_iter,
+    ):
+        """Inner computer use loop, separated for try/finally in caller."""
+        iteration = 0
+
+        while computer_tool_calls and iteration < max_iter:
+            iteration += 1
+
+            for tool_call in computer_tool_calls:
+                action = json.loads(
+                    tool_call['function']['arguments']
+                )
+                yield 'computer_action', json.dumps(action)
+
+                if self.workflow and self.workflow.stop_requested:
+                    browser.cancelled = True
+                    return
+
+                screenshot_b64 = await browser.execute_action(action)
+
+                if browser.cancelled:
+                    return
+
+                messages.append({
+                    'role': 'assistant',
+                    'tool_calls': [{
+                        'id': tool_call['id'],
+                        'type': 'function',
+                        'function': {
+                            'name': 'computer',
+                            'arguments': json.dumps(action),
+                        },
+                    }],
+                })
+                messages.append({
+                    'role': 'tool',
+                    'tool_call_id': tool_call['id'],
+                    'content': [{
+                        'type': 'image_url',
+                        'image_url': {
+                            'url': (
+                                f'data:image/png;base64,'
+                                f'{screenshot_b64}'
+                            ),
+                        },
+                    }],
+                })
+
+            if self.workflow and self.workflow.stop_requested:
+                return
+
+            stream = await gui_system.manager.models.run_model(
+                model_obj=model,
+                messages=messages,
+                tools=all_tools,
+            )
+            collected_tools = []
+            accumulated_text = ''
+            is_aiter = isinstance(stream, AsyncIterable)
+            if is_aiter:
+                async for resp in stream:
+                    delta = resp.choices[0].get('delta', {})
+                    if not delta:
+                        continue
+                    content = delta.get('content', None) or ''
+                    tool_calls = delta.get('tool_calls', None)
+                    if tool_calls:
+                        for t_chunk in delta.tool_calls:
+                            if len(collected_tools) <= t_chunk.index:
+                                collected_tools.append({
+                                    "id": "",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "",
+                                        "arguments": "",
+                                    },
+                                })
+                            tc = collected_tools[t_chunk.index]
+                            if t_chunk.id:
+                                tc["id"] += t_chunk.id
+                            if t_chunk.function.name:
+                                tc["function"]["name"] += (
+                                    t_chunk.function.name
+                                )
+                            if t_chunk.function.arguments:
+                                tc["function"]["arguments"] += (
+                                    t_chunk.function.arguments
+                                )
+                    if content != '':
+                        accumulated_text += content
+            else:
+                message = stream.choices[0].message.content
+                if message:
+                    accumulated_text += message
+
+            computer_tool_calls = [
+                t for t in collected_tools
+                if t.get('function', {}).get('name') == 'computer'
+            ]
+            regular_tools = [
+                t for t in collected_tools
+                if t.get('function', {}).get('name') != 'computer'
+            ]
+            if regular_tools:
+                yield 'tools', regular_tools
+
+        if accumulated_text:
+            yield 'text', accumulated_text
 
     async def stream_structured_output(self, model, messages):
         tools = self.get_function_call_tools()
-        resp = await gui_system.manager.providers.get_structured_output(
+        provider = gui_system.manager.providers.get(model['provider'])
+        if not provider:
+            raise ValueError(f"Provider '{model['provider']}' not found.")
+        resp = await provider.get_structured_output(
             model_obj=model,
             messages=messages,
-            tools=tools
+            tools=tools,
         )
         yield 'STRUCT', str(resp)
         # return resp
@@ -515,21 +775,21 @@ class LlmMember(Member):
                         }
                     }
                 )
-            elif tool_type.startswith('computer_'):
-                screen_width, screen_height = pyautogui.size()
-                formatted_tools.append(
-                    {
-                        'type': tool_type,
-                        'function': {
-                            'name': 'computer',
-                            'parameters': {
-                                'display_height_px': screen_height,
-                                'display_width_px': screen_width,
-                                'display_number': 1,
-                            }
-                        }
-                    }
-                )
+            # elif tool_type.startswith('computer_'):
+            #     screen_width, screen_height = pyautogui.size()
+            #     formatted_tools.append(
+            #         {
+            #             'type': tool_type,
+            #             'function': {
+            #                 'name': 'computer',
+            #                 'parameters': {
+            #                     'display_height_px': screen_height,
+            #                     'display_width_px': screen_width,
+            #                     'display_number': 1,
+            #                 }
+            #             }
+            #         }
+            #     )
 
             # formatted_tools.append(
             #     {
@@ -541,6 +801,93 @@ class LlmMember(Member):
             #         }
             #     }
             # )
+
+        if self.config.get('computer_use.enabled', False):
+            screen_width = self._computer_use_browser.target_w
+            screen_height = self._computer_use_browser.target_h
+            formatted_tools.append({
+                'type': 'function',
+                'function': {
+                    'name': 'computer',
+                    'description': (
+                        f'Control a desktop computer. The screen is '
+                        f'{screen_width}x{screen_height} pixels. '
+                        f'Coordinates in actions must be within this '
+                        f'range. After each action a screenshot is '
+                        f'returned. When the task is complete, respond '
+                        f'with text instead of calling this tool.'
+                    ),
+                    'parameters': {
+                        'type': 'object',
+                        'properties': {
+                            'action': {
+                                'type': 'string',
+                                'enum': [
+                                    'left_click', 'right_click',
+                                    'middle_click', 'double_click',
+                                    'triple_click', 'type', 'key',
+                                    'scroll', 'mouse_move', 'drag',
+                                    'screenshot', 'cursor_position',
+                                ],
+                                'description': (
+                                    'The action to perform.'
+                                ),
+                            },
+                            'coordinate': {
+                                'type': 'array',
+                                'items': {'type': 'integer'},
+                                'minItems': 2,
+                                'maxItems': 2,
+                                'description': (
+                                    '[x, y] pixel coordinate for '
+                                    'click/scroll/move actions.'
+                                ),
+                            },
+                            'text': {
+                                'type': 'string',
+                                'description': (
+                                    'Text to type (for "type" action)'
+                                    ' or key combo (for "key" action).'
+                                ),
+                            },
+                            'direction': {
+                                'type': 'string',
+                                'enum': [
+                                    'up', 'down', 'left', 'right',
+                                ],
+                                'description': (
+                                    'Scroll direction (for "scroll").'
+                                ),
+                            },
+                            'amount': {
+                                'type': 'integer',
+                                'description': (
+                                    'Scroll amount (for "scroll").'
+                                ),
+                            },
+                            'start_coordinate': {
+                                'type': 'array',
+                                'items': {'type': 'integer'},
+                                'minItems': 2,
+                                'maxItems': 2,
+                                'description': (
+                                    'Start [x, y] for drag action.'
+                                ),
+                            },
+                            'end_coordinate': {
+                                'type': 'array',
+                                'items': {'type': 'integer'},
+                                'minItems': 2,
+                                'maxItems': 2,
+                                'description': (
+                                    'End [x, y] for drag action.'
+                                ),
+                            },
+                        },
+                        'required': ['action'],
+                    },
+                },
+            })
 
         return formatted_tools
 
@@ -675,7 +1022,8 @@ class CharProcessor:  # todo clean / rethink
                 if matched_role:
                     self.active_tag = self.tag_name_buffer
                     self.active_tag_role = matched_role
-                yield self.default_role, f'<{self.tag_name_buffer}>'
+                else:
+                    yield self.default_role, f'<{self.tag_name_buffer}>'
                 self.tag_name_buffer = ''
             elif self.tag_opened:
                 self.tag_name_buffer += char
@@ -696,7 +1044,7 @@ class CharProcessor:  # todo clean / rethink
                 if self.closing_tag_name_buffer == self.active_tag:
                     self.active_tag = None
                     self.active_tag_role = None
-                    yield self.default_role, f'</{self.closing_tag_name_buffer}>'
+                    # yield self.default_role, f'</{self.closing_tag_name_buffer}>'
                 else:
                     yield self.active_tag_role, f'</{self.closing_tag_name_buffer}>'
                 self.closing_tag_name_buffer = ''
@@ -719,3 +1067,119 @@ class CharProcessor:  # todo clean / rethink
             if self.closing_tag_name_buffer != '':
                 yield self.active_tag_role, f'</{self.closing_tag_name_buffer}'
             return
+
+
+class MediaMember(Member):
+    """Base class for media members (Image, Video, Audio).
+
+    Subclasses must define:
+        default_role: str - 'image', 'video', or 'audio'
+    """
+    workflow_insert_mode = 'single'
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'text': str,
+            },
+        }
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.receivable_function = self.receive
+
+    async def receive(self):
+        """The entry response method for the member."""
+        msg_content = await self._process_media()
+        yield 'SYS', 'SKIP'
+
+    async def _process_media(self):
+        """Shared media processing logic. Returns msg_content."""
+        config = await self.get_computed_config()
+        model_obj = None
+        filepath = config.get('browse.path', None)
+
+        if filepath:
+            msg_json = {
+                'filepath': filepath,
+            }
+        else:
+            mode = config.get('mode', 'Model')
+
+            if mode == 'Model':
+                model_json = config.get('model', None)
+                if not model_json:
+                    raise ValueError("Model is required")
+                model_obj = convert_model_json_to_obj(model_json)
+                model_params = model_obj.get('model_params', None)
+
+                if config.get('use_cache', False):
+                    candidates = sql.get_results("""
+                        SELECT json_extract(msg, '$.filepath'),
+                               json_extract(log, '$.model.model_params')
+                        FROM contexts_messages
+                        WHERE role = ? AND
+                            COALESCE(json_extract(log, '$.model._model_name'), json_extract(log, '$.model.model_name')) = ? AND
+                            json_extract(msg, '$.filepath') IS NOT NULL
+                        ORDER BY id DESC
+                        LIMIT 20""",
+                        (self.default_role, model_obj.get('_model_name'))
+                    )
+                    last_generated_path = None
+                    for cached_path, cached_params_str in candidates:
+                        cached_params = json.loads(cached_params_str) if cached_params_str else {}
+                        if all(cached_params.get(k) == v for k, v in model_params.items()):
+                            last_generated_path = cached_path
+                            break
+                    if last_generated_path:
+                        filepath = last_generated_path
+                        msg_json = {'filepath': filepath}
+
+                if not filepath:
+                    msg_json = None
+                    stream = await gui_system.manager.models.run_model(
+                        model_obj=model_obj,
+                    )
+                    for item in stream:
+                        msg_json = json.loads(item)
+                        break
+
+                    if config.get('wait_until_finished', False) \
+                            and msg_json and 'request_id' in msg_json:
+                        import asyncio
+                        from utils.helpers import download_url_to_file
+                        request_id = msg_json['request_id']
+                        model_name = msg_json['model_name']
+                        provider_name = msg_json['provider']
+                        provider = gui_system.manager.providers.get(provider_name)
+                        while True:
+                            status = await provider.get_request_status(model_name, request_id)
+                            if status.get('status') == 'completed':
+                                break
+                            elif status.get('status') == 'failed':
+                                raise RuntimeError(f"Media generation failed for {model_name}")
+                            await asyncio.sleep(2)
+                        media_urls = await provider.get_request_result(model_name, request_id)
+                        if media_urls:
+                            filepath = await download_url_to_file(media_urls[0])
+                            msg_json = {'filepath': filepath}
+
+            elif mode == 'URL':
+                raise NotImplementedError("URL mode not implemented")
+            else:
+                raise ValueError("Invalid mode")
+
+        logging_obj = {
+            'id': 0,
+            'context_id': self.workflow.context_id,
+            'member_id': self.full_member_id(),
+        }
+        if model_obj:
+            if 'api_key' in model_obj['model_params']:
+                model_obj['model_params'].pop('api_key')
+            logging_obj['model'] = model_obj
+
+        msg_content = json.dumps(msg_json)
+        self.workflow.save_message(self.default_role, msg_content, self.full_member_id(), logging_obj)
+        return msg_content

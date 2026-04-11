@@ -1,71 +1,97 @@
 
 import os
+import platform
+import subprocess
 import tempfile
 import time
 
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PySide6.QtCore import QUrl
-
-media_player = QMediaPlayer()
-audio_output = QAudioOutput()
-media_player.setAudioOutput(audio_output)
-
-
-def play_url(url):
-    if not url:
-        return
-
-    media_player.setSource(QUrl(url))
-    media_player.play()
-
-
-def get_audio_file_duration(filepath):
-    """
-    Returns the duration of a WAV audio file in milliseconds
-    using the wave module.
-    """
-    import wave
-
-    try:
-        with wave.open(filepath, 'rb') as wav_file:
-            # Get file properties
-            frames = wav_file.getnframes()
-            rate = wav_file.getframerate()
-
-            # Calculate duration in milliseconds
-            duration_ms = int((frames / rate) * 1000)
-            return duration_ms
-    except Exception as e:
-        print(f"Error getting audio duration: {e}")
-        return 0
+_current_process = None
 
 
 def play_file(filepath, blocking=False, wait_percent=0.0):
-    """
-    Plays an audio file. If blocking, waits until wait_percent of the duration or end of media.
-    """
-    if not os.path.isfile(filepath):
+    """Plays an audio file using platform-native commands."""
+    global _current_process
+    if not filepath or not os.path.isfile(filepath):
         return
 
-    media_player.setSource(QUrl.fromLocalFile(filepath))
-    file_duration = get_audio_file_duration(filepath)
-    media_player.play()
+    if wait_percent > 0.0:
+        blocking = True
+
+    stop_playback()
+
+    system = platform.system()
+    if system == 'Darwin':
+        cmd = ['afplay', filepath]
+    elif system == 'Windows':
+        cmd = ['powershell', '-NoProfile', '-Command',
+               f'(New-Object Media.SoundPlayer "{filepath}").PlaySync()']
+    else:
+        cmd = ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', filepath]
+
+    try:
+        _current_process = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return
 
     if blocking:
-        if wait_percent == 0.0:
-            wait_percent = 1.0
-        wait_duration = int(file_duration * wait_percent)
-        playback_pos = 0
-        while playback_pos < wait_duration:
-            playback_pos = media_player.position()
-            time.sleep(0.015)
+        if wait_percent > 0.0 and wait_percent < 1.0:
+            duration = _estimate_duration(filepath)
+            wait_secs = duration * wait_percent
+            start = time.monotonic()
+            while time.monotonic() - start < wait_secs:
+                if _current_process.poll() is not None:
+                    return
+                time.sleep(0.05)
+        else:
+            _current_process.wait()
+
+
+def _estimate_duration(filepath):
+    """Estimate audio duration in seconds from file size."""
+    try:
+        size = os.path.getsize(filepath)
+    except OSError:
+        return 0
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext == '.wav':
+        return size / (44100 * 2 * 2)
+    return size / (128000 / 8)
+
+
+def get_audio_file_duration(filepath):
+    """Returns the duration of an audio file in milliseconds."""
+    from PySide6.QtMultimedia import QMediaPlayer
+    from PySide6.QtCore import QUrl
+    player = QMediaPlayer()
+    player.setSource(QUrl.fromLocalFile(filepath))
+    timeout = 5.0
+    elapsed = 0.0
+    while player.duration() <= 0 and elapsed < timeout:
+        time.sleep(0.015)
+        elapsed += 0.015
+    return player.duration()
+
+
+def stop_playback():
+    """Stop any currently playing audio."""
+    global _current_process
+    if _current_process and _current_process.poll() is None:
+        _current_process.terminate()
+        _current_process = None
 
 
 def play_audio_bytes(audio_bytes):
+    """Play audio from raw bytes via a temp file."""
     if not audio_bytes:
         return
-
-    with tempfile.NamedTemporaryFile(delete=True) as temp_file:
-        temp_file.write(audio_bytes)
-        temp_file.flush()
-        play_url(temp_file.name)
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+        f.write(audio_bytes)
+        path = f.name
+    try:
+        play_file(path, blocking=True)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass

@@ -146,28 +146,6 @@ class VenvManager(BaseManager):
             return any(package in package_info for package_info in packages)
 
 
-        # def delete(self):
-        #     """
-        #     Deletes the virtual environment.
-        #     """
-        #     run_command(f"rm -rf {self.path}")
-
-
-# def get_application_path():
-#     if getattr(sys, 'frozen', True):
-#         return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
-#
-#     if platform.system() == "Windows":
-#         return os.path.dirname(os.path.abspath(sys.executable))
-#     elif platform.system() == "Linux":
-#         app_image_var = os.environ.get('APPIMAGE')
-#         if not app_image_var:
-#             app_image_var = os.path.abspath(sys.executable)
-#         return os.path.dirname(app_image_var)
-#     elif platform.system() == "Darwin":
-#         return os.path.dirname(os.path.abspath(sys.executable))
-
-
 def get_pip_path(venv_path):
     if platform.system() == "Windows":
         return os.path.join(venv_path, "Scripts", "pip")

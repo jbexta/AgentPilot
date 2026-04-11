@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QEvent, QRunnable, Slot, QPoint, QTimer
 from PySide6.QtGui import QAction, QCursor, QPixmap, QPalette, QColor, QIcon, QFont, Qt, QPainter, \
-    QTextOption, QTextDocument, QKeyEvent, QTextCursor, QFontMetrics
+    QTextOption, QTextDocument, QKeyEvent, QTextCursor, QFontMetrics, QStandardItem, QStandardItemModel
 
 from gui import system
 from gui.style import TEXT_COLOR, ACCENT_COLOR_1
@@ -17,22 +17,108 @@ from utils.helpers import convert_to_safe_case, path_to_pixmap, display_message_
 from PySide6.QtWidgets import QAbstractItemView
 
 
-def find_main_widget(widget):
-    if widget.__class__.__name__ == 'BlockManager':
-        pass
-    if hasattr(widget, 'main'):
-        if widget.main is not None:
-            return widget.main
+class FramelessResizeMixin:
+    """Mixin providing frameless window resize and move behaviour.
 
-    clss = widget.__class__.__name__
-    if clss == 'Main':
-        return widget
-    if not hasattr(widget, 'parent'):
-        return None  # QApplication.activeWindow()
-    return find_main_widget(widget.parent)
+    Call :meth:`init_frameless_resize` from the subclass ``__init__``
+    after setting the ``Qt.FramelessWindowHint`` window flag.
+    """
+
+    def init_frameless_resize(self, margin=10):
+        """Initialise resize state variables.
+
+        Parameters
+        ----------
+        margin : int
+            Pixel width of the resize grab area along each edge.
+        """
+        self._mouse_pressed = False
+        self._mouse_pos = None
+        self._mouse_global_pos = None
+        self._resizing = False
+        self._resize_margins = margin
+
+    # -- mouse events -----------------------------------------------
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._mouse_pressed = True
+            self._mouse_pos = event.pos()
+            self._mouse_global_pos = event.globalPos()
+            self._resizing = self._is_mouse_on_edge(event.pos())
+            self._update_cursor_shape(event.pos())
+
+    def mouseMoveEvent(self, event):
+        if self._mouse_pressed:
+            if self._resizing:
+                self._resize_window(event.globalPos())
+            else:
+                self._move_window(event.globalPos())
+
+    def mouseReleaseEvent(self, event):
+        self._mouse_pressed = False
+        self._resizing = False
+        self._mouse_pos = None
+        self._mouse_global_pos = None
+        self.setCursor(Qt.ArrowCursor)
+
+    # -- helpers ----------------------------------------------------
+
+    def _is_mouse_on_edge(self, pos):
+        rect = self.rect()
+        m = self._resize_margins
+        return (pos.x() < m
+                or pos.x() > rect.width() - m
+                or pos.y() < m
+                or pos.y() > rect.height() - m)
+
+    def _move_window(self, global_pos):
+        if self._mouse_global_pos is None:
+            return
+        diff = global_pos - self._mouse_global_pos
+        self.move(self.pos() + diff)
+        self._mouse_global_pos = global_pos
+
+    def _resize_window(self, global_pos):
+        diff = global_pos - self._mouse_global_pos
+        new_rect = self.geometry()
+        m = self._resize_margins
+
+        if self._mouse_pos.x() < m:
+            new_rect.setLeft(new_rect.left() + diff.x())
+        elif self._mouse_pos.x() > self.width() - m:
+            new_rect.setRight(new_rect.right() + diff.x())
+
+        if self._mouse_pos.y() < m:
+            new_rect.setTop(new_rect.top() + diff.y())
+        elif self._mouse_pos.y() > self.height() - m:
+            new_rect.setBottom(new_rect.bottom() + diff.y())
+
+        self.setGeometry(new_rect)
+        self._mouse_pos = self.mapFromGlobal(global_pos)
+        self._mouse_global_pos = global_pos
+
+    def _update_cursor_shape(self, pos):
+        rect = self.rect()
+        m = self._resize_margins
+        left = pos.x() < m
+        right = pos.x() > rect.width() - m
+        top = pos.y() < m
+        bottom = pos.y() > rect.height() - m
+
+        if (left and top) or (right and bottom):
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif (left and bottom) or (right and top):
+            self.setCursor(Qt.SizeBDiagCursor)
+        elif left or right:
+            self.setCursor(Qt.SizeHorCursor)
+        elif top or bottom:
+            self.setCursor(Qt.SizeVerCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
 
 
-def find_main():  # NEW
+def find_main():
     from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance()
@@ -43,29 +129,14 @@ def find_main():  # NEW
     return None
 
 
-
-def find_breadcrumb_widget(widget):
-    if hasattr(widget, 'breadcrumb_widget'):
-        return widget.breadcrumb_widget
+def find_chat_widget(widget):
+    from plugins.workflows.widgets.chat_widget import ChattableWorkflowWidget
+    # is instance ChattableWorkflowWidget
+    if isinstance(widget, ChattableWorkflowWidget):
+        return widget
     if not hasattr(widget, 'parent'):
         return None
-    return find_breadcrumb_widget(widget.parent)
-
-
-def find_editing_module_id(widget):
-    if getattr(widget, 'module_id', None):
-        return widget.module_id
-    if not hasattr(widget, 'parent'):
-        return None
-    return find_editing_module_id(widget.parent)
-
-
-def find_page_editor_widget(widget):
-    if hasattr(widget, 'module_popup'):
-        return widget.module_popup  #  find_page_editor_widget(widget.parent)
-    if hasattr(widget, 'parent'):
-        return find_page_editor_widget(widget.parent)
-    return None
+    return find_chat_widget(widget.parent)
 
 
 def find_workflow_widget(widget):
@@ -77,14 +148,6 @@ def find_workflow_widget(widget):
     if not hasattr(widget, 'parent'):
         return None
     return find_workflow_widget(widget.parent)
-
-
-def find_input_key(widget):
-    if hasattr(widget, 'input_key'):
-        return widget.input_key
-    if not hasattr(widget, 'parent'):
-        return None
-    return find_input_key(widget.parent)
 
 
 def find_attribute(widget, attribute, default=None):
@@ -156,7 +219,6 @@ class BreadcrumbWidget(QWidget):
 
         self.setFixedHeight(45)
         self.parent = parent
-        self.main = find_main_widget(self)
         self.root_title = root_title
 
         self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
@@ -181,7 +243,7 @@ class BreadcrumbWidget(QWidget):
             icon_path=':/resources/icon-edit.png',
             tooltip='Edit this page'
         )
-        self.edit_btn.setStyleSheet("border-top-left-radius: 22px;")
+        self.edit_btn.setFixedSize(25, 25)
         self.edit_btn.clicked.connect(self.edit_page)
         self.edit_btn.hide()
 
@@ -190,7 +252,7 @@ class BreadcrumbWidget(QWidget):
             icon_path=':/resources/icon-tick.svg',
             tooltip='Finish editing'
         )
-        self.finish_btn.setStyleSheet("border-top-left-radius: 22px;")
+        self.finish_btn.setFixedSize(25, 25)
         self.finish_btn.clicked.connect(self.finish_edit)
         self.finish_btn.hide()
 
@@ -207,46 +269,46 @@ class BreadcrumbWidget(QWidget):
             self.label.setText(breadcrumb_text)
 
     def go_back(self):
-        history = self.main.page_history
+        main = find_main()
+        history = main.page_history
         if len(history) > 1:
             last_page_index = history[-2]
-            self.main.page_history.pop()
-            self.main.sidebar.button_group.button(last_page_index).click()
+            main.page_history.pop()
+            main.sidebar.button_group.button(last_page_index).click()
         else:
-            self.main.main_pages.goto_page('chat')
+            main.main_pages.goto_page('chat')
             # self.main.page_chat.ensure_visible()
 
     def edit_page(self):  # todo
-        module_id = find_attribute(self.parent, 'module_id')
-        if not module_id:
+        main = find_main()
+        page_widget = self.parent
+        module_name = None
+        for name, page in main.main_pages.pages.items():
+            if page is page_widget:
+                module_name = name
+                break
+        if not module_name:
             return
 
-        page_widget = self.parent
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(True)
 
         from gui.pages.modules import PageEditor
-        main = find_main_widget(self)
         if getattr(main, 'module_popup', None):
             main.module_popup.close()
             main.module_popup = None
-        main.module_popup = PageEditor(main, module_id)
+        main.module_popup = PageEditor(main, module_name)
         main.module_popup.load()
         main.module_popup.show()
         self.edit_btn.hide()
         self.finish_btn.show()
 
     def finish_edit(self):
-        module_id = find_attribute(self.parent, 'module_id')
-        if not module_id:
-            return
-
         page_widget = self.parent
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(False)
 
-        from gui.pages.modules import PageEditor
-        main = find_main_widget(self)
+        main = find_main()
         if getattr(main, 'module_popup', None):
             main.module_popup.close()
             main.module_popup = None
@@ -264,7 +326,12 @@ class BreadcrumbWidget(QWidget):
             self.finish_btn.show()
             return
 
-        can_edit = find_attribute(self.parent, 'module_id') is not None
+        allow_db = sql.get_scalar("""
+            SELECT json_extract(value, '$."system.allow_importing_db_modules"')
+            FROM settings WHERE field = 'app_config'
+        """)
+        module_id = find_attribute(self.parent, 'module_id')
+        can_edit = module_id is not None and allow_db
         if can_edit:
             self.edit_btn.show()
             self.finish_btn.hide()
@@ -299,11 +366,6 @@ class IconButton(QPushButton):
         self.pixmap = path_to_pixmap(icon_path, diameter=size, opacity=opacity)  if icon_path else QPixmap(0, 0)
         # copy of pixmap to restore when leaving hover state
         self.original_pixmap = self.pixmap.copy()
-        # elif isinstance(icon_path, QPixmap):
-        #     self.pixmap = icon_path
-        # else:
-        #     raise ValueError("icon_path must be a string or QPixmap")
-
         self.hover_pixmap = QPixmap(hover_icon_path) if hover_icon_path else None
         self.target = target
         self.clicked.connect(self.on_click)
@@ -380,16 +442,6 @@ class ToggleIconButton(IconButton):
     def setChecked(self, state):
         super().setChecked(state)
         self.refresh_icon()
-    #
-    # def setEnabled(self, enabled):
-    #     super().setEnabled(enabled)
-    #     self.refresh_icon()
-
-    # def on_click(self):
-    #     super().on_click()
-    #
-    #     # Refresh the icon to reflect the checked state
-    #     self.refresh_icon()
 
     def refresh_icon(self):
         path = self.icon_path
@@ -461,130 +513,81 @@ class CustomMenu(QWidget):
             return self.inner_widget.sizeHint()
         return super().sizeHint()
 
-    # def _reload_predicate_for_item(self, item, inner_widget, item_prefix='', parent_visibility=None, parent_enabled=None):
-    #     """Reload predicates for a single item, handling flatmenu recursively."""
-
-    #     skip_types = ['separator', 'stretch']
-    #     if item.get('type') in skip_types:
-    #         print(f'Skipping {item.get("text")} because it is a {item.get("type")}')
-    #         return
-
-    #     visibility_predicate = item.get('visibility_predicate', True)
-    #     enabled = item.get('enabled', True)
-
-    #     is_visible = visibility_predicate() if callable(visibility_predicate) else visibility_predicate
-    #     is_enabled = enabled() if callable(enabled) else enabled
-
-    #     if parent_visibility is not None:
-    #         parent_is_visible = parent_visibility() if callable(parent_visibility) else parent_visibility
-    #         is_visible = parent_is_visible and is_visible
-    #     if parent_enabled is not None:
-    #         parent_is_enabled = parent_enabled() if callable(parent_enabled) else parent_enabled
-    #         is_enabled = parent_is_enabled and is_enabled
-                
-    #     # Handle flatmenu - process flattened items
-    #     flatmenu = item.get('flatmenu', None)
-    #     if flatmenu:
-    #         # Get the prefix for this flatmenu
-    #         prefix = item.get('prefix', '')
-    #         flat_items = flatmenu() if callable(flatmenu) else flatmenu
-
-    #         for flat_item in flat_items:
-    #             print(f'Processing flat item: {flat_item.get("text")}')
-    #             self._reload_predicate_for_item(
-    #                 flat_item, 
-    #                 inner_widget, 
-    #                 item_prefix=prefix,
-    #                 parent_visibility=is_visible,
-    #                 parent_enabled=is_enabled
-    #             )
-    #         return
-
-    #     # Skip items without text
-    #     if 'text' not in item:
-    #         return
-
-    #     if item['text'] == 'Extend':
-    #         pass
-            
-    #     # reload_item_widget(item, inner_widget, item_prefix=item_prefix)
-    #     # Use the prefix to find the correct action or tool button
-    #     action_name = f'btn_{item_prefix}{convert_to_safe_case(item["text"].lower())}'
-    #     widget = getattr(inner_widget, action_name, None)
-    #     if widget is not None:
-    #         try:
-    #             print(f'Setting visible for {item.get("text")} to {is_visible}')
-    #             print(f'Setting enabled for {item.get("text")} to {is_enabled}')
-    #             widget.setVisible(is_visible)
-    #             widget.setEnabled(is_enabled)
-    #         except:
-    #             pass
-    #         # Update icon with appropriate opacity (only if icon_path exists and is not None)
-    #         is_toolbar = isinstance(inner_widget, QToolBar)
-    #         if is_toolbar and hasattr(widget, 'icon_path') and widget.icon_path is not None:
-    #             opacity = 1.0 if is_enabled else 0.3
-    #             widget.setIcon(QIcon(colorize_pixmap(QPixmap(widget.icon_path), opacity=opacity)))
     def _reload_predicate_for_item(self, item, inner_widget, item_prefix='', parent_visibility=None, parent_enabled=None):
-            skip_types = ['separator', 'stretch']
-            if item.get('type') in skip_types:
-                return
+        skip_types = ['separator', 'stretch']
+        if item.get('type') in skip_types:
+            return
 
-            # 1. Calculate Logic
-            item_vis_pred = item.get('visibility_predicate', True)
-            item_enabled_pred = item.get('enabled', True)
+        # 1. Calculate Logic
+        item_vis_pred = item.get('visibility_predicate', True)
+        item_enabled_pred = item.get('enabled', True)
 
-            is_visible = item_vis_pred() if callable(item_vis_pred) else item_vis_pred
-            is_enabled = item_enabled_pred() if callable(item_enabled_pred) else item_enabled_pred
+        is_visible = item_vis_pred() if callable(item_vis_pred) else item_vis_pred
+        is_enabled = item_enabled_pred() if callable(item_enabled_pred) else item_enabled_pred
 
-            # 2. Merge with Parent Logic
-            if parent_visibility is not None:
-                is_visible = is_visible and parent_visibility
-            if parent_enabled is not None:
-                is_enabled = is_enabled and parent_enabled
+        # 2. Merge with Parent Logic
+        if parent_visibility is not None:
+            is_visible = is_visible and parent_visibility
+        if parent_enabled is not None:
+            is_enabled = is_enabled and parent_enabled
 
-            # 3. Handle Recursive Flatmenu
-            flatmenu = item.get('flatmenu', None)
-            if flatmenu:
-                prefix = item.get('prefix', '')
-                flat_items = flatmenu() if callable(flatmenu) else flatmenu
-                for flat_item in flat_items:
-                    self._reload_predicate_for_item(
-                        flat_item, 
-                        inner_widget, 
-                        item_prefix=prefix,
-                        parent_visibility=is_visible,
-                        parent_enabled=is_enabled
-                    )
-                return
+        # 3. Handle Recursive Flatmenu
+        flatmenu = item.get('flatmenu', None)
+        if flatmenu:
+            prefix = item.get('prefix', '')
+            flat_items = flatmenu() if callable(flatmenu) else flatmenu
+            for flat_item in flat_items:
+                self._reload_predicate_for_item(
+                    flat_item, 
+                    inner_widget, 
+                    item_prefix=prefix,
+                    parent_visibility=is_visible,
+                    parent_enabled=is_enabled
+                )
+            return
 
-            if 'text' not in item:
-                return
+        # # Handle widget items
+        # widget_factory = item.get('widget', None)
+        # if widget_factory:
+        #     widget_id = item.get('id', id(widget_factory))
+        #     widget_name = f'widget_{item_prefix}{widget_id}'
+        #     action = getattr(inner_widget, widget_name, None)
+        #     if action is not None:
+        #         try:
+        #             action.setVisible(bool(is_visible))
+        #             action.setEnabled(bool(is_enabled))
+        #         except Exception:
+        #             pass
+        #     return
 
-            # 4. Apply State
-            # This now retrieves the QAction (or the wrapper action for toolbuttons)
-            action_name = f'btn_{item_prefix}{convert_to_safe_case(item["text"].lower())}'
-            widget = getattr(inner_widget, action_name, None)
+        if 'text' not in item:
+            return
 
-            if widget is not None:
-                try:
-                    # QAction.setVisible controls the toolbar item visibility
-                    widget.setVisible(bool(is_visible))
-                    widget.setEnabled(bool(is_enabled))
-                except Exception:
-                    pass
+        # 4. Apply State
+        # This now retrieves the QAction (or the wrapper action for toolbuttons)
+        action_name = f'btn_{item_prefix}{convert_to_safe_case(item["text"].lower())}'
+        action = getattr(inner_widget, action_name, None)
 
-                # 5. Update Icon
-                is_toolbar = isinstance(inner_widget, QToolBar)
-                # Check if widget has icon_path metadata (we attached this in _add_item_to_toolbar)
-                if is_toolbar and getattr(widget, 'icon_path', None):
-                    opacity = 1.0 if is_enabled else 0.3
-                    
-                    # Determine target: If it's a wrapper action, update the inner button
-                    target = getattr(widget, 'widget_ref', widget)
-                    
-                    icon_pixmap = QPixmap(widget.icon_path)
-                    if not icon_pixmap.isNull():
-                        target.setIcon(QIcon(colorize_pixmap(icon_pixmap, opacity=opacity)))
+        if action is not None:
+            try:
+                # QAction.setVisible controls the toolbar item visibility
+                action.setVisible(bool(is_visible))
+                action.setEnabled(bool(is_enabled))
+            except Exception:
+                pass
+
+            # 5. Update Icon
+            is_toolbar = isinstance(inner_widget, QToolBar)
+            # Check if widget has icon_path metadata (we attached this in _add_item_to_toolbar)
+            if is_toolbar and getattr(action, 'icon_path', None):
+                opacity = 1.0 if is_enabled else 0.3
+
+                # Determine target: If it's a wrapper action, update the inner button
+                target = getattr(action, 'widget_ref', action)
+
+                icon_pixmap = QPixmap(action.icon_path)
+                if not icon_pixmap.isNull():
+                    target.setIcon(QIcon(colorize_pixmap(icon_pixmap, opacity=opacity)))
                         
     def reload_predicates(self):
         if not self.inner_widget:
@@ -635,144 +638,78 @@ class CustomMenu(QWidget):
             menu.deleteLater()
 
     def _add_item_to_toolbar(self, toolbar, item, item_prefix=''):
-            """Add a single schema item to the toolbar."""
-            if item.get('type') == 'separator':
-                toolbar.addSeparator()
-                return
-            elif item.get('type') == 'stretch':
-                spacer = QWidget()
-                spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-                toolbar.addWidget(spacer)
-                return
-            elif item.get('type') == 'create_standard':
-                return
+        """Add a single schema item to the toolbar."""
+        if item.get('type') == 'separator':
+            toolbar.addSeparator()
+            return
+        elif item.get('type') == 'stretch':
+            spacer = QWidget()
+            spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            toolbar.addWidget(spacer)
+            return
+        elif item.get('type') == 'create_standard':
+            return
 
-            # Handle flatmenu
-            flatmenu = item.get('flatmenu', None)
-            if flatmenu:
-                prefix = item.get('prefix', '')
-                if not prefix:
-                    raise ValueError(f"Flatmenu items must have a 'prefix'")
-                flat_items = flatmenu() if callable(flatmenu) else flatmenu
-                for flat_item in flat_items:
-                    self._add_item_to_toolbar(toolbar, flat_item, item_prefix=prefix)
-                return
+        # Handle flatmenu
+        flatmenu = item.get('flatmenu', None)
+        if flatmenu:
+            prefix = item.get('prefix', '')
+            if not prefix:
+                raise ValueError(f"Flatmenu items must have a 'prefix'")
+            flat_items = flatmenu() if callable(flatmenu) else flatmenu
+            for flat_item in flat_items:
+                self._add_item_to_toolbar(toolbar, flat_item, item_prefix=prefix)
+            return
+        
+        # Skip widget items in toolbar (only supported in menus)
+        if 'widget' in item:
+            return
 
-            # Determine text and safe name
-            text = item.get('text', None)
-            # Ensure you have convert_to_safe_case available or imported
-            button_name = f'btn_{item_prefix}{convert_to_safe_case(text.lower())}'
-            icon_path = item.get('icon_path', None)
+        # Determine text and safe name
+        text = item.get('text', None)
+        # Ensure you have convert_to_safe_case available or imported
+        button_name = f'btn_{item_prefix}{convert_to_safe_case(text.lower())}'
+        icon_path = item.get('icon_path', None)
 
-            # Handle submenu
-            submenu = item.get('submenu', None)
-            if submenu:
-                menu = QMenu(item['text'], toolbar)
-                menu.aboutToShow.connect(
-                    lambda m=menu, s=submenu: self._populate_menu_on_show(m, s)
-                )
+        # Handle submenu
+        submenu = item.get('submenu', None)
+        if submenu:
+            menu = QMenu(item['text'], toolbar)
+            menu.aboutToShow.connect(
+                lambda m=menu, s=submenu: self._populate_menu_on_show(m, s)
+            )
 
-                tool_button = QToolButton(toolbar)
-                tool_button.setText(item['text'])
-                tool_button.setMenu(menu)
-                tool_button.setPopupMode(QToolButton.InstantPopup)
+            tool_button = QToolButton(toolbar)
+            tool_button.setText(item['text'])
+            tool_button.setMenu(menu)
+            tool_button.setPopupMode(QToolButton.InstantPopup)
 
-                if icon_path:
-                    icon = QIcon(colorize_pixmap(QPixmap(icon_path)))
-                    tool_button.setIcon(icon)
+            if icon_path:
+                icon = QIcon(colorize_pixmap(QPixmap(icon_path)))
+                tool_button.setIcon(icon)
 
-                # --- KEY FIX START ---
-                # Capture the wrapper action returned by addWidget
-                action_proxy = toolbar.addWidget(tool_button)
-                
-                # Store metadata on the action so reload_predicates works
-                action_proxy.icon_path = icon_path 
-                
-                # Store reference to the real button so we can update icons later
-                action_proxy.widget_ref = tool_button 
-                
-                # Store the ACTION, not the button, in the attribute
-                setattr(toolbar, button_name, action_proxy)
-                # --- KEY FIX END ---
-            else:
-                # Regular action item
-                icon = QIcon(colorize_pixmap(QPixmap(icon_path))) if icon_path else None
-                action = QAction(text, toolbar)
-                self._configure_action(action, item)
-                action.icon_path = icon_path
-                
-                setattr(toolbar, button_name, action)
-                toolbar.addAction(action)
-
-    # def _add_item_to_toolbar(self, toolbar, item, item_prefix=''):
-    #     """Add a single schema item to the toolbar."""
-    #     if item.get('type') == 'separator':
-    #         toolbar.addSeparator()
-    #         return
-    #     elif item.get('type') == 'stretch':
-    #         # add stretch to toolbar
-    #         spacer = QWidget()
-    #         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-    #         toolbar.addWidget(spacer)
-    #         return
-    #     elif item.get('type') == 'create_standard':
-    #         return  # not applicable for QToolBar
-
-    #     # Handle flatmenu - directly add items inline
-    #     flatmenu = item.get('flatmenu', None)
-    #     if flatmenu:
-    #         # Get the required prefix for this flatmenu
-    #         prefix = item.get('prefix', '')
-    #         if not prefix:
-    #             raise ValueError(f"Flatmenu items must have a 'prefix' field to ensure unique action names")
-
-    #         # Call the flatmenu function to get items
-    #         flat_items = flatmenu() if callable(flatmenu) else flatmenu
-    #         # Recursively add each flat item to the toolbar with the prefix
-    #         for flat_item in flat_items:
-    #             self._add_item_to_toolbar(toolbar, flat_item, item_prefix=prefix)
-    #         return
-
-    #     # Handle submenu
-    #     submenu = item.get('submenu', None)
-    #     if submenu:
-    #         menu = QMenu(item['text'], toolbar)
-    #         # Connect aboutToShow to dynamically populate the menu
-    #         menu.aboutToShow.connect(
-    #             lambda m=menu, s=submenu: self._populate_menu_on_show(m, s)
-    #         )
-
-    #         # Create a QToolButton to hold the menu
-    #         tool_button = QToolButton(toolbar)
-    #         tool_button.setText(item['text'])
-    #         tool_button.setMenu(menu)
-    #         tool_button.setPopupMode(QToolButton.InstantPopup)
-
-    #         # Add icon if provided
-    #         icon_path = item.get('icon_path', None)
-    #         tool_button.icon_path = icon_path  # Store for reload_predicates (even if None)
-    #         if icon_path:
-    #             icon = QIcon(colorize_pixmap(QPixmap(icon_path)))
-    #             tool_button.setIcon(icon)
-
-    #         # Store the tool_button with a unique name including prefix
-    #         text = item.get('text', None)
-    #         button_name = f'btn_{item_prefix}{convert_to_safe_case(text.lower())}'
-    #         setattr(toolbar, button_name, tool_button)
-
-    #         toolbar.addWidget(tool_button)
-    #     else:
-    #         # Regular action item
-    #         icon_path = item.get('icon_path', None)
-    #         icon = QIcon(colorize_pixmap(QPixmap(icon_path))) if icon_path else None
-    #         text = item.get('text', None)
-    #         action = QAction(text, toolbar)
-    #         self._configure_action(action, item)
-    #         action.icon_path = icon_path  # Store for reload_predicates
-    #         # Use prefix to make action names unique
-    #         action_name = f'btn_{item_prefix}{convert_to_safe_case(text.lower())}'
-    #         setattr(toolbar, action_name, action)
-    #         toolbar.addAction(action)
+            # --- KEY FIX START ---
+            # Capture the wrapper action returned by addWidget
+            action_proxy = toolbar.addWidget(tool_button)
+            
+            # Store metadata on the action so reload_predicates works
+            action_proxy.icon_path = icon_path 
+            
+            # Store reference to the real button so we can update icons later
+            action_proxy.widget_ref = tool_button 
+            
+            # Store the ACTION, not the button, in the attribute
+            setattr(toolbar, button_name, action_proxy)
+            # --- KEY FIX END ---
+        else:
+            # Regular action item
+            icon = QIcon(colorize_pixmap(QPixmap(icon_path))) if icon_path else None
+            action = QAction(text, toolbar)
+            self._configure_action(action, item)
+            action.icon_path = icon_path
+            
+            setattr(toolbar, button_name, action)
+            toolbar.addAction(action)
 
     def create_toolbar(self, parent=None) -> QToolBar:
         toolbar = QToolBar(parent if parent else self)
@@ -809,7 +746,9 @@ class CustomMenu(QWidget):
                 continue  # not applicable for QMenuBar
 
             visibility_predicate = item.get('visibility_predicate', lambda: True)
-            if not visibility_predicate():
+            if callable(visibility_predicate):
+                visibility_predicate = visibility_predicate()
+            if not visibility_predicate:
                 continue
 
             submenu = item.get('submenu', None)
@@ -835,6 +774,7 @@ class CustomMenu(QWidget):
     def _populate_menu_on_show(self, menu, schema):
         """Populate menu dynamically when it's about to be shown."""
         menu.clear()
+        
         for item in schema:
             self._add_item_to_menu(menu, item)
 
@@ -857,7 +797,18 @@ class CustomMenu(QWidget):
             return
 
         visibility_predicate = item.get('visibility_predicate', lambda: True)
-        if not visibility_predicate():
+        if callable(visibility_predicate):
+            visibility_predicate = visibility_predicate()
+        if not visibility_predicate:
+            return
+
+        # Handle custom widget
+        widget_factory = item.get('widget', None)
+        if widget_factory:
+            widget = widget_factory() if callable(widget_factory) else widget_factory
+            widget_action = QWidgetAction(menu)
+            widget_action.setDefaultWidget(widget)
+            menu.addAction(widget_action)
             return
 
         # Handle flatmenu - directly add items inline
@@ -873,6 +824,8 @@ class CustomMenu(QWidget):
         # Handle submenu
         submenu = item.get('submenu', None)
         if submenu:
+            if callable(submenu):
+                submenu = submenu()
             if isinstance(submenu, list):
                 # Recursive submenu
                 submenu = self._create_menu_recursive(
@@ -880,6 +833,9 @@ class CustomMenu(QWidget):
                     submenu,
                     parent=menu
                 )
+
+            if item.get('text') == 'Effects':
+                pass
             icon_path = item.get('icon_path', None)
             if icon_path:
                 submenu.setIcon(QIcon(colorize_pixmap(QPixmap(icon_path))))
@@ -1054,24 +1010,6 @@ class TextEnhancerButton(IconButton):
         menu_pos = self.mapToGlobal(QPoint(self.rect().topRight().x() - menu.sizeHint().width(), self.rect().topRight().y()))
         menu.exec_(menu_pos)
 
-        # self.load_available_blocks()
-        # menu = QMenu(self)
-        # new_action = menu.addAction("Add block")
-        # new_action.triggered.connect(self.add_enhancement_block_dialog)
-        #
-        # if len(self.available_blocks) > 0:
-        #     # add separator
-        #     menu.addSeparator()
-        #     for name in self.available_blocks.keys():
-        #         action = menu.addAction(name)
-        #         action.triggered.connect(partial(self.on_block_selected, name))
-        #
-        # # Bottom right of menu at top right of widget
-        # # self.rect().topRight() - menu.rect().size()
-        # menu_pos = self.mapToGlobal(QPoint(self.rect().topRight().x() - menu.sizeHint().width(), self.rect().topRight().y()))
-        # # _pos = self.mapToGlobal(self.rect().topRight() -
-        # menu.exec_(menu_pos)
-
     def on_block_selected(self, block_name):
         messagebox_input = self.widget.toPlainText().strip()
         if messagebox_input == '':
@@ -1085,8 +1023,6 @@ class TextEnhancerButton(IconButton):
         self.run_block(block_name)
 
     def delete_block(self, block_name, menu):
-        print(f"delete block {block_name}")
-
         # Remove the block from the enhancement_blocks setting
         existing_uuids = sql.get_scalar(f"""
             SELECT json_extract(value, '$.{self.enhancement_key}')
@@ -1149,7 +1085,7 @@ class TextEnhancerButton(IconButton):
         self.enhancing_text = self.widget.toPlainText().strip()
         self.widget.clear()
         enhance_runnable = self.EnhancementRunnable(self, block_name)
-        main = find_main_widget(self)
+        main = find_main()
         main.threadpool.start(enhance_runnable)
 
     class EnhancementRunnable(QRunnable):
@@ -1208,7 +1144,8 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
     painter.setOpacity(opacity)
     painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
 
-    painter.fillRect(colored_pixmap.rect(), TEXT_COLOR if not color else color)
+    from gui.style import TEXT_COLOR as current_text_color
+    painter.fillRect(colored_pixmap.rect(), current_text_color if not color else color)
     painter.end()
 
     return colored_pixmap
@@ -1286,7 +1223,17 @@ class BakedItemDelegate(QStyledItemDelegate):
             if hasattr(tree_widget, '_baked_ids'):
                 is_baked = item_data.get('id') in tree_widget._baked_ids
         
-        if is_baked:
+        is_disabled = False
+        if isinstance(item_data, dict) and item_data.get('id'):
+            if hasattr(tree_widget, '_disabled_ids'):
+                is_disabled = item_data.get('id') in tree_widget._disabled_ids
+
+        if is_disabled:
+            painter.save()
+            painter.setOpacity(0.4)
+            super().paint(painter, option, index)
+            painter.restore()
+        elif is_baked:
             super().paint(painter, option, index)
 
             # add a dot of accent color to the left of the text with thickness 3
@@ -1306,6 +1253,7 @@ class BaseTreeWidget(QTreeWidget):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.parent = parent
+        self.main = find_main()
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.folder_items_mapping = {None: self}
@@ -1484,7 +1432,9 @@ class BaseTreeWidget(QTreeWidget):
                         col_schema = schema[i]
                         column_type = col_schema.get('type', str)
                         key = col_schema.get('key', col_schema.get('text', ''))
-                        if column_type != 'text' and column_type != str:
+                        column_visible = col_schema.get('visible', True)
+
+                        if column_visible and column_type != 'text' and column_type != str:
                             widget = get_field_widget(col_schema, parent=self)
                             if not widget:
                                 param_type = col_schema.get('type', 'text')
@@ -1496,19 +1446,6 @@ class BaseTreeWidget(QTreeWidget):
                                 if hasattr(widget, 'set_value'):
                                     widget.set_value(row_data[i])
                             self.setItemWidget(item, i, widget)
-
-                        # if cell_type == QPushButton:
-                        #     btn_func = col_schema.get('func', None)
-                        #     btn_partial = partial(btn_func, row_data)
-                        #     btn_icon_path = col_schema.get('icon', '')
-                        #     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                        #     self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-                        # elif cell_type == 'ColorPickerWidget':
-                        #     color_picker_widget = ColorPickerWidget(self)
-                        #     color_picker_widget.setFixedWidth(25)
-                        #     color_picker_widget.setColor(row_data[i])
-                        #     self.setItemWidget(item, i, color_picker_widget)
-                        #     color_picker_widget.colorChanged.connect(lambda color: self.set_field_temp(item, i, color))
 
                         image_key = col_schema.get('image_key', None)
                         if image_key:
@@ -1547,18 +1484,11 @@ class BaseTreeWidget(QTreeWidget):
                 self.select_items_by_id(select_id)
             elif select_folder_id:
                 # select the first item in the folder
-                # self.setCurrentItem(
                 folder_item = self.folder_items_mapping.get(select_folder_id)
                 if folder_item:
                     self.setCurrentItem(folder_item)
                     item = self.currentItem()
                     self.scrollToItem(item)
-                    # if you want to select the first item in the folder
-                    # if folder_item.childCount() > 0:
-                    #     folder_item.child(0).setSelected(True)
-                    # else:
-                    #     folder_item.setSelected(True)
-                # folder_item.setSelected(True)
 
             elif not silent_select_id:
                 self.setCurrentItem(self.topLevelItem(0))
@@ -1571,31 +1501,15 @@ class BaseTreeWidget(QTreeWidget):
     def widget_enter_event(self, item, column):
         self.setCurrentItem(item, column)
     
-    # def temp_focus_cell(self, item, column):
-    #     # widget = self.itemWidget(item, column)
-    #     self.setCurrentItem(item, column)
-    #     # self.setCurrentColumn(column)
-        
-    # def select_cell(self, item, column):
-    #     self.setCurrentItem(item)
-    #     self.setCurrentColumn(column)
-
     def update_config(self):
         if hasattr(self.parent, 'on_cell_edited'):
             item = self.currentItem()
             self.parent.on_cell_edited(item)
-        # if hasattr(self.parent, 'update_config'):
-        #     self.parent.update_config()
-
-    # def set_field_temp(self, item, column, value):  # todo clean
-    #     item.setText(column, value)
 
     def reload_selected_item(self, data, schema):
         # data is same as in `load`
         current_id = self.get_selected_item_id()
         if current_id is None:
-            # current_folder_id = self.get_selected_folder_id()
-            # if current_folder_id is None:
             return
 
         row_data = next((row for row in data if row[1] == current_id), None)
@@ -1839,9 +1753,7 @@ class BaseTreeWidget(QTreeWidget):
         if distance < 5:
             # REORDER AND/OR MOVE
             dragging_item_parent = dragging_item.parent() if dragging_item else None
-            # dragging_item_parent_id = dragging_item_parent.text(1) if dragging_item_parent else None
-            # dragging_item_parent_type = dragging_item_parent.data(0, Qt.UserRole) if dragging_item_parent else None
-            
+
             target_item_parent = target_item.parent() if target_item else None
             target_item_parent_id = target_item_parent.text(1) if target_item_parent else None
             target_item_parent_type = target_item_parent.data(0, Qt.UserRole) if target_item_parent else 'folder'
@@ -1864,20 +1776,6 @@ class BaseTreeWidget(QTreeWidget):
                     return
                 else:  # dragging item is an item
                     self.update_item_parent(dragging_id, target_item_parent_id)
-
-            
-            # if target_item_parent_type == 'folder':
-            #     if dragging_type == 'folder':
-            #         self.update_folder_parent(dragging_id, target_item_parent_id)
-            #     else:  # is an item
-            #         self.update_item_folder(dragging_id, target_item_parent_id)
-            # else: # target parent is an item
-            #     if dragging_type == 'folder':
-            #         display_message('Cannot move folders into items', 'Error', QMessageBox.Warning)
-            #         event.ignore()
-            #         return
-            #     else:  # is an item
-            #         self.update_item_parent(dragging_id, target_item_parent_id)
 
         elif not can_drop:
             event.ignore()
@@ -1991,30 +1889,28 @@ class BaseTreeWidget(QTreeWidget):
                 #     # force the item into edit mode
                 #     self.editItem(item, col)
             else:
-                main = find_main_widget(self)
-                if main:
-                    main.mouseReleaseEvent(event)
+                window = self.window()
+                if window and isinstance(window, FramelessResizeMixin):
+                    window.mouseReleaseEvent(event)
                 return True  # Event handled
 
         super().mouseReleaseEvent(event)
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
-        main = find_main_widget(self)
-        if not main:
-            return
         if event.button() == Qt.LeftButton:
             item = self.itemAt(event.pos())
             if item is None:
-                main.mousePressEvent(event)
+                window = self.window()
+                if window and isinstance(window, FramelessResizeMixin):
+                    window.mousePressEvent(event)
                 return  # Event handled
 
     def mouseMoveEvent(self, event):
-        main = find_main_widget(self)
-        if not main:
-            return
         super().mouseMoveEvent(event)
-        main.mouseMoveEvent(event)
+        window = self.window()
+        if window and isinstance(window, FramelessResizeMixin):
+            window.mouseMoveEvent(event)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
@@ -2047,12 +1943,18 @@ class TreeDialog(QDialog):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
-        self.setWindowFlag(Qt.WindowCloseButtonHint, True)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
 
         self.setWindowTitle(kwargs.get('title', ''))
-        self.list_type = kwargs.get('list_type')
+        self.list_type = kwargs.get('list_type', '')
+        if self.list_type in ('agent', 'tool', 'module'):
+            self.list_type = self.list_type.upper()
         self.callback = kwargs.get('callback', None)
         multiselect = kwargs.get('multiselect', False)
         show_blank = kwargs.get('show_blank', False)
@@ -2063,7 +1965,8 @@ class TreeDialog(QDialog):
         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.tree_widget)
 
-        if self.list_type == 'agent':  # or self.list_type == 'CONTACT':
+        # todo refactor
+        if self.list_type == 'AGENT':  # or self.list_type == 'CONTACT':
             def_avatar = ':/resources/icon-agent-solid.png'  # if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = 'Empty agent'  # if self.list_type == 'AGENT' else 'You'
@@ -2085,7 +1988,7 @@ class TreeDialog(QDialog):
                     WHERE kind = '{self.list_type}'
                 )
                 ORDER BY id DESC"""
-        elif self.list_type == 'tool':
+        elif self.list_type == 'TOOL':
             def_avatar = ':/resources/icon-tool.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = None
@@ -2099,7 +2002,7 @@ class TreeDialog(QDialog):
                 FROM tools
                 ORDER BY name"""
 
-        elif self.list_type == 'module':
+        elif self.list_type == 'MODULE':
             def_avatar = ':/resources/icon-jigsaw-solid.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = None
@@ -2113,7 +2016,7 @@ class TreeDialog(QDialog):
                 FROM modules
                 ORDER BY name"""
 
-        # elif self.list_type == 'prompt_block', 'code_block']:
+        # elif self.list_type == 'prompt', 'code']:
         #     def_avatar = ':/resources/icon-blocks.png'
         #     col_name_list = ['block', 'id', 'config']
         #     empty_member_label = None
@@ -2129,7 +2032,7 @@ class TreeDialog(QDialog):
         #             OR json_type(json_extract(config, '$.members')) IS NULL)
         #         ORDER BY name"""
 
-        elif self.list_type == 'text_block':
+        elif self.list_type == 'text':
             def_avatar = ':/resources/icon-blocks.png'
             col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty text block'
@@ -2137,16 +2040,16 @@ class TreeDialog(QDialog):
             query = f"""
                 SELECT
                     name,
-                    id,
+                    uuid,
                     COALESCE(json_extract(config, '$.members[0].config'), config) as config,
                     folder_id
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND COALESCE(json_extract(config, '$._TYPE'), 'text_block') = 'text_block'
+                    AND COALESCE(json_extract(config, '$._TYPE'), 'text') = 'text'
                 ORDER BY name"""
 
-        elif self.list_type == 'prompt_block':
+        elif self.list_type == 'prompt':
             def_avatar = ':/resources/icon-brain.png'
             col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty prompt block'
@@ -2155,16 +2058,16 @@ class TreeDialog(QDialog):
             query = f"""
                 SELECT
                     name,
-                    id,
+                    uuid,
                     COALESCE(json_extract(config, '$.members[0].config'), config) as config,
                     folder_id
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND COALESCE(json_extract(config, '$._TYPE'), 'text_block') = 'prompt_block'
+                    AND COALESCE(json_extract(config, '$._TYPE'), 'text') = 'prompt'
                 ORDER BY name"""
 
-        elif self.list_type == 'code_block':
+        elif self.list_type == 'code':
             def_avatar = ':/resources/icon-code.png'
             col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty code block'
@@ -2172,13 +2075,13 @@ class TreeDialog(QDialog):
             query = f"""
                 SELECT
                     name,
-                    id,
+                    uuid,
                     COALESCE(json_extract(config, '$.members[0].config'), config) as config,
                     folder_id
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND COALESCE(json_extract(config, '$._TYPE'), 'text_block') = 'code_block'
+                    AND COALESCE(json_extract(config, '$._TYPE'), 'text') = 'code'
                 ORDER BY name"""
         else:
             raise NotImplementedError(f'List type {self.list_type} not implemented')
@@ -2206,11 +2109,11 @@ class TreeDialog(QDialog):
         self.tree_widget.build_columns_from_schema(column_schema)
         self.tree_widget.setHeaderHidden(True)
 
-        if self.list_type == 'agent':
+        if self.list_type == 'AGENT':
             tbl_name = 'entities'
-        elif self.list_type in ['text_block', 'prompt_block', 'code_block']:
+        elif self.list_type in ['text', 'prompt', 'code']:
             tbl_name = 'blocks'
-        elif self.list_type == 'tool':
+        elif self.list_type == 'TOOL':
             tbl_name = 'tools'
         else:
             tbl_name = None
@@ -2227,7 +2130,7 @@ class TreeDialog(QDialog):
                         entity_id=row[1] if tbl_name is not None else None,
                         entity_table=tbl_name
                     )
-                ) if self.list_type in ['agent', 'tool', 'text_block', 'prompt_block', 'code_block'] else row[2],
+                ) if self.list_type in ['AGENT', 'TOOL', 'text', 'prompt', 'code'] else row[2],
                 row[3],
             )
             for row in data
@@ -2236,7 +2139,7 @@ class TreeDialog(QDialog):
             if self.list_type == 'workflow':
                 pass
             empty_config = {}
-            if self.list_type in ['text_block', 'prompt_block', 'code_block']:
+            if self.list_type in ['text', 'prompt', 'code']:
                 empty_config = {
                     "_TYPE": self.list_type.lower(),
                     "name": self.list_type.replace('_', ' ').title()
@@ -2258,39 +2161,6 @@ class TreeDialog(QDialog):
             readonly=True,
             default_item_icon=def_avatar,
         )
-
-        # if self.list_type == 'MODULE':
-        #
-        #     pd = get_page_definitions(with_ids=True)
-        #     pages_module_folder_id = sql.get_scalar("""
-        #         SELECT id
-        #         FROM folders
-        #         WHERE name = 'Pages'
-        #             AND type = 'modules'
-        #     """)  # todo de-deupe
-        #
-        #     # extra_data = [('jj', 'dhs787dhus', int(pages_module_folder_id))]
-        #     extra_data = [(name, id, int(pages_module_folder_id)) for id, name in pd.keys() if id is None]
-        #
-        #     with block_signals(self):
-        #         for r, row_data in enumerate(extra_data):
-        #             parent_item = self
-        #             if folder_key is not None:
-        #                 folder_id = row_data[-1]
-        #                 parent_item = self.tree_widget.folder_items_mapping.get(folder_id) if folder_id else self
-        #
-        #             if len(row_data) > len(column_schema):
-        #                 row_data = row_data[:-1]  # remove folder_id
-        #
-        #             item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
-        #             field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
-        #             item.setData(0, Qt.UserRole, field_dict)
-        #
-        #             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-        #
-        #             if def_avatar:
-        #                 pixmap = colorize_pixmap(QPixmap(def_avatar))
-        #                 item.setIcon(0, QIcon(pixmap))
 
         if self.callback:
             self.tree_widget.itemDoubleClicked.connect(self.itemSelected)
@@ -2318,6 +2188,146 @@ class TreeDialog(QDialog):
             return
         item = self.tree_widget.currentItem()
         self.itemSelected(item)
+
+
+class LibraryDialog(QDialog):
+    """Dialog with tabs for browsing Agents, Blocks, and Tools."""
+
+    def __init__(self, parent, callback, kind=None):
+        super().__init__(parent=parent)
+        self.callback = callback
+        self.setWindowTitle('Library')
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
+        self.resize(400, 500)
+
+        layout = QVBoxLayout(self)
+        self.tabs = QTabWidget(self)
+        layout.addWidget(self.tabs)
+
+        column_schema = [
+            {
+                'text': 'Name',
+                'key': 'name',
+                'type': str,
+                'stretch': True,
+            },
+            {
+                'text': 'id',
+                'key': 'id',
+                'type': int,
+                'visible': False,
+            },
+            {
+                'text': 'config',
+                'type': str,
+                'visible': False,
+            },
+            {
+                'text': 'table',
+                'key': 'table',
+                'type': str,
+                'visible': False,
+            },
+        ]
+
+        tab_defs = [
+            (
+                'Agent',
+                """SELECT name, uuid, config, folder_id
+                   FROM entities
+                   WHERE kind = 'AGENT'
+                   ORDER BY id DESC""",
+                'agents',
+                ':/resources/icon-agent-solid.png',
+                'entities',
+            ),
+            (
+                'Block',
+                """SELECT name, uuid,
+                       COALESCE(
+                           json_extract(config, '$.members[0].config'),
+                           config
+                       ) as config,
+                       folder_id
+                   FROM blocks
+                   WHERE (json_array_length(
+                              json_extract(config, '$.members')
+                          ) = 1
+                       OR json_type(
+                              json_extract(config, '$.members')
+                          ) IS NULL)
+                   ORDER BY name""",
+                'blocks',
+                ':/resources/icon-blocks.png',
+                'blocks',
+            ),
+            (
+                'Tool',
+                """SELECT name, uuid as id, '{}' as config,
+                       folder_id
+                   FROM tools
+                   ORDER BY name""",
+                'tools',
+                ':/resources/icon-tool.png',
+                'tools',
+            ),
+        ]
+
+        for label, query, folder_key, icon, tbl_name in tab_defs:
+            tree = BaseTreeWidget(self)
+            tree.setDragDropMode(QAbstractItemView.NoDragDrop)
+            tree.build_columns_from_schema(column_schema)
+            tree.setHeaderHidden(True)
+
+            data = sql.get_results(query)
+            data = [
+                (
+                    row[0],
+                    row[1],
+                    json.dumps(
+                        merge_config_into_workflow_config(
+                            json.loads(row[2]),
+                            entity_id=row[1],
+                            entity_table=tbl_name,
+                        )
+                    ),
+                    tbl_name,
+                    row[3],
+                )
+                for row in data
+            ]
+
+            tree.load(
+                data=data,
+                folder_key=folder_key,
+                schema=column_schema,
+                readonly=True,
+                default_item_icon=icon,
+            )
+            tree.itemDoubleClicked.connect(self.item_selected)
+            self.tabs.addTab(tree, label)
+
+        self.link_checkbox = QCheckBox('Link as reference', self)
+        layout.addWidget(self.link_checkbox)
+
+        kind_tab_map = {'conversation': 0, 'blocks': 1, 'tool': 2}
+        if kind in kind_tab_map:
+            self.tabs.setCurrentIndex(kind_tab_map[kind])
+
+    def item_selected(self, item):
+        if item.data(0, Qt.UserRole) == 'folder':
+            return
+        self.close()
+        self.callback(item, link=self.link_checkbox.isChecked())
+
+    def open(self):
+        self.exec()
 
 
 class HelpIcon(QLabel):
@@ -2360,16 +2370,37 @@ class EditBar(QWidget):
         self.editing_widget = editing_widget
         self.editing_module_id = find_attribute(editing_widget, 'module_id')
         self.class_name = editing_widget.__class__.__name__
-        self.loaded_module = system.manager.modules.loaded_modules.get(self.editing_module_id)
+        module_name = sql.get_scalar(
+            "SELECT name FROM modules WHERE id = ?",
+            (self.editing_module_id,)
+        )
+        controller = system.manager.modules.type_controllers.get('pages')
+        loaded_module = None
+        if controller and module_name:
+            module_path = controller.get_module_path(module_name)
+            import sys as _sys
+            loaded_module = _sys.modules.get(module_path)
         from gui.builder import get_class_path
-        class_tup = get_class_path(self.loaded_module, self.class_name)
+        class_tup = get_class_path(loaded_module, self.class_name)
         self.class_map = None
-        self.current_superclass = None
         if class_tup:
-            self.class_map, self.current_superclass = class_tup
+            self.class_map, _ = class_tup
 
-        # from gui.util import find_page_editor_widget, BaseComboBox
-        self.page_editor = find_page_editor_widget(editing_widget)
+        # Detect current superclass via MRO against registered Widget modules
+        widget_modules = system.manager.modules.get_modules_in_folder(
+            'Widgets', fetch_keys=('name', 'class'))
+        self.current_superclass = None
+        current_mod_name = None
+        for base in type(editing_widget).__mro__:
+            for mod_name, mod_cls in widget_modules:
+                if base is mod_cls:
+                    self.current_superclass = base
+                    current_mod_name = mod_name
+                    break
+            if self.current_superclass:
+                break
+
+        self.page_editor = find_attribute(editing_widget, 'module_popup')
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setProperty('class', 'edit-bar')
@@ -2378,11 +2409,37 @@ class EditBar(QWidget):
 
         from gui.fields.combo import BaseCombo
         self.type_combo = BaseCombo()
-        # self.type_combo.addItems(['ConfigWidget', 'ConfigTabs', 'ConfigPages', 'ConfigJoined', 'ConfigDBTree', 'ConfigFields'])
         self.type_combo.setFixedWidth(150)
-        # set current superclass
-        if self.current_superclass:
-            self.type_combo.setCurrentText(self.current_superclass.__name__)
+
+        # Group modules by origin (Core vs plugin name)
+        def _get_group(cls):
+            mod = getattr(cls, '__module__', '')
+            if mod.startswith('plugins.'):
+                return mod.split('.')[1]
+            return 'Core'
+
+        grouped = {}
+        for mod_name, mod_cls in widget_modules:
+            group = _get_group(mod_cls)
+            grouped.setdefault(group, []).append(mod_name)
+
+        combo_model = QStandardItemModel()
+        for group in sorted(
+            grouped.keys(), key=lambda g: (g != 'Core', g)
+        ):
+            header = QStandardItem(group)
+            header.setData('header', Qt.UserRole)
+            header.setEnabled(False)
+            font = header.font()
+            font.setBold(True)
+            header.setFont(font)
+            combo_model.appendRow(header)
+            for mod_name in grouped[group]:
+                combo_model.appendRow(QStandardItem(mod_name))
+        self.type_combo.setModel(combo_model)
+
+        if current_mod_name:
+            self.type_combo.setCurrentText(current_mod_name)
         self.type_combo.currentIndexChanged.connect(self.on_type_combo_changed)
 
         # self.btn_add_widget_left = IconButton(
@@ -2424,6 +2481,11 @@ class EditBar(QWidget):
         self.config_widget.build_schema()
 
     def on_type_combo_changed(self, index):
+        # Skip header items
+        model = self.type_combo.model()
+        if model and model.item(index):
+            if model.item(index).data(Qt.UserRole) == 'header':
+                return
         if not self.page_editor:
             return
         if not hasattr(self.page_editor, 'module_id'):
@@ -2463,7 +2525,8 @@ class EditBar(QWidget):
         try:
             if self.editing_widget and not self.editing_widget.isVisible():
                 return
-            self.move(self.editing_widget.mapToGlobal(QPoint(0, -45)))
+            self.move(self.editing_widget.mapToGlobal(
+            QPoint(0, -self.sizeHint().height())))
         except RuntimeError:
             pass
 
@@ -2549,173 +2612,6 @@ class TreeButtons(CustomMenu):
         self.create_toolbar(parent)
 
 
-# class TreeButtons(IconButtonCollection):  # config_json_db_tree, config_table, config_tree
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent=parent)
-
-#         self.btn_add = IconButton(
-#             parent=self,
-#             icon_path=':/resources/icon-new.png',
-#             tooltip='Add',
-#             size=self.icon_size,
-#         )
-#         self.btn_del = IconButton(
-#             parent=self,
-#             icon_path=':/resources/icon-minus.png',
-#             tooltip='Delete',
-#             size=self.icon_size,
-#         )
-#         self.layout.addWidget(self.btn_add)
-#         self.layout.addWidget(self.btn_del)
-
-#         if getattr(parent, 'folder_key', False):
-#             self.btn_new_folder = IconButton(
-#                 parent=self,
-#                 icon_path=':/resources/icon-new-folder.png',
-#                 tooltip='New Folder',
-#                 size=self.icon_size,
-#             )
-#             self.layout.addWidget(self.btn_new_folder)
-#             # runnables = ['blocks', 'agents', 'tools']
-#             # if parent.folder_key in runnables:
-
-#         # mgr_string = kwargs.get('manager', None)  # todo clean
-#         # if mgr_string:
-#         #     mgr = getattr(system.manager, mgr_string, None)
-#         #     if getattr(mgr, 'config_is_workflow', False) and getattr(parent, 'has_chat', False):
-#         #         self.btn_run = IconButton(
-#         #             parent=self,
-#         #             icon_path=':/resources/icon-run.png',
-#         #             tooltip='Run',
-#         #             size=self.icon_size,
-#         #         )
-#         #         self.layout.addWidget(self.btn_run)
-
-#         if getattr(parent, 'folders_groupable', False):
-#             self.btn_group_folders = ToggleIconButton(
-#                 parent=self,
-#                 icon_path=':/resources/icon-group.png',
-#                 icon_path_checked=':/resources/icon-group-solid.png',
-#                 tooltip='Group Folders',
-#                 icon_size_percent=0.6,
-#                 size=self.icon_size,
-#             )
-#             self.layout.addWidget(self.btn_group_folders)
-#             self.btn_group_folders.clicked.connect(self.parent.load)
-#             self.btn_group_folders.setChecked(True)
-
-#         if getattr(parent, 'versionable', False):
-#             self.btn_versions = IconButton(
-#                 parent=self,
-#                 icon_path=':/resources/icon-history.png',
-#                 tooltip='Versions',
-#                 size=self.icon_size,
-#             )
-#             self.btn_versions.clicked.connect(self.parent.show_history_context_menu)
-#             self.layout.addWidget(self.btn_versions)
-
-        
-#         # get all class definitions in bubble_class decorated with @message_bubble
-
-#         for attr in type(parent).__dict__.values():
-#             # if is a method, not a class
-#             # if not isinstance(attr, type):
-#             #     btn = IconButton(
-#             #         parent=self,
-#             #         icon_path=attr._ap_widget_button_icon_path,
-#             #         tooltip=name,
-#             #         target=attr,
-#             #         size=self.icon_size,
-#             #     )
-#             #     self.layout.addWidget(btn)
-#             #     setattr(self, name, btn)
-#             if not hasattr(attr, '_ap_widget_button'):
-#                 continue
-
-#             btn_name = attr._ap_widget_button
-#             if isinstance(attr, type):
-#                 setattr(self, btn_name, attr(self))
-#                 self.layout.addWidget(getattr(self, btn_name))
-#             else:
-#                 btn = IconButton(
-#                     parent=self,
-#                     icon_path=getattr(attr, '_ap_widget_button_icon_path', None),
-#                     tooltip=btn_name,
-#                     target=partial(attr, parent),
-#                     size=self.icon_size,
-#                 )
-#                 btn_name = attr._ap_widget_button
-#                 setattr(self, btn_name, btn)
-#                 self.layout.addWidget(btn)
-
-
-#         if getattr(parent, 'filterable', False):
-#             self.btn_filter = ToggleIconButton(
-#                 parent=self,
-#                 icon_path=':/resources/icon-filter.png',
-#                 icon_path_checked=':/resources/icon-filter-filled.png',
-#                 tooltip='Filter',
-#                 size=self.icon_size,
-#             )
-#             self.btn_filter.toggled.connect(self.toggle_filter)
-#             self.layout.addWidget(self.btn_filter)
-
-#         if getattr(parent, 'searchable', False):
-#             self.btn_search = ToggleIconButton(
-#                 parent=self,
-#                 icon_path=':/resources/icon-search.png',
-#                 icon_path_checked=':/resources/icon-search-filled.png',
-#                 tooltip='Search',
-#                 size=self.icon_size,
-#             )
-#             self.layout.addWidget(self.btn_search)
-
-#             self.search_box = QLineEdit()
-#             self.search_box.setContentsMargins(1, 0, 1, 0)
-#             self.search_box.setPlaceholderText('Search...')
-
-#             self.search_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-#             self.btn_search.toggled.connect(self.toggle_search)
-
-#             if hasattr(parent, 'filter_rows'):
-#                 self.search_box.textChanged.connect(parent.filter_rows)
-
-#             self.layout.addWidget(self.search_box)
-#             self.search_box.hide()
-        
-#         # if getattr(parent, 'has_chat', False):
-#         #     self.btn_chat = ToggleIconButton(
-#         #         parent=self,
-#         #         icon_path=':/resources/icon-run.png',
-#         #         tooltip='Show chat',
-#         #         tooltip_checked='Hide chat',
-#         #         size=self.icon_size,
-#         #     )
-#         #     self.btn_chat.toggled.connect(self.parent.toggle_chat)
-#         #     self.layout.addWidget(self.btn_chat)
-
-#         self.layout.addStretch(1)
-
-#     def add_button(self, icon_button, icon_att_name):
-#         setattr(self, icon_att_name, icon_button)
-#         self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
-#         self.layout.addWidget(getattr(self, icon_att_name))
-#         self.layout.addStretch(1)
-
-#     def toggle_search(self):
-#         is_checked = self.btn_search.isChecked()
-#         self.search_box.setVisible(is_checked)
-#         self.parent.filter_rows()
-#         if is_checked:
-#             self.search_box.setFocus()
-
-#     # def toggle_filter(self):
-#     #     is_checked = self.btn_filter.isChecked()
-#     #     if hasattr(self.parent, 'filter_widget'):
-#     #         self.parent.filter_widget.setVisible(is_checked)
-#     #     self.parent.updateGeometry()
-
-
 class CVBoxLayout(QVBoxLayout):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2731,39 +2627,17 @@ class CHBoxLayout(QHBoxLayout):
 
 
 def save_table_config(table_name, item_id, value, ref_widget=None, key_field='config'):
-    old_name = sql.get_scalar(f"SELECT name FROM {table_name} WHERE id = ?", (item_id,))
     is_baked = False
     baked_in_table = sql.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table_name}') WHERE `name` = 'baked'") > 0
     if baked_in_table:
         is_baked = sql.get_scalar(f"SELECT baked FROM {table_name} WHERE id = ?", (item_id,)) == 1
 
-    # if hasattr(self, 'update_name'):
-    #     self.update_name()
-
-    # save_table_config(
-    #     ref_widget=self,
-    #     table_name=self.table_name,
-    #     item_id=item_id,
-    #     value=json.dumps(config),
-    # )
-
-    # value_json = json.dumps(value)
     sql.execute(f"""UPDATE `{table_name}` 
                     SET `{key_field}` = ?
                     WHERE id = ?
                 """, (value, item_id,))
     if table_name == 'modules':
         metadata = get_metadata(json.loads(value))
-        # is_baked 
-        # old_metadata = sql.get_scalar(f"SELECT metadata FROM {table_name} WHERE id = ?", 
-        #                                 (item_id,), load_json=True)
-        # old_hash = old_metadata['hash']
-        # new_hash = metadata['hash']
-        # if old_hash != new_hash:
-        #     sql.execute(f"""UPDATE `{table_name}` SET baked = 0 WHERE id = ?""", (item_id,))
-        # else:
-        #     sql.execute(f"""UPDATE `{table_name}` SET baked = 1 WHERE id = ?""", (item_id,))
-
         sql.execute(f"""UPDATE `{table_name}`
                         SET metadata = ?
                         WHERE id = ?
@@ -2771,19 +2645,17 @@ def save_table_config(table_name, item_id, value, ref_widget=None, key_field='co
 
     auto_bake = True  # system.manager.config.get('system.auto_bake', False)  # todo dedupe
     if auto_bake and is_baked and ref_widget is not None and hasattr(ref_widget, 'bake_item'):
+        old_name = sql.get_scalar(f"SELECT name FROM {table_name} WHERE id = ?", (item_id,))
         ref_widget.bake_item(force=True)
         config = sql.get_scalar(f"SELECT config FROM {table_name} WHERE id = ?", (item_id,), load_json=True)
         name = config.get('name', None)
         if not name:
             name = sql.get_scalar(f"SELECT name FROM {table_name} WHERE id = ?", (item_id,))
-        if old_name != name and hasattr(ref_widget, 'get_module_file_path'):  # todo dedupe
-            old_file_path = ref_widget.get_module_file_path(item_id, module_name=old_name)
+        if old_name != name:  # todo dedupe
+            from gui.pages.modules import get_module_abs_path
+            old_file_path = get_module_abs_path(item_id, module_name=old_name)
             os.remove(old_file_path)
     
-    # if hasattr(self, 'after_save_config'):  # todo clean
-    #     self.after_save_config(config=config)
-    # # if self.table_name in ['agents', 'blocks', 'tools']:  # todo
-
     if ref_widget:
         current_version = getattr(ref_widget, 'current_version', None) # !! #
         if current_version:
@@ -2803,7 +2675,6 @@ def save_table_config(table_name, item_id, value, ref_widget=None, key_field='co
 
 
 def get_field_widget(col_schema, parent=None):
-    
     column_type = col_schema.get('type', 'text')
     column_key = col_schema.get('key', col_schema.get('name', 'unknown'))
     type_map = {  # todo temp map
@@ -2812,11 +2683,10 @@ def get_field_widget(col_schema, parent=None):
         float: 'float',
         bool: 'boolean',
     }
-    if isinstance(column_type, tuple):
-        col_schema['items'] = column_type
-        column_type = 'combo'
-    elif isinstance(column_type, list):
-        col_schema['items'] = tuple(column_type)  # todo
+    if isinstance(column_type, (tuple, list)):
+        col_schema['items'] = tuple(column_type)
+        if column_type and not isinstance(column_type[0], str):
+            col_schema.setdefault('value_type', type(column_type[0]))
         column_type = 'combo'
     elif column_type in type_map:
         column_type = type_map[column_type]
@@ -2840,8 +2710,10 @@ def set_widget_value(widget, value):
         if hasattr(widget, 'set_value'):
             widget.set_value(value)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         display_message(
-            f'Error setting value for field {str(widget)}: {e}',
+            f'Error setting value for field {str(widget)}: {type(e).__name__}: {e}',
             icon=QMessageBox.Warning,
         )
 
@@ -2875,19 +2747,37 @@ def get_selected_pages(widget, incl_objects=False, stop_at_tree=False):  # todo 
             selected_page = w.pages[selected_page_name]
             result[path] = selected_page_name if not incl_objects else (selected_page_name, selected_page)
 
-            # page_widget = w.pages[selected_page_name]
             process_widget(selected_page, f"{path}.{selected_page_name}")
-            # for page_name, page_widget in w.pages.items():
-            #     process_widget(page_widget, f"{path}.{page_name}")
 
         elif hasattr(w, 'widgets'):
             for i, child_widget in enumerate(w.widgets):
                 process_widget(child_widget, f"{path}.widget_{i}")
         
         elif isinstance(w, FileTree):
-            result[path] = str(w.current_path) if not incl_objects else (str(w.current_path), w)
+            expanded = []
+            model = w.nav_panel.dir_model
+            tree = w.nav_panel.dir_tree
+            def _collect_expanded(parent_index):
+                for row in range(model.rowCount(parent_index)):
+                    index = model.index(row, 0, parent_index)
+                    if tree.isExpanded(index):
+                        expanded.append(model.filePath(index))
+                        _collect_expanded(index)
+            _collect_expanded(tree.rootIndex())
+            file_state = {
+                'current_path': str(w.current_path),
+                'current_file': str(w.current_file) if w.current_file else None,
+                'expanded': expanded,
+                'open_files': list(w.file_preview.open_files.keys()),
+                'active_tab': w.file_preview.tab_widget.currentIndex(),
+            }
+            result[path] = file_state if not incl_objects else (file_state, w)
 
         elif hasattr(w, 'config_widget'):
+            if isinstance(w, ConfigDBTree):
+                item_id = w.get_selected_item_id()
+                if item_id is not None:
+                    result[path] = item_id if not incl_objects else (item_id, w)
             if stop_at_tree:
                 return
             if w.config_widget:
@@ -2928,7 +2818,29 @@ def set_selected_pages(widget, selected_pages):
                     # elif isinstance(w, FileTree):
                     #     w.navigate_to(Path(selected_pages[path]), update_page_path=False)
             elif isinstance(w, FileTree):
-                w.navigate_to(Path(selected_pages[path]), update_page_path=False)
+                state = selected_pages[path]
+                if not isinstance(state, dict):
+                    state = {'current_path': str(state)}
+                dir_path = state.get('current_path')
+                if dir_path:
+                    w.navigate_to(Path(dir_path), update_page_path=False)
+                for folder_path in state.get('expanded', []):
+                    index = w.nav_panel.dir_model.index(folder_path)
+                    if index.isValid():
+                        w.nav_panel.dir_tree.expand(index)
+                for filepath in state.get('open_files', []):
+                    w.file_preview.set_filepath(filepath)
+                active_tab = state.get('active_tab', -1)
+                if active_tab >= 0:
+                    w.file_preview.tab_widget.setCurrentIndex(active_tab)
+                current_file = state.get('current_file')
+                if current_file:
+                    w.current_file = Path(current_file)
+                    tree = w.nav_panel.dir_tree                 
+                    model = w.nav_panel.dir_model               
+                    index = model.index(current_file)
+                    if index.isValid():
+                        tree.setCurrentIndex(index)
 
         if hasattr(w, 'pages'):
             for page_name, page_widget in w.pages.items():
@@ -2939,6 +2851,9 @@ def set_selected_pages(widget, selected_pages):
                 process_widget(child_widget, f"{path}.widget_{i}")
 
         elif hasattr(w, 'config_widget'):
+            if path in selected_pages:
+                if isinstance(w, ConfigDBTree):
+                    w.load(select_id=selected_pages[path])
             if w.config_widget:
                 process_widget(w.config_widget, f"{path}.config_widget")
 

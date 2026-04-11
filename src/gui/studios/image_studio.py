@@ -23,7 +23,7 @@ from PySide6.QtGui import (
     QPixmap, QImage, QPainter, QColor
 )
 
-from gui.util import CustomMenu, find_main_widget, CVBoxLayout, CHBoxLayout
+from gui.util import CustomMenu, find_main, CVBoxLayout, CHBoxLayout
 from utils.helpers import set_module_type
 
 
@@ -167,7 +167,7 @@ class ImageStudio(QWidget):
 
     def __init__(self, parent=None, full_screen=True):
         super().__init__(parent)
-        self.main = find_main_widget(self)
+        self.main = find_main()
         self.full_screen = full_screen
 
         # Document properties

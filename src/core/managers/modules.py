@@ -33,10 +33,12 @@ create custom modules that integrate seamlessly with the core application.
 import importlib
 import inspect
 import json
+import os
 import pkgutil
 import sys
 import textwrap
 import time
+import types
 from typing import Dict
 
 from typing_extensions import override
@@ -100,6 +102,8 @@ class ModuleManager(BaseManager):
     @override
     def add(self, name, **kwargs):
         module_type = kwargs.pop('module_type', None)
+        if module_type:
+            module_type = module_type.lower()
         if module_type is not None and module_type not in self.type_controllers:
             raise NotImplementedError(f'Folder `{module_type}` not found in module types.')
         
@@ -126,12 +130,6 @@ class ModuleManager(BaseManager):
         kwargs['folder_id'] = get_module_type_folder_id(module_type) if module_type else None
 
         super().add(name, **kwargs)
-
-        main = self.system._main_gui
-        if main:
-            if hasattr(main, 'main_pages'):
-                main.main_pages.build_schema()
-                main.main_pages.settings_sidebar.toggle_page_pin(name, True)
 
     # def test_modules(self):
     #     for module_type in self.type_controllers:
@@ -193,7 +191,7 @@ class ModulesController(BaseManager):
             **kwargs
     ):
         kwargs['table_name'] = 'modules'
-        kwargs['load_columns'] = ['uuid', 'name', 'config', 'class', 'kind_folder', 'metadata', 'hash', 'baked', 'folder_path']
+        kwargs['load_columns'] = ['id', 'uuid', 'name', 'config', 'class', 'kind_folder', 'metadata', 'hash', 'baked', 'folder_path']
         super().__init__(system, **kwargs)
 
         self.module_type = module_type
@@ -210,6 +208,14 @@ class ModulesController(BaseManager):
         if self.module_type is not None:
             self.load_source_modules()
 
+        allow_db = sql.get_scalar("""
+            SELECT json_extract(value, '$."system.allow_importing_db_modules"')
+            FROM settings WHERE field = 'app_config'
+        """)
+        
+        if not allow_db:
+            return
+
         rows = sql.get_results(f"""
             WITH RECURSIVE folder_path AS (
                 SELECT id, name, parent_id, name AS path
@@ -221,6 +227,7 @@ class ModulesController(BaseManager):
                 JOIN folder_path fp ON f.parent_id = fp.id
             )
             SELECT
+                m.id,
                 m.uuid,
                 m.name,
                 m.config,
@@ -232,13 +239,13 @@ class ModulesController(BaseManager):
         """, (self.module_type,))
 
         for row in rows:
-            module_name = row[1]
+            module_name = row[2]
 
             module_path = self.get_module_path(module_name)
             self.load_db_module(module_path, row)
 
     def load_db_module(self, module_path, row):
-        uuid, module_name, config, metadata, folder_path = row
+        db_id, uuid, module_name, config, metadata, folder_path = row
         metadata = json.loads(metadata)
 
         # Remove old module if exists
@@ -265,19 +272,23 @@ class ModulesController(BaseManager):
         cls = self.extract_module_class(module_name, default=None)
         kind_folder = None
         hash = metadata.get('hash')
-        self[module_name] = (uuid, module_name, config, cls, kind_folder, metadata, hash, 0, folder_path)
+        self[module_name] = (db_id, uuid, module_name, config, cls, kind_folder, metadata, hash, 0, folder_path)
 
     def load_source_modules(self):
         """
         Loads source modules by discovering them, importing, extracting their classes,
         and storing them.
         """
+
+        if self.load_to_path == 'plugins.workflows.providers':
+            pass
         discovered_module_infos = self.discover_modules(self.load_to_path)
-        plugin_module_infos = self.discover_plugin_modules(self.load_to_path)
-        
-        # Process both regular modules and plugin modules
+
+        # Discover modules from other plugins that provide this module type
+        plugin_module_infos = self.discover_plugin_modules()
         all_module_infos = discovered_module_infos | plugin_module_infos
         
+        folder_id = get_module_type_folder_id(self.module_type)
         for cls, module_path_str, kind_folder in all_module_infos:
             module_name = module_path_str.split('.')[-1]
             module = sys.modules[module_path_str]
@@ -285,8 +296,34 @@ class ModulesController(BaseManager):
             config = {'data': source_code, "name": module_name}
             metadata = get_metadata(config)
 
+            db_id = sql.get_scalar(
+                "SELECT id FROM modules WHERE name = ? AND folder_id = ?",
+                (module_name, folder_id)
+            )
+
+            if db_id is None:
+                metadata_json = json.dumps(metadata)
+                sql.execute("""
+                    INSERT INTO modules (name, config, folder_id, metadata, baked, locked)
+                    VALUES (?, ?, ?, ?, 1, 1)
+                """, (module_name, json.dumps(config), folder_id, metadata_json))
+                db_id = sql.get_scalar(
+                    "SELECT id FROM modules WHERE name = ? AND folder_id = ?",
+                    (module_name, folder_id)
+                )
+
+            # Preserve enabled state from DB config
+            if db_id is not None:
+                db_enabled = sql.get_scalar(
+                    "SELECT json_extract(config, '$.enabled') FROM modules WHERE id = ?",
+                    (db_id,)
+                )
+                if db_enabled is not None:
+                    config['enabled'] = bool(db_enabled)
+
             if cls:  # Ensure a class was indeed found and extracted
                 self[module_name] = (
+                    db_id,  # DB id (may be None if not in database)
                     None,  # UUID (not applicable for source modules)
                     module_name,  # Simple name of the module
                     config,  # Config
@@ -360,53 +397,54 @@ class ModulesController(BaseManager):
                     print(f"Error extracting class from module {inner_module_full_path}: {e}")
         return discovered_items
 
-    def discover_plugin_modules(self, load_to_path):
+    def get_plugin_module_dirs(self):
+        """Get all plugin directories that provide modules for *load_to_path*.
+
+        Checks two folder layouts per plugin:
+        1. ``plugins/<name>/<base_folder>/``
+        2. ``plugins/<name>/<load_to_path as path>/``
+
+        Yields ``(fs_path, dotted_path)`` for each match.
+        """
+        base_folder = self.load_to_path.split('.')[-1]
+
+        # Get all plugin directories
+        plugins_dir = "src/plugins"
+
+        if not os.path.isdir(plugins_dir):
+            return
+
+        for plugin_name in os.listdir(plugins_dir):
+            plugin_path = os.path.join(plugins_dir, plugin_name)
+
+            # Skip non-directories and special directories
+            if not os.path.isdir(plugin_path) or plugin_name.startswith('_'):
+                continue
+
+            # Check if the plugin has the base_folder subdirectory
+            base_folder_path = os.path.join(plugin_path, base_folder)
+            base_real_folder_path = os.path.join(plugin_path, self.load_to_path.replace('.', os.sep))
+
+            if os.path.isdir(base_folder_path):
+                # Convert to module path format
+                yield base_folder_path, f"plugins.{plugin_name}.{base_folder}"
+            elif os.path.isdir(base_real_folder_path):
+                yield base_real_folder_path, f"plugins.{plugin_name}.{self.load_to_path}"
+
+    def discover_plugin_modules(self):
         """
         Discovers modules within plugin directories.
         Searches through src/plugins/*/base_folder for modules.
         Returns a set of (class_object, module_full_path_str) tuples.
         """
         discovered_items = set()
-
-        if load_to_path == 'core.controllers':
-            pass
-        
-        base_folder = load_to_path.split('.')[-1]
-
-        # Get all plugin directories
-        import os
-        plugins_dir = "src/plugins"
-        
-        if not os.path.exists(plugins_dir):
-            return discovered_items
-            
-        for plugin_name in os.listdir(plugins_dir):
-            plugin_path = os.path.join(plugins_dir, plugin_name)
-            
-            # Skip non-directories and special directories
-            if not os.path.isdir(plugin_path) or plugin_name.startswith('_'):
-                continue
-                
-            # Check if the plugin has the base_folder subdirectory
-            base_folder_path = os.path.join(plugin_path, base_folder)
-            base_real_folder_path = os.path.join(plugin_path, load_to_path.replace('.', '/'))
-            if os.path.exists(base_folder_path) and os.path.isdir(base_folder_path):
-                # Convert to module path format
-                module_path = f"src.plugins.{plugin_name}.{base_folder}"
-                
-            elif os.path.exists(base_real_folder_path) and os.path.isdir(base_real_folder_path):
-                module_path = f"src.plugins.{plugin_name}.{load_to_path}"
-            else:
-                # print(f"Plugin {plugin_name} has no {base_folder} or {load_to_path} folder.")
-                continue
-
+        for _fs_path, dotted_path in self.get_plugin_module_dirs():
             # Use the existing discover_modules method to scan this path
             try:
-                plugin_modules = self.discover_modules(module_path, set())
+                plugin_modules = self.discover_modules(dotted_path, set())
                 discovered_items.update(plugin_modules)
             except Exception as e:
-                print(f"Error discovering modules in plugin {plugin_name}: {e}")
-
+                print(f"Error discovering modules in {dotted_path}: {e}")
         return discovered_items
 
     def get_modules(self, fetch_keys=('name',)):
@@ -422,19 +460,23 @@ class ModulesController(BaseManager):
 
             if isinstance(module_item, tuple):
                 module_item = {
-                    'uuid': module_item[0],
-                    'name': module_item[1],
-                    'config': module_item[2],
-                    'class': module_item[3],  #self.extract_module_class(module_item[1], default=None),
-                    'kind_folder': module_item[4],
-                    'metadata': module_item[5],
-                    'hash': module_item[6],
-                    'baked': module_item[7],
-                    'folder_path': module_item[8]
+                    'id': module_item[0],
+                    'uuid': module_item[1],
+                    'name': module_item[2],
+                    'config': module_item[3],
+                    'class': module_item[4],
+                    'kind_folder': module_item[5],
+                    'metadata': module_item[6],
+                    'hash': module_item[7],
+                    'baked': module_item[8],
+                    'folder_path': module_item[9]
                 }
 
             if module_item['class'] is None:
                 print(f"Module `{module_item['name']}` has no class defined.")
+                continue
+
+            if not module_item.get('config', {}).get('enabled', True):
                 continue
 
             # if fetch_keys:
@@ -489,7 +531,7 @@ class ModulesController(BaseManager):
 
         marked_module_classes = [
             (name, obj) for name, obj in all_module_classes
-            if getattr(obj, '_ap_module_type', None) == self.module_type # Check for None too
+            if obj.__dict__.get('_ap_module_type') == self.module_type
         ]
 
         if len(all_module_classes) == 1 and not marked_module_classes:

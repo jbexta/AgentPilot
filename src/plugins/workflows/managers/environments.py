@@ -2,7 +2,10 @@ import json
 
 from typing_extensions import override
 
-from plugins_old.openinterpreter.src import interpreter
+try:
+    from plugins_old.openinterpreter.src import interpreter
+except ImportError:
+    interpreter = None
 
 from utils import sql
 from utils.helpers import set_module_type
@@ -34,9 +37,11 @@ class EnvironmentManager(BaseManager):
         self.clear()
         for env_id, name, config in data:
             config = json.loads(config)
+            config['_env_id'] = env_id
+            env_type = config.get('environment_type', '')
             env_class = self.system.modules.get_module_class(
                 module_type='Environments',
-                module_name=name,
+                module_name=env_type,
                 default=Environment,
             )
             env = env_class(config=config)
@@ -55,6 +60,11 @@ class Environment:
         # self.update(config)
 
     def run_code(self, lang, code, venv_path=None):
+        if OI_EXECUTOR is None:
+            raise RuntimeError(
+                "OpenInterpreter is not available. "
+                "Use a Docker or SafeIntegrated environment."
+            )
         OI_EXECUTOR.venv_path = venv_path
         oi_res = OI_EXECUTOR.computer.run(lang, code)
         output = next(r for r in oi_res if r['format'] == 'output').get('content', '')

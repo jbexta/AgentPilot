@@ -20,15 +20,16 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QCursor
 from typing_extensions import override
 
-from utils.helpers import block_signals
+from utils.helpers import block_signals, set_module_type
 
 from gui import system
-from gui.util import find_attribute, find_main_widget, IconButton, CVBoxLayout, CHBoxLayout, ToggleIconButton, get_selected_pages
+from gui.util import find_attribute, find_main, IconButton, CVBoxLayout, CHBoxLayout, ToggleIconButton
 from utils import sql
 
 from gui.widgets.config_collection import ConfigCollection
 
 
+@set_module_type('Widgets')
 class ConfigPages(ConfigCollection):
     param_schema = [
         {
@@ -43,7 +44,7 @@ class ConfigPages(ConfigCollection):
             'type': bool,
             'default': False,
         }
-    ],
+    ]
 
     def __init__(
         self,
@@ -98,9 +99,8 @@ class ConfigPages(ConfigCollection):
                 widget = self.content.widget(i)
                 if widget != page:
                     self.content.insertWidget(i, page)
-
-                if hasattr(page, 'build_schema'):
-                    page.build_schema()
+                    if hasattr(page, 'build_schema'):
+                        page.build_schema()
 
             # if self.default_page:
             #     default_page = self.pages.get(self.default_page)
@@ -169,7 +169,7 @@ class ConfigPages(ConfigCollection):
             super().__init__(parent=parent)
 
             self.parent = parent
-            self.main = find_main_widget(self)
+            self.main = find_main()
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
@@ -266,38 +266,51 @@ class ConfigPages(ConfigCollection):
                 for btn in self.button_group.buttons():
                     self.button_group.removeButton(btn)
 
-            # Reorganize layout
-            # Remove all widgets from layout first
-            while self.layout.count():
-                item = self.layout.takeAt(0)
-                if item.widget():
-                    item.widget().setParent(None)
+            # Check if layout order already matches
+            current_order = []
+            for idx in range(self.layout.count()):
+                w = self.layout.itemAt(idx).widget()
+                if w and w in self.page_buttons.values():
+                    current_order.append(w)
+            desired_order = [self.page_buttons[key] for key in pages if key in self.page_buttons]
+            layout_matches = current_order == desired_order
 
-            # Add widgets back in correct order
-            if self.parent.bottom_to_top:
-                self.layout.addStretch(1)
-                self.layout.addWidget(self.new_page_btn)
+            if not layout_matches:
+                # Reorganize layout
+                while self.layout.count():
+                    item = self.layout.takeAt(0)
+                    if item.widget():
+                        item.widget().setParent(None)
 
-            # Add page buttons in correct order (based on pages order, not page_buttons order)
-            for i, (key, page) in enumerate(pages.items()):
-                btn = self.page_buttons[key]
-                btn.setContextMenuPolicy(Qt.CustomContextMenu)
-                btn.customContextMenuRequested.connect(lambda pos, btn=btn: self.show_context_menu(pos, btn))
-                self.button_group.addButton(btn, i)
-                self.layout.addWidget(btn)
+                if self.parent.bottom_to_top:
+                    self.layout.addStretch(1)
+                    self.layout.addWidget(self.new_page_btn)
 
-            if not self.parent.bottom_to_top:
-                self.layout.addWidget(self.new_page_btn)
-                self.layout.addStretch(1)
+                for i, (key, page) in enumerate(pages.items()):
+                    btn = self.page_buttons[key]
+                    btn.setContextMenuPolicy(Qt.CustomContextMenu)
+                    btn.customContextMenuRequested.connect(lambda pos, btn=btn: self.show_context_menu(pos, btn))
+                    self.button_group.addButton(btn, i)
+                    self.layout.addWidget(btn)
+
+                if not self.parent.bottom_to_top:
+                    self.layout.addWidget(self.new_page_btn)
+                    self.layout.addStretch(1)
+            else:
+                # Just ensure button group is up to date
+                for i, (key, page) in enumerate(pages.items()):
+                    btn = self.page_buttons[key]
+                    self.button_group.addButton(btn, i)
 
         def show_context_menu(self, pos, button):
             menu = QMenu(self)
 
-            custom_pages = system.manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
+            pages_data = system.manager.modules.get_modules_in_folder('Pages', fetch_keys=('name', 'baked'))
             page_key = next((key for key, value in self.page_buttons.items() if value == button), None)
             if page_key is None:
                 return
-            is_custom_page = page_key in custom_pages
+            is_custom_page = page_key in [p[0] for p in pages_data]
+            is_non_baked = any(p[0] == page_key and p[1] == 0 for p in pages_data)
 
             pinnable_pages = [key for key, value in self.parent.pages.items()
                               if getattr(value, 'page_type', 'any') == 'any']
@@ -314,12 +327,25 @@ class ConfigPages(ConfigCollection):
                 btn_edit = menu.addAction('Edit')
                 btn_edit.triggered.connect(lambda: self.parent.edit_page(page_key))
 
-            user_editing = find_attribute(self.parent, 'user_editing', False)
-            if user_editing:
+            if is_custom_page:
+                btn_disable = menu.addAction('Disable')
+                btn_disable.triggered.connect(lambda: self.disable_page(page_key))
+
+            if is_non_baked or find_attribute(self.parent, 'user_editing', False):
                 btn_delete = menu.addAction('Delete')
                 btn_delete.triggered.connect(lambda: self.parent.delete_page(page_key))
 
             menu.exec_(QCursor.pos())
+
+        def disable_page(self, page_name):
+            sql.execute("""
+                UPDATE modules SET config = json_set(config, '$.enabled', 0)
+                WHERE name = ?
+            """, (page_name,))
+            system.manager.load()
+            self.main.main_pages.build_schema()
+            if 'settings' in self.main.main_pages.pages:
+                self.main.main_pages.pages['settings'].build_schema()
 
         def toggle_page_pin(self, page_name, pinned):
             pinned_pages = sql.get_scalar("SELECT `value` FROM settings WHERE `field` = 'pinned_pages';")
@@ -373,7 +399,7 @@ class ConfigPages(ConfigCollection):
             if self.parent.bottom_to_top:
                 button_group_count = self.button_group.buttons().__len__()
                 button_index = button_group_count - 1 - button_index
-            
+
             if button_index == current_index:
                 page_object = self.parent.content.widget(button_index)
                 checked_target = getattr(page_object, 'target_when_checked', None)
@@ -382,9 +408,8 @@ class ConfigPages(ConfigCollection):
                         checked_target()
             else:
                 self.parent.content.setCurrentIndex(button_index)
-            
-            path = get_selected_pages(self.main.main_pages)
-            sql.execute("UPDATE settings SET value = ? WHERE `field` = 'page_path'", (json.dumps(path),))
+
+            self.parent.update_page_map()
             
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, parent, text='', text_size=13, align_left=False):

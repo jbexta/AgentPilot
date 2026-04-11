@@ -33,6 +33,7 @@ class User(Member):
     output_type = 'OUTPUT'
     conversational = True
     break_on_run = True
+    allow_condition = False
 
     @property
     def INPUTS(self):

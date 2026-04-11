@@ -16,7 +16,6 @@ class PopupMember(ConfigFields):
         super().__init__(parent=parent)
         self.use_namespace = use_namespace
         self.conf_namespace = use_namespace
-        self.member_type = member_type
 
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
@@ -64,15 +63,17 @@ class PopupMember(ConfigFields):
 
 
 class PopupModel(ConfigJoined):
-    def __init__(self, parent):
+    def __init__(self, parent, is_popup=True):
         super().__init__(parent=parent, layout_type='vertical', add_stretch_to_end=True)
         self.widgets = [
             self.PopupModelFields(parent=self),
             self.PopupModelOutputTabs(parent=self),
         ]
         # self.user_editable = False
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-        self.setFixedWidth(350)
+        if is_popup:
+            self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+            self.setFixedWidth(350)
+            
         self.build_schema()
 
     def showEvent(self, event):
@@ -288,6 +289,46 @@ class PopupFields(ConfigFields):
 
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(300)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        parent = self.parent
+        if parent:
+            btm_right = parent.rect().bottomRight()
+            btm_right_global = parent.mapToGlobal(btm_right)
+            btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
+            self.move(btm_right_global_minus_width)
+
+
+class PopupCondition(ConfigFields):
+    def __init__(self, parent, use_namespace=None):
+        super().__init__(parent=parent)
+        self.conf_namespace = use_namespace
+
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setFixedWidth(350)
+
+        self.auto_label_width = True
+
+        self.schema = [
+            {
+                'text': 'Enabled',
+                'type': bool,
+                'default': False,
+            },
+            {
+                'text': 'Expression',
+                'type': str,
+                'num_lines': 4,
+                'stretch_x': True,
+                'stretch_y': True,
+                'highlighter': 'cel',
+                'monospaced': True,
+                'label_position': None,
+                'default': 'true',
+            },
+        ]
+        self.build_schema()
 
     def showEvent(self, event):
         super().showEvent(event)

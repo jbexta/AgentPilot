@@ -82,8 +82,8 @@ class Integer(QWidget):
         self.parent = parent  # Store parent for update_config callback
         style = kwargs.get('style', 'spinbox')  # slider / spinbox
         orientation = kwargs.get('orientation', Qt.Horizontal)
-        minimum = kwargs.get('minimum', -2147483648)
-        maximum = kwargs.get('maximum', 2147483647)
+        minimum = max(kwargs.get('minimum', -2147483647), -2147483647)
+        maximum = min(kwargs.get('maximum', 2147483647), 2147483647)
         step = kwargs.get('step', 1)
         left_label = kwargs.get('left_label', '')
         right_label = kwargs.get('right_label', '')
@@ -170,6 +170,7 @@ class Integer(QWidget):
         self.inner_widget.setRange(minimum, maximum)
         self.inner_widget.setSingleStep(step)
         self.inner_widget.valueChanged.connect(parent.update_config)
+        self.inner_widget.wheelEvent = lambda e: e.ignore()
 
     def _handle_value_changed(self, value):
         """Handle value changes for live snapping during drag."""
@@ -205,128 +206,10 @@ class Integer(QWidget):
                 # raise ValueError(f"Invalid value: {value}")
                 print(f"Integer.set_value(): Invalid value: {value}")
                 return
+        # Clamp to the widget's range to avoid OverflowError
+        value = max(self.inner_widget.minimum(),
+                    min(value, self.inner_widget.maximum()))
         self.inner_widget.setValue(value)  # not recursive, camelCase not snake_case
     
     def clear_value(self):
         self.inner_widget.setValue(0)
-
-
-# class Integer(QSpinBox):
-#     option_schema = [
-#         {
-#             'text': 'Minimum',
-#             'key': 'f_minimum',
-#             'type': int,
-#             'minimum': -2147483647,
-#             'maximum': 2147483647,
-#             'step': 5,
-#             'default': 0,
-#         },
-#         {
-#             'text': 'Maximum',
-#             'key': 'f_maximum',
-#             'type': int,
-#             'minimum': -2147483647,
-#             'maximum': 2147483647,
-#             'step': 5,
-#             'default': 100,
-#         },
-#         {
-#             'text': 'Step',
-#             'key': 'f_step',
-#             'type': int,
-#             'minimum': -2147483647,
-#             'maximum': 2147483647,
-#             'step': 1,
-#             'default': 1,
-#         }
-#     ]
-
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent)
-#         minimum = kwargs.get('minimum', -2147483648)
-#         maximum = kwargs.get('maximum', 2147483647)
-#         step = kwargs.get('step', 1)
-#         self.setRange(minimum, maximum)
-#         self.setSingleStep(step)
-#         self.valueChanged.connect(parent.update_config)
-
-#     def get_value(self):
-#         return self.value()
-
-#     def set_value(self, value):
-#         if not isinstance(value, int):  # todo clean
-#             try:
-#                 value = int(str(value))
-#             except (ValueError, TypeError):
-#                 value = 0
-#         self.setValue(value)  # not recursive, camelCase not snake_case
-
-#     def clear_value(self):
-#         self.setValue(0)
-
-# #         """
-# # Integer field widget for configurable integer number input.
-
-# # This module provides an Integer field widget that extends QSpinBox to create
-# # configurable numeric input fields for integer values. It supports customizable
-# # minimum/maximum ranges, step values, and automatically integrates with the
-# # configuration system. Includes an option_schema for field configuration.
-# # """  # unchecked
-
-# # from PySide6.QtWidgets import QSpinBox
-
-
-# # class Integer(QSpinBox):
-# #     option_schema = [
-# #         {
-# #             'text': 'Minimum',
-# #             'key': 'f_minimum',
-# #             'type': int,
-# #             'minimum': -2147483647,
-# #             'maximum': 2147483647,
-# #             'step': 5,
-# #             'default': 0,
-# #         },
-# #         {
-# #             'text': 'Maximum',
-# #             'key': 'f_maximum',
-# #             'type': int,
-# #             'minimum': -2147483647,
-# #             'maximum': 2147483647,
-# #             'step': 5,
-# #             'default': 100,
-# #         },
-# #         {
-# #             'text': 'Step',
-# #             'key': 'f_step',
-# #             'type': int,
-# #             'minimum': -2147483647,
-# #             'maximum': 2147483647,
-# #             'step': 1,
-# #             'default': 1,
-# #         }
-# #     ]
-
-# #     def __init__(self, parent, **kwargs):
-# #         super().__init__(parent)
-# #         minimum = kwargs.get('minimum', -2147483648)
-# #         maximum = kwargs.get('maximum', 2147483647)
-# #         step = kwargs.get('step', 1)
-# #         self.setRange(minimum, maximum)
-# #         self.setSingleStep(step)
-# #         self.valueChanged.connect(parent.update_config)
-
-# #     def get_value(self):
-# #         return self.value()
-
-# #     def set_value(self, value):
-# #         if not isinstance(value, int):  # todo clean
-# #             try:
-# #                 value = int(str(value))
-# #             except (ValueError, TypeError):
-# #                 value = 0
-# #         self.setValue(value)  # not recursive, camelCase not snake_case
-
-# #     def clear_value(self):
-# #         self.setValue(0)

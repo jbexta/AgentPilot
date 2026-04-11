@@ -1,0 +1,60 @@
+uuid: 19bcfc53-ca2a-48da-976c-f823cb067cb4
+name: Claude Code
+config:
+  _TYPE: workflow
+  name: Claude Code
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '7'
+    linked_id: null
+    loc_x: 86
+    loc_y: 51
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: user
+      name: You
+  - id: '8'
+    linked_id: null
+    loc_x: 178
+    loc_y: 29
+    width: 450.0
+    height: 350.0
+    config:
+      chat.model:
+        _model_name: claude-sonnet-4-6
+        kind: CHAT
+        provider: litellm
+        model_params:
+          structure.data: []
+          xml_roles.data: []
+      chat.fast: true
+      chat.sys_msg: ''
+      builtin_tools.bash: true
+      builtin_tools.read: true
+      builtin_tools.write: true
+      builtin_tools.edit: true
+      builtin_tools.glob: true
+      builtin_tools.grep: true
+      builtin_tools.webfetch: false
+      builtin_tools.websearch: false
+      custom_tools.data: []
+      hooks.data: []
+      voice.model:
+        _model_name: minimax/speech-02-turbo
+        kind: AUDIO
+        provider: wavespeed
+        model_params: {}
+      _format_block_keys:
+      - chat.sys_msg
+      avatar_path: :/resources/icon-agent-solid.png
+      name: Claude Code
+      _TYPE: claude_code
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []

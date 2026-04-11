@@ -1,0 +1,28 @@
+uuid: 69bb8dbe-4c09-46de-a181-1fdf3f77484f
+name: core_architecture
+config:
+  _TYPE: workflow
+  name: core_architecture
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      data: ''
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+parent_uuid: 673d84a8-fd6b-4f41-b585-87fd53026401

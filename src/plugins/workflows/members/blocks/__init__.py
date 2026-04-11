@@ -1,6 +1,6 @@
-# from .text_block import TextBlock
-# from .code_block import CodeBlock
-# from .prompt_block import PromptBlock
+# from .text import Text
+# from .code import Code
+# from .prompt import Prompt
 
 # # from .base import *
 # #

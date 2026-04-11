@@ -1,0 +1,33 @@
+uuid: 11d9e241-9565-48b0-a842-08169e7332b4
+name: Infinite debate
+config:
+  _TYPE: workflow
+  name: Infinite debate
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 18
+    loc_y: 37
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: user
+      name: You
+  - id: '4'
+    linked_id: null
+    loc_x: 128
+    loc_y: 42
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: agent
+      name: Agent
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []

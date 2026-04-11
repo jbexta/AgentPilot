@@ -1,239 +1,102 @@
-<h1 align="center">💬 Agent Pilot</h1>
-
-<p align="center">️
-  <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
-<br><br>
-A generative, fully customizable UI that lets you design entire experiences—from custom pages to deeply layered configurations. This flexibility transforms the interface into an "everything app" tailored precisely to your world.
-<br><br>
-Agent Pilot features a powerful workflow automation system. Build intelligent agents, schedule recurring workflows, and choreograph intricate AI-driven workflows with ease. Whether you’re chatting with a single LLM or debugging a complex workflow, Agent Pilot delivers a seamless, unified experience.
-<br><br>
-With an intuitive and feature-rich interface, you can effortlessly design AI workflows and chat with them in real-time.
-Branching chats are supported, allowing flexible interactions and iterative refinement.
-<br><br>
-Create **Projects** with Claude Code to design and manage any type of initiative, from simple prototypes to complex systems. Each project is a living space where agents, workflows, and custom interfaces come together—and even the app itself can exist as a project in continuous evolution. This recursive design deepens the vision of an "everything app," transforming your workspace into an extensible environment that adapts, expands, and grows alongside your ideas.
-</p>
-
-<div align="center">
-
-[![Discord](https://img.shields.io/discord/1169291612816420896?style=flat)](https://discord.gg/ge2ZzDGu9e)
-[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
-</div>
+<h1 align="center">Agent Pilot</h1>
 
 <p align="center">
-  <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
-  <img src="docs/Screenshot3.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
-  <img src="docs/Screenshot1.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <b>
+   · The Everything Interface<br>
+   · Modular plugin system<br>
+   · Graph workflow builder<br>
+   · Project studio<br>
+   · Live vibecoding</b>
+   </b>
 </p>
+
 <p align="center">
-  <img src="docs/Screenshot2.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
-  <img src="docs/Screenshot4.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/demo.png" width="600px" alt="Agent Pilot" />
 </p>
+
+<p align="center">
+  <a href="https://discord.gg/ge2ZzDGu9e"><img src="https://img.shields.io/discord/1169291612816420896?style=flat&label=Discord" alt="Discord"></a>
+  <a href="https://twitter.com/AgentPilotAI"><img src="https://img.shields.io/twitter/follow/AgentPilotAI" alt="Twitter"></a>
+  <a href="https://github.com/jbexta/AgentPilot/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License"></a>
+</p>
+
+Agent Pilot is a generative, fully customizable desktop application. With a flexible plugin system and schema-driven UI. Includes multiple prebuilt plugins ready to use.
+
+Create projects with a coding agent (Claude Code), keep chats organized per project.
+Inject into your coding agent's context any workflow from your block library for dynamic or grounded context.
+
+The application is itself a project, and can be modified by coding agents live while it's running, enabling real-time vibecoding where you can see changes reflected instantly without restarting. This is not enabled by default.
+
+Includes a powerful AI workflow engine. Design modular, nestable workflows with a graph-based editor and execute them. Granular, branching execution is possible, allowing flexible interactions and iterative refinement. 
+
+Many member types are available, from templatable Text, system actions such as Wait or Notification, configured agents, or any AI model available from Litellm, Replicate, Wavespeed or Fal AI. API keys are required, local models are not supported yet.
+
+Workflow executions are saved in the 'Chats' page, these can be anything, a chat with a single LLM, a Claude Code session in a project, a templated text workflow for automated documentation. Anything is possible with a workflow.
+
+Manage a collection of workflows in the Block library, allowing reusability and consistency .
+These can be used from specific places within the app, can quickly be dropped into any workflow, or can be used in templated text (such as system message) by using the block name in double curly braces: "{{ block_name }}"
 
 ## Quickstart
 
-### Binaries
-<table>
-  <tr>
-	<th>Platform</th>
-	<th>Downloads</th>
-  </tr>
-  <tr>
-	<td><b>Linux</b></td>
-	<td>
-<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.1/AgentPilot_0.5.1_Linux.tar.gz/download" target="_blank">AgentPilot_0.5.1_Linux.tar.gz</a></b><br>
-<b>MD5:</b>  e74e736e3efbd459b411ecffc45e936e<br>
-<b>SHA1:</b> 93b12bd208095f8d8b34395446de23d233a1baed<br>
-	</td>
-  </tr>
-  <tr>
-	<td><b>Windows</b></td>
-	<td>
-<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.1/AgentPilot_0.5.1_Windows.zip/download" target="_blank">AgentPilot_0.5.1_Windows.zip</a></b><br>
-<b>MD5:</b> 17079a8f2faf9683c59d11d0b67a8092<br>
-<b>SHA1:</b> c5a30c02f17782ead98c24098e874c9ba2edc950<br>
-	</td>
-  </tr>
-  <tr>
-	<td><b>Mac Intel</b></td>
-	<td>
-<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.1/AgentPilot_0.5.1_Mac_Intel.tar.gz/download" target="_blank">AgentPilot_0.5.1_Mac_Intel.tar.gz</a></b><br>
-<b>MD5:</b> 2e1e03e5305ea279df1b76d1a8074cb7<br>
-<b>SHA1:</b> 9369152f1b69ff2a4ca476ecf1b377b5ce0e072b<br>
-	</td>
-  </tr>
-</table>
+### Download
 
-> [!TIP]
-> You can migrate your old database to the new version by replacing your executable with the new one before starting the application.
+Binaries for 0.6.0 are not available yet, see instructions to [build from source](docs/guides/how_to_build.md)
 
-### For developers
-[Building from source](docs/guides/how_to_build.md) <br>
-[Coding standards](docs/guides/how_to_build.md)<br>
-[GUI Architecture](docs/guides/how_to_build.md) <br>
-[Module documentation](docs/guides/how_to_build.md)<br>
+Live vibe coding is currently only available if running from source.
+
+> **Tip:** You can migrate your database to the new version by replacing the executable before launching.
+
+## Documentation
+[User guide](docs/guides/how_to_use.md)<br>
+[Module documentation](docs/guides/modules.md)<br>
+[Core Architecture](docs/guides/how_to_build.md)<br>
+[GUI Architecture](docs/guides/how_to_build.md)<br>
 [Creating a plugin](docs/guides/how_to_build.md)<br>
 
 ## Plugins
-[Workflow engine](docs/guides/how_to_build.md) <br>
-[Project studio](docs/guides/how_to_build.md) <br>
-[Project studio](docs/guides/how_to_build.md) <br>
+An AgentPilot plugin is a collection of modules bundled together and placed in the `src/plugins` directory.
+<br>By organizing related modules into a single plugin, all modules related to a feature or integration are kept together, making development and maintenance easier.
+<br>The application automatically discovers and loads plugins from the `src/plugins` directory at startup. Each module inside a plugin is registered and made available in the app.
 
-## Workflow engine
+### Included plugins
+- **[Workflows](src/plugins/workflows)** &mdash; Core AI workflow engine
+- **[Tasks](src/plugins/tasks)** &mdash; Scheduled & recurring workflows
+- **[Projects](src/plugins/projects)** &mdash; Project modification using AI Agents
+- **[Studio](src/plugins/studio)** &mdash; Creative studio with Gen AI capabilities
+- **[Files](src/plugins/files)** &mdash; File explorer with an optional AI agent
+- **[Slopify](src/plugins/slopify)** &mdash; AI Music streaming & generation
+- **[Finance](src/plugins/finance)** &mdash; Financial data, portfolio analysis & automation
 
-###  👤 Create Agents
-Create new agents, edit their configuration and organise them into folders.<br>
-Multi-member workflows can be saved as a single agent and nested infinitely.
+## Integrations
 
-### 📝 Manage Chats
-View, continue and delete previous workflow chats and organise them into folders.<br>
+### Database Connectors
+- **[SQLite](src/core/connectors/sqlite.py)**
+- **[MySQL](src/core/connectors/mysql.py)**
+- **[PostgreSQL](src/core/connectors/postgres.py)**
 
-### 🌱 Branching Workflows
-Messages, tools and code can be edited and re-run, allowing a more practical way to chat with your workflow.<br>
-Branching works with all plugins and multi-member chats.<br>
+### Model Providers
+- **[LiteLLM](src/plugins/workflows/providers/litellm.py)**
+- **[FalAI](src/plugins/workflows/providers/fal.py)**
+- **[Replicate](src/plugins/workflows/providers/replicate.py)**
+- **[Wavespeed](src/plugins/workflows/providers/wavespeed.py)**
 
-### 👥 Graph Workflows
-Seamlessly add other members or blocks to a workflow and configure how they interact with each other.<br>
-Members aligned vertically are executed in parallel.
+### External Agents
+- **[Claude Code](src/plugins/claude_code)**
+- ~~**[Codex CLI](src/plugins/codex_cli)**~~
+- ~~**[Gemini CLI](src/plugins/gemini_cli)**~~
 
-Available members:
-- **User** - This is you and will await your input.
-- **Agent** - Gets an LLM response with integrated tools and messages.
-- **Text** - A simple text block that can nest other blocks.
-- **Code** - Gets the output of any given code.
-- **Prompt** - Gets an LLM response from a single prompt.
-- **Module** - Runs or retrieves a method or variable from any module.
-- **Workflow** - Any combination of the above types.
+## Contributing
 
-### 📦 Blocks
-Manage a collection of nestable blocks available to use in any workflow or text field, 
-allowing reusability and consistency.<br>
-By default a block is a simple text block, but it can be any of the above member types, even a multi-member workflow.<br>
-These can be quickly dropped into any workflow, or used in text fields (such as system message) by using the block name in curly braces, e.g. `{block-name}`.
+Contributions are welcome. Please feel free to submit a pull request.
 
-### 🔨 Tools
-Create and manage tools which can be assigned to agents.<br>
-Tools share the same functionality as blocks, except by default they are a single Code member.<br> 
-They can also be an entire workflow, this allows your agents to not only run code but an entire workflow if you wish.<br>
-Configure their parameters, which can be accessed from all workflow member types.
-These parameters can be modified at runtime and re-executed, this creates a branch point which you can cycle through.
+## Known issues:
 
-### 💻 Modules
-Agent Pilot is modular and easily extensible, over 95% of the code is contained in editable modules of the following types:<br>
-- Managers
-- Connectors
-- Pages
-- Widgets
-- Fields
-- Members
-- Bubbles
-- Providers
-- Behaviours
-- Toolkits
-- Daemons
-- 
-These are only editable if Allow custom modules = True
-Modules are python files which are imported at runtime.<br>
-These are useful for things like toolkits, daemons, memory, custom pages or anything that needs persistence.
+Models with unsupported, arbitrary or niche outputs may not be available or not work even if they are. Support for specific models can be requested and I'll see what I can do.
 
-### 📐 Customizable UI
-Includes a flexible and powerful set of base classes for building complex hierarchical configuration interfaces. 
-The entire app is built on this framework.
-Developers can modify or create configuration pages easily, even while the app is running.
+There is no in-app way of seeing the cost of specific models.
 
-### 🕒 Scheduler (Premium)
-Schedule workflows to run at specific times or intervals.<br>
-Natural language expressions are supported, allowing for flexible scheduling.<br>
-For example, you can schedule a workflow to run every 5 minutes, every day at 3pm, or every 2nd Tuesday of the month.
+Local models aren't supported (except through a LiteLLM proxy)
 
-### 📄 Structured Outputs
-Members can be configured to output structured data, thanks to [Instructor](https://github.com/instructor-ai/instructor).<br>
+## License
 
-### 📦 Addons
-Create and import custom addons to extend the functionality of Agent Pilot.<br>
-
-### 💻 Code Interpreter
-Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
-or used to execute code in 9 languages (Python, Shell, AppleScript, HTML, JavaScript, PowerShell, R, React, Ruby)
-
-Code can be executed in multiple ways:
-- From any 'Code' member in any workflow (Chat, Block, Tool).
-- From a message with the role 'Code'
-
-You should always understand the code that is being run, any code you execute is your own responsibility.
-
-For code messages, auto-run can be enabled in the settings.
-To see code messages in action talk to the pre-configured Open Interpreter agent.
-
-### 🪄 AI Generation
-Blocks under the 'System Blocks' folder are used for generating or enhancing fields.
-Claude's prompt generator is included by default, you can tweak it or create your own.
-- **Prompt** - AI enhanced user input
-- **Agent** - AI generated agent (Coming soon)
-- - **System message** - AI generated system message (Coming soon)
-- **Page** - AI generated page (Coming soon)
-
-### 🔌 Plugins
-Agent Pilot supports the following plugins:
-- **Agent** - Create custom agent behaviour.
-- - [Open Interpreter](https://github.com/KillianLucas/open-interpreter)
-- - [OpenAI Assistant](/)
-- - [CrewAI Agent](/) (Currently disabled)
-- **Workflow** - Create workflow behaviour.
-- - [CrewAI Workflow](/) (Currently disabled)
-- **Provider** - Add support for a model provider.
-- - [Litellm (100+ models)](/)
-
-- [Create a plugin](/)
-
-### 👄 Voice
-**Coming back soon**<br>
-~~Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!~~<br>
-
-### 🔠 Models
-LiteLLM is integrated and supports the following providers:<br>
-
-- AI21
-- AWS Bedrock
-- AWS Sagemaker
-- Aleph Alpha
-- Anthropic
-- Anyscale
-- Azure OpenAI
-- Baseten
-- Cloudflare
-- Cohere
-- Custom API Servers
-- DeepInfra
-- DeepSeek
-- Gemini
-- Github
-- Groq
-- Huggingface
-- Mistral
-- NLP Cloud
-- Nvidia NIM
-- Ollama
-- OpenAI
-- OpenRouter
-- PaLM API Google
-- Perplexity AI
-- Petals
-- Replicate
-- Together AI
-- VLLM
-- VertexAI Google
-- Voyage
-
-## Contributions
-Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.
-
-## Known Issues
-- Be careful using auto run code and open interpreter, any chat you open, if code is the last message it will start auto running, I'll add a flag to remember if the countdown has been stopped.
-- Windows exe must have console visible due to a strange bug.
-- Issue on linux, creating venv does not install pip 
-- Changing the config of an OpenAI Assistant won't reload the assistant, for now close and reopen the chat.
-
-If you find this project useful please consider showing support by giving a star or leaving a tip :)
-<br><br>
-BTC:<br> 
-ETH: <br>
+[AGPL-3.0](LICENSE)

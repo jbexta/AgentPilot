@@ -1,0 +1,6 @@
+uuid: 69513553-f563-437e-9b0a-66ae74a53030
+name: Glob
+config:
+  _TYPE: code
+  name: FileEdit
+folder_path: Web search/Filesystem

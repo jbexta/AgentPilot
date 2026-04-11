@@ -1,0 +1,28 @@
+uuid: df563e21-10a6-4f61-811e-cb70f5dd80ca
+name: CreateWorkflow
+config:
+  _TYPE: workflow
+  name: CreateWorkflow
+  avatar_path: :/resources/icon-tool-small.png
+  description: ''
+  members:
+  - id: '1'
+    linked_id: tools.20
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      language: Python
+      environment: 42
+      data: ''
+      _TYPE: code
+      name: Code Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+folder_path: Workflows

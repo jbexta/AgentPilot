@@ -1,5 +1,6 @@
 
 from contextlib import contextmanager
+from decimal import Decimal
 import os
 import re
 import uuid
@@ -184,8 +185,16 @@ class PriceFile:
     def __init__(self, path, mode='a'):
         self.path = path
         self.mode = mode
-        self.base_interval = 0
         self._file = None
+        with h5py.File(path, 'r') as f:
+            if 'trades' in f:
+                self.base_interval = 0
+            elif 'ohlc' in f:
+                self.base_interval = int(list(f['ohlc'].keys())[0])
+            elif 'data' in f:  # treat as line for now
+                self.base_interval = None
+            else:
+                raise ValueError(f"No trades or ohlc or data datasets found in {path}")
     
     def __enter__(self):
         try:
@@ -255,6 +264,47 @@ class PriceFile:
                 for indicator in f['indicators'].keys():
                     indicators[indicator] = f[f'indicators/{indicator}']
             return dataset, indicators
+    
+    def binary_search_unix_price(self, unix):
+        path_or_file = self.file if self.file is not None else self.path
+        with h5py_file(path_or_file, 'r') as f:
+            interval = 60 if self.base_interval == 0 else self.base_interval
+            dataset = f['ohlc'][str(interval)]
+
+            if dataset.shape[0] == 0:
+                raise ValueError(f"No data found in {path_or_file}")
+
+            left = 0
+            right = dataset.shape[0] - 1
+            while left < right:
+                mid = (left + right) // 2
+                if dataset[mid]['unix'] < unix:
+                    left = mid + 1
+                else:
+                    right = mid
+            
+            if left > dataset.shape[0] - 2:
+                raise ValueError(f"Unix {unix} is greater than the last unix in the dataset")
+            elif left == 0:
+                raise ValueError(f"Unix {unix} is less than the first unix in the dataset")
+
+            nearest_candle = dataset[left]
+            nearest_candle_unix = nearest_candle['unix']
+            # nearest_candle_left = dataset[left - 1]
+            # nearest_candle_right = dataset[left + 1]
+            # nearest_candle_left_unix = nearest_candle_left['unix']
+            # nearest_candle_right_unix = nearest_candle_right['unix']
+
+            diff = abs(nearest_candle_unix - unix)
+            if nearest_candle_unix >= unix:
+                if diff > interval * 10:
+                    raise ValueError(f"Unix {unix} is more than 2 candles away from the nearest candle")
+                return nearest_candle['open']
+            elif nearest_candle_unix < unix:
+                if diff > interval * 10:
+                    raise ValueError(f"Unix {unix} is more than 2 candles away from the nearest candle")
+                return nearest_candle['close']
+
     
     # def get_data_at_unix(self, unix):
     #     # next interval after base_interval that is greater than 0
@@ -529,6 +579,10 @@ def get_h5_file_info(path):
 
 def sanitize_string(s):
     return re.sub("[^A-Za-z0-9_-]+", '', str(s))
+
+
+def sanitize_filename(s):
+    return re.sub("[^A-Za-z0-9_() -]+", '', str(s))
 
 
 def get_h5_path(api, market):

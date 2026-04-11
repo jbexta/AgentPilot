@@ -20,18 +20,21 @@ It's commonly used in settings pages, agent configurations, and other multi-face
 configuration scenarios where logical grouping improves user experience.
 """
 
-import json
+
+
 from PySide6.QtWidgets import *
 from typing_extensions import override
 
-from utils import sql
-from utils.helpers import block_signals
 
-from gui.util import find_attribute, IconButton, CVBoxLayout, find_main_widget, get_selected_pages
+
+from utils.helpers import block_signals, set_module_type
+
+from gui.util import find_attribute, IconButton, CVBoxLayout
 
 from gui.widgets.config_collection import ConfigCollection
 
 
+@set_module_type('Widgets')
 class ConfigTabs(ConfigCollection):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
@@ -86,10 +89,18 @@ class ConfigTabs(ConfigCollection):
     def on_current_changed(self, _):
         self.load()
         self.update_breadcrumbs()
-        main = find_main_widget(self)
-        path = get_selected_pages(main.main_pages)
-        sql.execute("UPDATE settings SET value = ? WHERE `field` = 'page_path'", (json.dumps(path),))
+        self.update_page_map()
         
+    def goto_page(self, page_name):
+        if page_name not in self.pages:
+            print(f'page {page_name} not found in {self.pages}')
+            return
+        is_current = self.content.currentWidget() == self.pages[page_name]
+        if is_current:
+            return
+        # set tab
+        tab_index = list(self.pages.keys()).index(page_name)
+        self.content.setCurrentIndex(tab_index)
 
     # def show_tab_context_menu(self, pos):
     #     tab_index = self.content.tabBar().tabAt(pos)

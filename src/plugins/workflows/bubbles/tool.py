@@ -25,6 +25,7 @@ from typing import Dict, Any
 
 from gui import system
 from plugins.workflows.bubbles import MessageBubble, MessageButton
+from src.gui.util import find_main
 from utils.helpers import try_parse_json, message_button, message_extension, get_json_value
 from gui.widgets.config_fields import ConfigFields
 
@@ -100,8 +101,7 @@ class ToolBubble(MessageBubble):
                 self.hide()
 
         def on_clicked(self):  # todo dupe code
-            from gui.util import find_main_widget
-            main = find_main_widget(self)
+            main = find_main()
             main.main_pages.settings_sidebar.page_buttons['tools'].click()
             tools_tree = main.main_pages.pages['Tools'].tree
             # select the tool

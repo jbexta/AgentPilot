@@ -20,6 +20,8 @@ and manage their messages within conversations, enabling flexible
 communication with AI systems.
 """  # unchecked
 
+import qasync
+
 from plugins.workflows.bubbles import MessageBubble, MessageButton
 from utils.helpers import message_button
 
@@ -38,7 +40,8 @@ class UserBubble(MessageBubble):
             super().__init__(parent=parent,
                              icon_path=':/resources/icon-send.png')
 
-        def on_clicked(self):
+        @qasync.asyncSlot()
+        async def on_clicked(self):
             if self.msg_container.parent.workflow.responding:
                 return
             msg_to_send = self.msg_container.bubble.text
@@ -51,4 +54,4 @@ class UserBubble(MessageBubble):
             run_workflow = self.msg_container.parent.workflow.config.get('config', {}).get('autorun', True)
             editing_member_id = self.msg_container.member_id
             msg_alt_turn = self.msg_container.message.alt_turn
-            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow, alt_turn=msg_alt_turn)
+            await self.msg_container.parent.workflow.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow, alt_turn=msg_alt_turn)

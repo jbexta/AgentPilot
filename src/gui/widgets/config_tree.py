@@ -17,13 +17,11 @@ throughout Agent Pilot, providing consistent behavior and appearance for
 tree widgets.
 """
 
-from functools import partial
 import json
 from abc import abstractmethod
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QWidget, QSizePolicy, QSplitter, QHeaderView
-from matplotlib.cbook import silent_list
 
 from gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
 from gui.widgets.config_fields import ConfigFields
@@ -95,6 +93,7 @@ class ConfigTree(ConfigWidget):
         self.tree.setSortingEnabled(False)
         self.tree.itemChanged.connect(self.on_cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        self.tree.itemSelectionChanged.connect(lambda: QTimer.singleShot(0, self.update_page_map))
         self.tree.itemExpanded.connect(self.on_folder_toggled)
         self.tree.itemCollapsed.connect(self.on_folder_toggled)
 

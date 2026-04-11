@@ -46,11 +46,12 @@ from gui.widgets.config_json_tree import ConfigJsonTree
 from gui.widgets.config_joined import ConfigJoined
 
 from gui.util import CustomMenu, IconButton, TreeDialog, CVBoxLayout, CHBoxLayout, \
-    BaseTreeWidget, colorize_pixmap, find_main_widget, clear_layout, safe_single_shot, get_selected_pages, set_selected_pages, \
+    BaseTreeWidget, colorize_pixmap, find_main, clear_layout, safe_single_shot, get_selected_pages, set_selected_pages, \
     find_attribute, get_member_settings_class
 from utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
-    set_module_type, merge_config_into_workflow_config, merge_multiple_into_workflow_config
+    set_module_type, merge_config_into_workflow_config, merge_multiple_into_workflow_config, \
+    resolve_linked_config, save_linked_config, has_circular_link
 
 
 @set_module_type('Widgets')
@@ -60,6 +61,8 @@ class WorkflowSettings(ConfigWidget):
         self.compact_mode: bool = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing: bool = False
         self.workflow_editable: bool = kwargs.get('workflow_editable', True)
+        self.collapsible: bool = kwargs.get('collapsible', False)
+        self.linked_id = None
 
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
@@ -90,11 +93,9 @@ class WorkflowSettings(ConfigWidget):
         h_layout = CHBoxLayout()
         h_layout.addWidget(self.view)
 
-        enable_member_list = self.linked_workflow() is not None
-        if enable_member_list:
-            self.member_list = self.MemberList(parent=self)
-            h_layout.addWidget(self.member_list)
-            self.member_list.hide()
+        # self.member_list = self.MemberList(parent=self)
+        # h_layout.addWidget(self.member_list)
+        # self.member_list.hide()
 
         self.workflow_options = self.WorkflowOptions(parent=self)
         self.workflow_options.build_schema()
@@ -148,10 +149,15 @@ class WorkflowSettings(ConfigWidget):
             
         json_config = merge_config_into_workflow_config(json_config)
 
+        self.linked_id = json_config.get('linked_id', None)
+
         json_wf_options = json_config.get('options', {})
         json_wf_params = json_config.get('params', [])
         wf_desc = json_config.get('description', '')
         self.header_widget.load_config(json_config)
+
+        header_fields = self.header_widget.widgets[0]
+        header_fields._update_link_icon(self.linked_id is not None)
         
         self.workflow_buttons.autorun = json_wf_options.get('autorun', True)
         self.workflow_buttons.show_hidden_bubbles = json_wf_options.get('show_hidden_bubbles', False)
@@ -189,6 +195,8 @@ class WorkflowSettings(ConfigWidget):
             'options': workflow_opts,
             'params': workflow_params.get('data', []),
         }
+        if self.linked_id:
+            config['linked_id'] = self.linked_id
 
         for member_id, member in self.members_in_view.items():
             # # add _TYPE to member_config
@@ -214,7 +222,6 @@ class WorkflowSettings(ConfigWidget):
                 'target_member_id': target_member_id,
                 'config': line.config,
             })
-        print(json.dumps(config, indent=4))
         return config
 
     @override
@@ -230,14 +237,23 @@ class WorkflowSettings(ConfigWidget):
             m.update_visuals()  # refresh_avatar()
         self.refresh_member_highlights()
         # self.refresh_member_headers()
-        if hasattr(self, 'member_list'):
-            self.member_list.load()
+        # if hasattr(self, 'member_list'):
+        #     self.member_list.load()
 
     @override
     def load(self):
         # # self.setUpdatesEnabled(False)
         sel_member_ids = [x.id for x in self.scene.selectedItems()
                           if isinstance(x, DraggableMember)]
+
+        # Reset member config widget before reloading to avoid stale references
+        self.member_config_widget.config_widget = None
+        self.member_config_widget.hide()
+        if self.compact_mode_editing:
+            self.set_edit_mode(False)
+        self.header_widget.setVisible(True)
+        self.workflow_panel.setVisible(True)
+
         self.load_members()
         self.load_inputs()
         self.header_widget.load()
@@ -246,8 +262,8 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_buttons.reload_predicates()
         # self.workflow_buttons.load()
 
-        if hasattr(self, 'member_list'):
-            self.member_list.load()
+        # if hasattr(self, 'member_list'):
+        #     self.member_list.load()
 
         if self.can_simplify_view():
             self.toggle_view(False)
@@ -273,24 +289,32 @@ class WorkflowSettings(ConfigWidget):
         # self.setUpdatesEnabled(True)
 
     def load_members(self):
-        # # return
-        # # Clear any existing members from the scene
-        # selected_ids = []
-        for m_id, member in self.members_in_view.items():
-            # if member.isSelected():
-            #     selected_ids.append(m_id)
-            self.scene.removeItem(member)
-            # member.deleteLater()
-        self.members_in_view = {}
+        # Block signals during cleanup to prevent on_selection_changed
+        # from firing with stale state mid-reload
+        with block_signals(self.scene):
+            # Remove inputs before members so connection lines don't
+            # reference destroyed member connection points
+            for _, line in self.inputs_in_view.items():
+                self.scene.removeItem(line)
+            self.inputs_in_view = {}
 
-        # return
+            for m_id, member in self.members_in_view.items():
+                self.scene.removeItem(member)
+            self.members_in_view = {}
+
         members_data = self.config.get('members', [])
-        # Iterate over the parsed 'members' data and add them to the scene
         for member_info in members_data:
             _id = member_info['id']
-            # agent_id = member_info.get('agent_id')
             linked_id = member_info.get('linked_id', None)
             member_config = member_info.get('config')
+
+            # Resolve linked config from source entity
+            if linked_id:
+                resolved = resolve_linked_config(linked_id)
+                if resolved is not None:
+                    member_config = resolved
+                    member_info['config'] = resolved
+
             loc_x = member_info.get('loc_x')
             loc_y = member_info.get('loc_y')
             width = member_info.get('width', None)
@@ -300,16 +324,13 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(member)
             self.members_in_view[_id] = member
 
-            # if _id in selected_ids:
-            #     member.setSelected(True)
-
         self.view.fit_to_all()
 
     def load_inputs(self):
-        for _, line in self.inputs_in_view.items():
-            self.scene.removeItem(line)
-            # line.deleteLater()
-        self.inputs_in_view = {}
+        with block_signals(self.scene):
+            for _, line in self.inputs_in_view.items():
+                self.scene.removeItem(line)
+            self.inputs_in_view = {}
 
         inputs_data = self.config.get('inputs', [])
         for input_dict in inputs_data:
@@ -364,7 +385,7 @@ class WorkflowSettings(ConfigWidget):
         members = list(self.members_in_view.values())
         if member_count == 1:
             member_config = members[0].member_config
-            types_to_simplify = ['text_block', 'code_block', 'prompt_block', 'voice_model', 'image_model']
+            types_to_simplify = ['text', 'code', 'prompt', 'audio', 'image', 'video']
             if member_config.get('_TYPE', 'agent') in types_to_simplify:
                 return True
 
@@ -372,17 +393,22 @@ class WorkflowSettings(ConfigWidget):
             members.sort(key=lambda m: m.x())
             first_member = members[0]
             second_member = members[1]
-            conversation_types = ['user', 'agent', 'claude_code']
-            if first_member.member_type == 'user' and second_member.member_type in conversation_types:
+            conversation_types_except_user = ['agent', 'claude_code']
+            if first_member.member_type == 'user' and second_member.member_type in conversation_types_except_user:
                 return True
 
         return False
 
     def toggle_view(self, visible):
         self.view.setVisible(visible)
-        # safe_single_shot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
         self.splitter.setHandleWidth(0 if not visible else 1)
-        safe_single_shot(10, lambda: self.splitter.setSizes([0, 0, 0, 0, 1000]))
+        handle = self.splitter.handle(4)
+        handle.setStyleSheet('' if visible else 'border: none;')
+        handle.setMaximumHeight(16777215 if visible else 0)
+        if visible and self.compact_mode:
+            safe_single_shot(10, lambda: self.splitter.setSizes([0, 0, 0, 1000, 0]))
+        else:
+            safe_single_shot(10, lambda: self.splitter.setSizes([0, 0, 0, 0, 1000]))
 
     def reposition_view(self):
         # return
@@ -422,14 +448,33 @@ class WorkflowSettings(ConfigWidget):
         self.compact_mode_editing = state
 
         if is_nested_workflow:  # todo clean
-            # return
             wf_settings = self.parent.parent
             wf_settings.toggle_view(not state)
-            wf_settings.header_widget.setVisible(not state)
-            wf_settings.workflow_panel.setVisible(not state)
-            wf_settings.workflow_description.setVisible(not state and wf_settings.workflow_buttons.btn_toggle_description.isChecked())
-            wf_settings.workflow_options.setVisible(not state and wf_settings.workflow_buttons.btn_workflow_options.isChecked())
-            wf_settings.workflow_params.setVisible(not state and wf_settings.workflow_buttons.btn_workflow_params.isChecked())
+            parent_is_nested = hasattr(
+                wf_settings.parent.parent, 'view'
+            )
+            root_tree_container = find_attribute(
+                wf_settings.parent, 'tree_container', None
+            )
+            hide_header = (
+                root_tree_container is not None or parent_is_nested
+            )
+            if hide_header:
+                wf_settings.header_widget.setVisible(not state)
+                wf_settings.workflow_panel.setVisible(not state)
+                show_description = wf_settings.workflow_buttons.inner_widget.btn_description.isChecked()
+                show_options = wf_settings.workflow_buttons.inner_widget.btn_workflow_options.isChecked()
+                show_params = wf_settings.workflow_buttons.inner_widget.btn_workflow_params.isChecked()
+                wf_settings.workflow_description.setVisible(not state and show_description)
+                wf_settings.workflow_options.setVisible(not state and show_options)
+                wf_settings.workflow_params.setVisible(not state and show_params)
+                if state:
+                    wf_settings.compact_mode_back_button.hide()
+                else:
+                    if wf_settings.compact_mode_editing:
+                        wf_settings.compact_mode_back_button.show()
+            if not state:
+                wf_settings.member_config_widget.hide()
             self.compact_mode_back_button.setVisible(state)
 
         elif is_root_workflow:
@@ -437,6 +482,7 @@ class WorkflowSettings(ConfigWidget):
             if tree_container:
                 tree_container.setVisible(not state)
                 self.compact_mode_back_button.setVisible(state)
+                print(f'compact_mode_back_button for root workflow is {state}')
                 # return
 
     def select_ids(self, ids, send_signal=True):
@@ -477,8 +523,8 @@ class WorkflowSettings(ConfigWidget):
         # self.workflow_buttons.load()  # !404!
         self.workflow_buttons.reload_predicates()
 
-        if hasattr(self, 'member_list'):
-            self.member_list.refresh_selected()
+        # if hasattr(self, 'member_list'):
+        #     self.member_list.refresh_selected()
 
     def add_insertable_entity(self, item, del_pairs=None):
         # if self.compact_mode:
@@ -602,11 +648,18 @@ class WorkflowSettings(ConfigWidget):
         self.cancel_new_line()
         self.cancel_new_entity()
 
+        transform = self.view.transform()
+        h_scroll = self.view.horizontalScrollBar().value()
+        v_scroll = self.view.verticalScrollBar().value()
+
         self.update_config()
         # if hasattr(self.parent, 'top_bar'):
         if hasattr(self.parent, 'load'):
             self.parent.load()
-        pass
+
+        self.view.setTransform(transform)
+        self.view.horizontalScrollBar().setValue(h_scroll)
+        self.view.verticalScrollBar().setValue(v_scroll)
 
     def add_input(self, target_member_id):
         if not self.adding_line:
@@ -747,7 +800,7 @@ class WorkflowSettings(ConfigWidget):
 
             self.temp_block_move_flag = False
 
-            self.setMinimumHeight(200)
+            self.setMinimumHeight(120)
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             self.setRenderHint(QPainter.Antialiasing)
@@ -910,9 +963,6 @@ class WorkflowSettings(ConfigWidget):
                 self.setDragMode(QGraphicsView.NoDrag)
 
             super().mouseReleaseEvent(event)
-            main = find_main_widget(self)
-            if main:
-                main.mouseReleaseEvent(event)
 
         def mousePressEvent(self, event):
             self.temp_block_move_flag = False
@@ -1150,12 +1200,19 @@ class WorkflowSettings(ConfigWidget):
                         },
                     ],
                 },
+                # {
+                #     'text': 'Member List',
+                #     'icon_path': ':/resources/icon-list.png',
+                #     'target': self.toggle_member_list,
+                #     'checkable': True,
+                #     'visibility_predicate': lambda: self.parent.linked_workflow() is not None,
+                # },
                 {
                     'text': 'Workflow Params',
                     'icon_path': ':/resources/icon-parameter.png',
-                    'target': lambda: print('state:', self.inner_widget.btn_workflow_params.isChecked()),
+                    # 'target': lambda: print('state:', self.inner_widget.btn_workflow_params.isChecked()),
                     'checkable': True,
-                    # 'target': self.toggle_workflow_params,
+                    'target': self.toggle_workflow_params,
                 },
                 {
                     'text': 'Description',
@@ -1168,6 +1225,11 @@ class WorkflowSettings(ConfigWidget):
                     'icon_path': ':/resources/icon-settings-solid.png',
                     'target': self.toggle_workflow_options,
                     'checkable': True,
+                },
+                {
+                    'text': 'Save As',
+                    'icon_path': ':/resources/icon-save.png',
+                    'target': self.show_save_context_menu,
                 },
             ]
             self.create_toolbar(parent)
@@ -1248,6 +1310,8 @@ class WorkflowSettings(ConfigWidget):
             save_block.triggered.connect(partial(self.save_as, 'BLOCK'))
             save_tool = menu.addAction('Save as Tool')
             save_tool.triggered.connect(partial(self.save_as, 'TOOL'))
+            save_task = menu.addAction('Save as Task')
+            save_task.triggered.connect(partial(self.save_as, 'TASK'))
             menu.exec_(QCursor.pos())
 
         def save_as(self, save_type):
@@ -1274,6 +1338,12 @@ class WorkflowSettings(ConfigWidget):
                         INSERT INTO tools (uuid, name, config)
                         VALUES (?, ?, ?)
                     """, (str(uuid.uuid4()), new_name, workflow_config,))
+
+                elif save_type == 'TASK':
+                    sql.execute("""
+                        INSERT INTO tasks (uuid, name, kind, config)
+                        VALUES (?, ?, ?, ?)
+                    """, (str(uuid.uuid4()), new_name, 'SCHEDULED', workflow_config,))
 
                 display_message(
                     message='Entity saved',
@@ -1358,17 +1428,74 @@ class WorkflowSettings(ConfigWidget):
             member_configs = [(pos - center, config) for pos, config in member_configs]
             return member_configs, member_inputs
 
-        def toggle_link(self):
-            selected_member = next(iter(self.parent.view.scene().selectedItems()), None)
-            if not selected_member or not isinstance(selected_member, DraggableMember):
-                return
-            if selected_member.linked_id is not None:
-                selected_member.linked_id = None
-            else:
-                selected_member.linked_id = "TODO"
+        # def toggle_link(self):
+        #     selected_member = next(iter(self.parent.view.scene().selectedItems()), None)
+        #     if not selected_member or not isinstance(selected_member, DraggableMember):
+        #         return
+        #     if selected_member.linked_id is not None:
+        #         # Unlink — keep current config as standalone
+        #         selected_member.linked_id = None
+        #         self.parent.update_config()
+        #     else:
+        #         # Link — open library to pick source entity
+        #         from gui.util import LibraryDialog
+        #         dialog = LibraryDialog(
+        #             parent=self.parent,
+        #             callback=lambda item: self._on_link_selected(selected_member, item),
+        #         )
+        #         dialog.open()
 
-            self.parent.update_config()
-            # self.load()
+        # def _on_link_selected(self, member, item):
+        #     """Handle library selection for linking a member."""
+        #     item_data = item.data(0, Qt.UserRole)
+        #     if not item_data or item_data == 'folder':
+        #         return
+
+        #     item_config = json.loads(item_data.get('config', '{}'))
+
+        #     # The config returned has linked_id baked in from
+        #     # merge_config_into_workflow_config. Extract it from members.
+        #     members = item_config.get('members', [])
+        #     linked_id = None
+        #     for m in members:
+        #         if m.get('linked_id'):
+        #             linked_id = m['linked_id']
+        #             break
+
+        #     if not linked_id:
+        #         linked_id = item_config.get('linked_id')
+
+        #     if not linked_id:
+        #         return
+
+        #     # Check for circular references
+        #     # Build existing chain from current workflow
+        #     existing_chain = set()
+        #     for m_id, m in self.parent.members_in_view.items():
+        #         if m.linked_id and m.id != member.id:
+        #             existing_chain.add(m.linked_id)
+
+        #     if has_circular_link(linked_id, existing_chain=existing_chain):
+        #         display_message(
+        #             message='Cannot link: this would create a circular reference.',
+        #             icon='Warning',
+        #         )
+        #         return
+
+        #     # Resolve the source config
+        #     resolved = resolve_linked_config(linked_id)
+        #     if resolved is not None:
+        #         member.member_config.clear()
+        #         member.member_config.update(resolved)
+        #     else:
+        #         # Use the config from the library item as fallback
+        #         member_config = members[0].get('config', {}) if members else item_config
+        #         member.member_config.clear()
+        #         member.member_config.update(member_config)
+
+        #     member.linked_id = linked_id
+        #     self.parent.update_config()
+        #     self.parent.load()
 
         def copy_selected_items(self):
             member_configs, member_inputs = self.get_member_configs()
@@ -1562,24 +1689,24 @@ class WorkflowSettings(ConfigWidget):
             if hasattr(workflow_settings.parent, 'load'):
                 workflow_settings.parent.load()
 
-        def toggle_member_list(self):
-            is_checked = self.btn_member_list.isChecked()
-            self.parent.member_list.setVisible(is_checked)
+        # def toggle_member_list(self):
+        #     is_checked = self.inner_widget.btn_member_list.isChecked()
+        #     self.parent.member_list.setVisible(is_checked)
 
         def toggle_workflow_params(self):
-            self.show_toggle_widget(self.btn_workflow_params)
+            self.show_toggle_widget(self.inner_widget.btn_workflow_params)
 
         def toggle_description(self):
-            self.show_toggle_widget(self.btn_toggle_description)
+            self.show_toggle_widget(self.inner_widget.btn_description)
 
         def toggle_workflow_options(self):
-            self.show_toggle_widget(self.btn_workflow_options)
+            self.show_toggle_widget(self.inner_widget.btn_workflow_options)
 
         def show_toggle_widget(self, toggle_btn):
             all_toggle_widgets = {
-                self.btn_workflow_params: self.parent.workflow_params,
-                self.btn_workflow_options: self.parent.workflow_options,
-                self.btn_toggle_description: self.parent.workflow_description,
+                self.inner_widget.btn_workflow_params: self.parent.workflow_params,
+                self.inner_widget.btn_workflow_options: self.parent.workflow_options,
+                self.inner_widget.btn_description: self.parent.workflow_description,
             }
 
             is_now_checked = toggle_btn.isChecked()
@@ -1598,18 +1725,29 @@ class WorkflowSettings(ConfigWidget):
             super().__init__(parent)
             self.parent = parent
             self.layout = CHBoxLayout(self)
+            depth = self.get_depth()
             self.btn_back = IconButton(
                 parent=self,
-                icon_path=':/resources/icon-cross.png',
+                icon_path=':/resources/icon-back.png',
                 tooltip='Back',
                 size=22,
-                text='Close edit mode',
+                icon_size_percent=0.7,
+                text=f'Close edit mode ({depth} deep)',
             )
             self.btn_back.clicked.connect(partial(self.parent.set_edit_mode, False))
 
             self.layout.addWidget(self.btn_back)
             self.layout.addStretch(1)
             self.hide()
+        
+        def get_depth(self):
+            depth = 0
+            widget = self.parent
+            while widget is not None:
+                if hasattr(widget, 'view'):
+                    depth += 1
+                widget = getattr(widget, 'parent', None)
+            return depth
 
     class MemberList(QWidget):
         """This widget displays a list of members in the chat."""
@@ -1876,7 +2014,7 @@ class DraggableMember(QGraphicsObject):
     def _content_rect(self) -> QRectF:
         """Returns the content rectangle (excluding resize handle padding) in local coordinates."""
         if self.workflow_settings.view.mini_view or not self.member_proxy.widget():
-            return self.member_ellipse.boundingRect()
+            return self.member_ellipse.rect()
         else:
             pr = self.member_proxy.boundingRect()
             scale = self.member_proxy.scale()
@@ -1888,17 +2026,29 @@ class DraggableMember(QGraphicsObject):
 
         handle_size = int(content_rect.width() * 0.05)
         padding = handle_size
-        return content_rect.adjusted(-padding, -padding, padding, padding)
+        top_padding = padding + 20 if self.linked_id is not None else padding
+        return content_rect.adjusted(-padding, -top_padding, padding, padding)
 
     def paint(self, painter, option, widget=None):
         from gui.style import TEXT_COLOR
         if option.state & QStyle.State_Selected:
             painter.setPen(QPen(QColor(TEXT_COLOR), 0, Qt.DashLine))
-            painter.setBrush(Qt.NoBrush)  # Avoid filling the rect
-            # draw a border around the content rect + 1px
+            painter.setBrush(Qt.NoBrush)
             border_rect = self._content_rect().adjusted(-1, -1, 1, 1)
             painter.drawRect(border_rect)
-            # painter.drawRect(self._content_rect())
+
+        # Visual indicator for linked members
+        if self.linked_id is not None:
+            from gui.style import TEXT_COLOR as _text_color
+            content_rect = self._content_rect()
+            icon_path = ':/resources/icon-link.png'
+            pixmap = colorize_pixmap(QPixmap(icon_path), color=_text_color)
+            pixmap = pixmap.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_x = content_rect.right() - 14 # - 4  # pixmap.width() / 2
+            icon_y = content_rect.top() - 4  # - pixmap.height() + 4  # - 4
+            painter.setOpacity(0.5)
+            painter.drawPixmap(QPointF(icon_x, icon_y), pixmap)
+            painter.setOpacity(1.0)
 
     def brush(self):
         return self.member_ellipse.brush()
@@ -2286,8 +2436,11 @@ class ConnectionLine(QGraphicsPathItem):
         else:
             if self.end_point is None:
                 return
-            start_point = self.start_point.scenePos() if isinstance(self.start_point, QGraphicsItem) else self.start_point
-            end_point = self.end_point.scenePos() if isinstance(self.end_point, QGraphicsItem) else self.end_point
+            try:
+                start_point = self.start_point.scenePos() if isinstance(self.start_point, QGraphicsItem) else self.start_point
+                end_point = self.end_point.scenePos() if isinstance(self.end_point, QGraphicsItem) else self.end_point
+            except RuntimeError:
+                return
         
         start_point.setX(start_point.x() - 2)
         end_point.setX(end_point.x() - 2)
@@ -2486,12 +2639,28 @@ class MemberConfigWidget(ConfigWidget):
 
         if isinstance(self.parent, WorkflowSettings):
             workflow_settings = self.parent
-            workflow_settings.members_in_view[self.config_widget.member_id].member_config = config
+            member_id = getattr(self.config_widget, 'member_id', None)
+            if member_id is None or member_id not in workflow_settings.members_in_view:
+                return
+            member = workflow_settings.members_in_view[member_id]
+            member.member_config.clear()
+            member.member_config.update(config)
+
+            # Save back to source entity if linked
+            if member.linked_id:
+                save_linked_config(member.linked_id, config)
+
             workflow_settings.update_config()
-            workflow_settings.members_in_view[self.config_widget.member_id].member_proxy.load()
+            member.member_proxy.load()
         else:
             draggable_member = self.parent.parent
-            draggable_member.member_config = config
+            draggable_member.member_config.clear()
+            draggable_member.member_config.update(config)
+
+            # Save back to source entity if linked
+            if draggable_member.linked_id:
+                save_linked_config(draggable_member.linked_id, config)
+
             draggable_member.workflow_settings.update_config()
             draggable_member.workflow_settings.member_config_widget.hide()  # todo
 
@@ -2531,6 +2700,13 @@ class MemberConfigWidget(ConfigWidget):
 
         self.config_widget = member_settings_class(self, **kwargs)
         self.config_widget.member_id = member_id
+
+        if member_settings_class == WorkflowSettings and member is not None:
+            linked_id = getattr(member, 'linked_id', None)
+            if linked_id is not None:
+                member_config = dict(member_config)
+                member_config['linked_id'] = linked_id
+
         self.rebuild_member(config=member_config)
 
         ignore_page_maps = [
@@ -2551,21 +2727,45 @@ class MemberConfigWidget(ConfigWidget):
         self.show()
 
     def rebuild_member(self, config):
-        clear_layout(self.layout, skip_count=1)  # 
+        clear_layout(self.layout, skip_count=1)  #
         member_type = config.get('_TYPE', 'agent')
+
+        header_fields = self.member_header_widget.widgets[0]
+        header_fields._current_member_type = member_type
 
         member_class = system.manager.modules.get_module_class('Members', module_name=member_type)
         if member_class:
             default_avatar = getattr(member_class, 'default_avatar', '')
-            self.member_header_widget.widgets[0].schema[0]['default'] = default_avatar
+            header_fields.schema[0]['default'] = default_avatar
+            for s in header_fields.schema:
+                if s.get('type') == 'popup_button':
+                    s['member_type'] = member_type
+                    break
             self.member_header_widget.build_schema()
 
         self.member_header_widget.load_config(config)
         self.member_header_widget.load()
+
+        # Update link button icon based on member's linked state
+        member_obj = header_fields._get_current_member()
+        is_linked = member_obj is not None and member_obj.linked_id is not None
+        header_fields._update_link_icon(is_linked)
+
+        popup_btn = getattr(header_fields, 'member_options_wgt', None)
+        if popup_btn and hasattr(popup_btn, 'config_widget'):
+            popup_btn.config_widget.load_config(config)
+            popup_btn.config_widget.load()
+
+        condition_btn = getattr(header_fields, 'condition_wgt', None)
+        if condition_btn and hasattr(condition_btn, 'config_widget'):
+            condition_btn.config_widget.load_config(config)
+            condition_btn.config_widget.load()
         
         self.config_widget.load_config(config)
         self.config_widget.build_schema()
         self.config_widget.load()
+        if hasattr(self.config_widget, 'reload_predicates'):
+            self.config_widget.reload_predicates()  # todo auto bubble down
         self.layout.addWidget(self.config_widget)
 
         if hasattr(self.config_widget, 'reposition_view'):
@@ -2579,51 +2779,82 @@ class HeaderFields(ConfigJoined):
             layout_type='horizontal',
         )
         self.setFixedHeight(50)
+        self.collapsible = getattr(parent, 'collapsible', False)
         self.widgets = [self.ConfigFields(parent=self)]
         if hasattr(parent.parent, 'workflow'):
             self.context_bar = self.ContextBar(parent=self)
             self.widgets.append(self.context_bar)
         self.build_schema()
-        
+        if self.collapsible:
+            self.btn_collapse = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-settings-solid.png',
+            )
+            self.btn_collapse.setFixedSize(25, 25)
+            self.btn_collapse.clicked.connect(self.toggle_collapse)
+            self.layout.addWidget(self.btn_collapse)
+        config_fields = self.widgets[0]
+        if hasattr(config_fields, '_TYPE_wgt'):
+            sp = config_fields._TYPE_wgt.sizePolicy()
+            sp.setRetainSizeWhenHidden(True)
+            config_fields._TYPE_wgt.setSizePolicy(sp)
+        if hasattr(config_fields, 'link_wgt'):
+            sp = config_fields.link_wgt.sizePolicy()
+            sp.setRetainSizeWhenHidden(True)
+            config_fields.link_wgt.setSizePolicy(sp)
+
     def load_config(self, json_config=None):
         if json_config:
             _type = json_config.get('_TYPE', 'agent')
             if 'name' not in json_config:
                 json_config['name'] = _type.replace('_', ' ').title()
         super().load_config(json_config)
-    
+
     def enterEvent(self, event):
         header_fields_widget = self.widgets[0]
         if hasattr(header_fields_widget, '_TYPE_wgt'):
             header_fields_widget._TYPE_wgt.show()
+        # if hasattr(header_fields_widget, 'link_wgt'):
+        #     if header_fields_widget._link_button_visible():
+        #         header_fields_widget.link_wgt.show()
 
         if hasattr(self, 'context_bar'):
-            self.context_bar.show()
-            # self.context_bar.btn_prev_context.show()
-            # self.context_bar.btn_next_context.show()
-            # self.context_bar.btn_info.show()
+            self.context_bar.btn_prev_context.show()
+            self.context_bar.btn_next_context.show()
+            self.context_bar.btn_info.show()
 
     def leaveEvent(self, event):
         header_fields_widget = self.widgets[0]
         if hasattr(header_fields_widget, '_TYPE_wgt'):
             header_fields_widget._TYPE_wgt.hide()
+        # if hasattr(header_fields_widget, 'link_wgt'):
+        #     header_fields_widget.link_wgt.hide()
 
         if hasattr(self, 'context_bar'):
-            self.context_bar.hide()
-            # self.context_bar.title_label.show()  # todo clean, keep title visible
-            # self.context_bar.btn_prev_context.hide()
-            # self.context_bar.btn_next_context.hide()
-            # self.context_bar.btn_info.hide()
-    
+            self.context_bar.btn_prev_context.hide()
+            self.context_bar.btn_next_context.hide()
+            self.context_bar.btn_info.hide()
+
+    def toggle_collapse(self):
+        workflow_settings = self.parent
+        splitter = workflow_settings.splitter
+        is_visible = splitter.isVisible()
+        splitter.setVisible(not is_visible)
+        if is_visible:
+            workflow_settings.setMaximumHeight(self.height())
+        else:
+            workflow_settings.setMaximumHeight(16777215)
+
     class ConfigFields(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)  # , add_stretch_to_end=True)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             self.is_member_header = self.parent.parent.__class__.__name__ == 'MemberConfigWidget'
             is_readonly = False
             if not self.is_member_header:
                 workflow_settings = self.parent.parent
                 is_readonly = not getattr(workflow_settings, 'workflow_editable', True)
-
+            
             self.schema = [
                 {
                     'text': 'Avatar',
@@ -2647,10 +2878,18 @@ class HeaderFields(ConfigJoined):
                     'row_key': 0,
                     'readonly': is_readonly,
                 },
-                # {
-                #     'type': 'stretch',
-                #     'text': '',  # todo remove
-                # },
+                {
+                    'text': '',
+                    'key': 'link',
+                    'type': 'button',
+                    'icon_path': ':/resources/icon-unlink.png',
+                    'clicked': self.toggle_link,
+                    'tooltip': 'Unlink this member',
+                    'label_position': None,
+                    'row_key': 0,
+                    'size': 20,
+                    'visibility_predicate': self._link_button_visible,
+                },
                 {
                     'key': '_TYPE',
                     'text': 'Member type',
@@ -2661,11 +2900,115 @@ class HeaderFields(ConfigJoined):
                     'row_key': 0,
                 },
                 {
-                    'type': 'stretch',
-                    'text': '',  # todo remove
+                    'text': 'Member options',
+                    'type': 'popup_button',
+                    'use_namespace': 'group',
+                    'member_type': 'agent',
+                    'label_position': None,
+                    'default': '',
+                    'row_key': 0,
+                    'visibility_predicate': lambda: self.is_member_header,
+                },
+                {
+                    'text': 'Condition',
+                    'type': 'condition_popup_button',
+                    'use_namespace': 'condition',
+                    'label_position': None,
+                    'default': '',
+                    'row_key': 0,
+                    'visibility_predicate': self.condition_visibility_predicate,
                 },
             ]
-        
+            # if self.is_member_header:
+            self.schema.insert(4, {
+                'type': 'stretch',
+                'text': '',  # todo remove
+                'row_key': 0,
+            })
+
+        def _get_current_member(self):
+            """Get the DraggableMember currently being configured."""
+            grandparent = self.parent.parent
+            if isinstance(grandparent, MemberConfigWidget):
+                member_config_widget = grandparent
+            elif isinstance(grandparent, WorkflowSettings):
+                # Header is inside WorkflowSettings itself
+                member_config_widget = grandparent.parent
+                if not isinstance(member_config_widget, MemberConfigWidget):
+                    return None
+            else:
+                return None
+            workflow_settings = member_config_widget.parent
+            if not isinstance(workflow_settings, WorkflowSettings):
+                return None
+            member_id = getattr(member_config_widget.config_widget, 'member_id', None)
+            if member_id and member_id in workflow_settings.members_in_view:
+                return workflow_settings.members_in_view[member_id]
+            return None
+
+        def toggle_link(self):
+            """Unlink the current member."""
+            retval = display_message_box(
+                icon=QMessageBox.Warning,
+                title="Unlink",
+                text="Are you sure you want to unlink this member?",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval != QMessageBox.Yes:
+                return
+
+            member = self._get_current_member()
+            if not member:
+                if not self.is_member_header:
+                    ws = self.parent.parent
+                    if isinstance(ws, WorkflowSettings):
+                        self._toggle_root_link(ws)
+                return
+
+            if member.linked_id is not None:
+                member.linked_id = None
+                link_wgt = getattr(self, 'link_wgt', None)
+                if link_wgt:
+                    link_wgt.hide()
+                member.workflow_settings.update_config()
+
+        def _update_link_icon(self, is_linked):
+            """Update the link button icon based on linked state."""
+            link_btn = getattr(self, 'link_wgt', None)
+            if link_btn:
+                icon_path = ':/resources/icon-link.png'  # ':/resources/icon-unlink.png' if is_linked else ':/resources/icon-link.png'
+                link_btn.setIcon(QIcon(colorize_pixmap(QPixmap(icon_path))))
+
+        def _toggle_root_link(self, ws):
+            """Unlink the root WorkflowSettings."""
+            if ws.linked_id is not None:
+                ws.linked_id = None
+                link_wgt = getattr(self, 'link_wgt', None)
+                if link_wgt:
+                    link_wgt.hide()
+                ws.update_config()
+
+        def _link_button_visible(self):
+            """Show link button only when the member is linked."""
+            if self.is_member_header:
+                member = self._get_current_member()
+                return member is not None and member.linked_id is not None
+            ws = self.parent.parent
+            if isinstance(ws, WorkflowSettings):
+                return ws.linked_id is not None
+            return False
+
+        def condition_visibility_predicate(self):
+            if not self.is_member_header:
+                return False
+            member_type = getattr(self, '_current_member_type', 'agent')
+            member_class = system.manager.modules.get_module_class(
+                'Members', module_name=member_type,
+            )
+            if member_class is None:
+                return True
+            return getattr(member_class, 'allow_condition', True)
+
         def member_type_visibility_predicate(self):
             if self.is_member_header:
                 return True
@@ -2676,6 +3019,7 @@ class HeaderFields(ConfigJoined):
     class ContextBar(ConfigWidget):
         def __init__(self, parent):
             super().__init__(parent)
+            self.propagate_config = False
             # self.setMouseTracking(True)
             self.workflow_settings = parent.parent
             # self.workflow = parent.parent.workflow
@@ -2693,8 +3037,8 @@ class HeaderFields(ConfigJoined):
 
 
             # Create buttons
-            self.btn_prev_context = IconButton(parent=self, icon_path=':/resources/icon-left-arrow.png')
-            self.btn_next_context = IconButton(parent=self, icon_path=':/resources/icon-right-arrow.png')
+            self.btn_prev_context = IconButton(parent=self, icon_path=':/resources/icon-arrow-left.png')
+            self.btn_next_context = IconButton(parent=self, icon_path=':/resources/icon-arrow-right.png')
 
             # # add a combobox with 'CHAT', 'BLOCK', 'TOOL' options
             # self.combo_kind = BaseCombo(self, items=['CHAT', 'BLOCK', 'TOOL'])
@@ -2717,7 +3061,14 @@ class HeaderFields(ConfigJoined):
             self.layout.addWidget(self.btn_next_context)
             self.layout.addWidget(self.btn_info)
 
-            self.hide()
+            for btn in (self.btn_prev_context, self.btn_next_context, self.btn_info):
+                sp = btn.sizePolicy()
+                sp.setRetainSizeWhenHidden(True)
+                btn.setSizePolicy(sp)
+
+            self.btn_prev_context.hide()
+            self.btn_next_context.hide()
+            self.btn_info.hide()
         
         @property
         def workflow(self):

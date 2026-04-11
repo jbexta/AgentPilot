@@ -24,6 +24,7 @@ for conversation management and workflow execution.
 from functools import partial
 import json
 import os
+import sys
 from typing import Optional, List, Dict, Tuple, Any
 from urllib.parse import quote
 
@@ -32,7 +33,7 @@ from PySide6.QtCore import QSize, QTimer, QRect, QEvent, QPropertyAnimation, QEa
 from PySide6.QtGui import QDesktopServices, QPixmap, QIcon, Qt, QGuiApplication
 
 from plugins.workflows.bubbles import MessageBubble
-from gui.util import CustomMenu, colorize_pixmap, IconButton, find_main_widget, clear_layout, \
+from gui.util import CustomMenu, colorize_pixmap, IconButton, find_main, clear_layout, \
     ToggleIconButton, CHBoxLayout, CVBoxLayout, find_workflow_widget, safe_single_shot, TextEnhancerButton
 
 from gui import system
@@ -48,7 +49,6 @@ class MessageCollection(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
-        self.main = find_main_widget(self)
         self.layout = CVBoxLayout(self)
         # self.setMinimumHeight(100)
         # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -144,7 +144,7 @@ class MessageCollection(QWidget):
             self.layout.addStretch(1)
 
         def on_play_click(self):
-            self.parent.run_workflow(from_member_id=self.member_id)
+            self.parent.parent.run_workflow(from_member_id=self.member_id)
 
     @property
     def workflow(self):
@@ -499,7 +499,7 @@ class MessageContainer(QWidget):
 
         self.collapse_button = ToggleIconButton(
             parent=self,
-            icon_path=':/resources/icon-left-arrow.png',
+            icon_path=':/resources/icon-arrow-left.png',
             icon_path_checked=':/resources/icon-expanded.png',
             target=self.toggle_collapse,
             tooltip='Collapse',
@@ -510,7 +510,8 @@ class MessageContainer(QWidget):
         # self.collapse_button.hide()
         button_v_layout.addWidget(self.collapse_button)
 
-        if getattr(self.bubble, 'enable_markdown', False):
+        # if getattr(self.bubble, 'enable_markdown', False):
+        if message.role in ('user', 'assistant', 'block'):
             self.markdown_button = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-code.png',
@@ -522,6 +523,25 @@ class MessageContainer(QWidget):
             self.markdown_button.setFixedSize(32, 24)
             self.markdown_button.setChecked(not getattr(self.bubble, 'enable_markdown', False))
             button_v_layout.addWidget(self.markdown_button)
+        
+        if message.role in ('video', 'image', 'audio'):
+            self.open_button = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-push.png',
+                target=self.open_media,
+                tooltip='Open Media',
+            )
+            self.open_button.setFixedSize(32, 24)
+            button_v_layout.addWidget(self.open_button)
+            
+            self.open_containing_folder_button = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-folder.png',
+                target=self.open_containing_folder,
+                tooltip='Open Containing Folder',
+            )
+            self.open_containing_folder_button.setFixedSize(32, 24)
+            button_v_layout.addWidget(self.open_containing_folder_button)
 
         button_v_layout.addStretch(1)
 
@@ -574,7 +594,7 @@ class MessageContainer(QWidget):
     def toggle_collapse(self):
         self.bubble.collapsed = not self.bubble.collapsed
 
-        main = find_main_widget(self)
+        main = find_main()
         app_height = main.size().height()
         collapse_ratio = system.manager.config.get('display.collapse_ratio', 0.5)
         too_big_height = collapse_ratio * app_height
@@ -639,7 +659,8 @@ class MessageContainer(QWidget):
         # for name, attr in type(self.bubble).__dict__.items():
         #     if isinstance(attr, type) and hasattr(attr, '_ap_message_button'):
         #         bubble_buttons[name] = attr
-        self.check_and_toggle_collapse_button()
+
+        # self.check_and_toggle_collapse_button()  # !! #  todo
 
         buttons = [
             getattr(self, name) for name, cls in self.__dict__.items()
@@ -650,8 +671,12 @@ class MessageContainer(QWidget):
             is_under_mouse = self.underMouse()
             for btn in buttons:
                 btn.setVisible(is_under_mouse)
-            if hasattr(self, 'markdown_button'):
+            if hasattr(self, 'markdown_button'):  # todo clean and refactor
                 self.markdown_button.setVisible(is_under_mouse)
+            if hasattr(self, 'open_button'):
+                self.open_button.setVisible(is_under_mouse)
+            if hasattr(self, 'open_containing_folder_button'):
+                self.open_containing_folder_button.setVisible(is_under_mouse)
             if hasattr(self, 'btn_countdown'):
                 self.btn_countdown.reset_countdown()
 
@@ -671,7 +696,9 @@ class MessageContainer(QWidget):
             collapse_ratio = system.manager.config.get('display.collapse_ratio', 0.5)
             height = self.bubble.sizeHint().height()
 
-            main = find_main_widget(self)
+            main = find_main()
+            if not main:
+                pass
             app_height = main.size().height()
             too_big = height / app_height > collapse_ratio
 
@@ -740,18 +767,60 @@ class MessageContainer(QWidget):
         full_member_id = self.bubble.log.get('member_id')
         workflow_settings = find_workflow_widget(self)
         workflow_settings.goto_member(full_member_id)
-        main = find_main_widget(self)
-        page_chat = main.main_pages.get('chat')
-        if page_chat:
-            if not page_chat.workflow_settings.isVisible():
-                page_chat.workflow_settings.header_widget.widgets[1].agent_name_clicked(None)
+        # main = find_main()
+        # page_chat = main.main_pages.get('chat')
+        # if page_chat:
+            # if not page_chat.workflow_settings.isVisible():
+            #     page_chat.workflow_settings.header_widget.widgets[1].agent_name_clicked(None)
+        if not workflow_settings.isVisible():
+            workflow_settings.header_widget.widgets[1].agent_name_clicked(None)
 
     def search_web(self):
-        search_text = self.bubble.textCursor().selectedText()
-        if search_text == '':
+        search_text = ''
+        if hasattr(self.bubble, 'textCursor'):
+            search_text = self.bubble.textCursor().selectedText()
+        if not search_text:
             search_text = self.bubble.toPlainText()
         formatted_text = quote(search_text)
         QDesktopServices.openUrl(QUrl(f"https://www.google.com/search?q={formatted_text}"))
+
+    def open_media(self):
+        try:
+            filepath = self.bubble.filepath
+            if not filepath:
+                display_message(f"No file found", "Error", QMessageBox.Warning)
+                return
+
+            # try open file with system default application
+            if sys.platform == "win32":
+                os.startfile(filepath)
+            elif sys.platform == "darwin":
+                os.system(f"open '{filepath}'")
+            else:
+                os.system(f"xdg-open '{filepath}'")
+
+        except Exception as e:
+            display_message(f"Error opening media: {e}", "Error", QMessageBox.Warning)
+            return
+    
+    def open_containing_folder(self):
+        try:
+            filepath = self.bubble.filepath
+            if not filepath:
+                display_message(f"No file found", "Error", QMessageBox.Warning)
+                return
+
+            folderpath = os.path.dirname(filepath)
+            if sys.platform == "win32":
+                os.startfile(folderpath)
+            elif sys.platform == "darwin":
+                os.system(f"open '{folderpath}'")
+            else:
+                os.system(f"xdg-open '{folderpath}'")
+
+        except Exception as e:
+            display_message(f"Error opening containing folder: {e}", "Error", QMessageBox.Warning)
+            return
 
     def delete_message(self):
         if self.bubble.msg_id == -1:
@@ -778,7 +847,8 @@ class MessageContainer(QWidget):
             return
 
         sql.execute("DELETE FROM contexts_messages WHERE id = ?;", (self.bubble.msg_id,))
-        self.parent.main.main_pages.load_page('chat')
+        main = find_main()
+        main.main_pages.load_page('chat')
 
     def contextMenuEvent(self, event):
         menu = self.BubbleContextMenu(self)
@@ -801,8 +871,8 @@ class MessageContainer(QWidget):
                     'target': parent.search_web,
                 },
                 # {
-                #     'text': 'Copy code block',
-                #     'target': parent.copy_code_block,
+                #     'text': 'Copy code',
+                #     'target': parent.copy_code,
                 # },
                 {
                     'type': 'separator',
@@ -825,7 +895,6 @@ class MessageContainer(QWidget):
     class CountdownButton(QPushButton):
         def __init__(self, parent, target_button):
             super().__init__(parent=parent)
-            self.main = find_main_widget(self)
             self.parent = parent
             self.target_button = target_button
             self.countdown_from = 5
@@ -930,7 +999,7 @@ class MessageButtonBar(QWidget):
 
         def on_clicked(self):
             # minimize app, take screenshot, maximize app
-            main = find_main_widget(self)
+            main = find_main()
 
             hide_app = QGuiApplication.keyboardModifiers() == Qt.KeyboardModifier.ControlModifier
             try:

@@ -1,0 +1,90 @@
+uuid: e918e35a-89d9-4464-9315-b6405d4f6ced
+name: widgets_doc
+config:
+  _TYPE: workflow
+  name: widgets_doc
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Widgets
+
+        Widgets are reusable configurable components that have a specific functionality.
+        They can orchestrate multiple fields or other widgets
+        Ideally they extend ConfigWidget, or any other class derived from ConfigWidget
+
+        Key built-in Widgets:
+        {{ ConfigWidget }}
+        {{ ConfigFields }}
+        {{ ConfigJoined }}
+        {{ ConfigTabs }}
+        {{ ConfigPages }}
+        {{ ConfigDBTree }}
+
+        a) ConfigFields - Schema-driven form builder
+        - Takes a schema list defining fields
+        - Dynamically instantiates Field widgets via get_field_widget()
+        - Auto-binds values to/from config dict
+
+        b) ConfigDBTree - Database-backed tree view with config panel
+        - Left panel: Tree view of database items (with folders)
+        - Right panel: Configuration widget for selected item
+        - Handles CRUD operations, search, filtering
+
+        c) ConfigJoined - Combines multiple widgets
+        - Vertical or horizontal layout
+        - Aggregates configs from child widgets
+
+        d) WorkflowSettings - Complex workflow designer
+        - Visual graph editor with drag-drop
+        - Combines header fields + workflow canvas + member config
+        - A complete specialized configuration interface
+
+        e) Other specialized widgets:
+        - AgentSettings, InputSettings, NotifSettings, etc.
+        - Domain-specific configurations built from Fields/Widgets
+
+        Widget Responsibilities:
+
+        - Schema building: `build_schema()` - construct UI from schema
+        - Config loading: `load_config(json_config)` - populate from data source
+        - UI loading: `load()` - load UI from the config
+        - Signal an update: `update_config()` - propagates up to root, runs save_config
+        - Config extraction: `get_config()` - serialize current state
+        - Config saving: `save_config()` - persist to database
+
+        Propagation:
+        a) Down from root to all leaf widgets:
+        - `build_schema()`
+        -` load_config()`
+        - `load()`
+
+        b) Up to root from any leaf widget:
+        - `update_config()`
+
+        Any widget can set the boolean attribute `self.propagate_config` which allows or prevents propagation of `load_config` and `update_config`.
+        This is True by default for all widgets, but some widgets such as `ConfigDBTree` and `ConfigTable` have it set to False by default.
+
+        **All widget modules:**
+        {% for name, module_data in system.modules.type_controllers['widgets'].items() %}
+        - **{{ name | capitalize }}**
+        {% endfor %}
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+parent_uuid: b3245998-3a81-4fe0-a032-a2c9bf2ce169

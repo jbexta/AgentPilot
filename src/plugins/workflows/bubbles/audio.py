@@ -18,34 +18,75 @@ Key Features:
 Audio roles provide an interactive interface for playing and
 managing audio content within conversations, enabling multimedia
 communication and audio-based interactions with AI systems.
-"""  # unchecked
+"""
 
 import os
-from utils.helpers import get_json_value, message_button
-from plugins.workflows.bubbles import MessageBubble, MessageButton
+
+from PySide6.QtWidgets import QWidget, QSizePolicy
+
+from gui.media_previews.audio import AudioPreview
+from gui.util import CVBoxLayout
+from utils.helpers import get_json_value
+from gui import system
 
 
-class AudioBubble(MessageBubble):
+class AudioBubble(QWidget):
     def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-            readonly=True,
-        )
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.msg_id = message.id
+        self.member_id = message.member_id
+        self.role = message.role
+        self.log = message.log
+        self.text = ''
+        self.collapsed = False
+        self.filepath = None
+
+        # Layout
+        self.main_layout = CVBoxLayout(self)
+        self.main_layout.setContentsMargins(5, 5, 5, 5)
+        self.main_layout.setSpacing(5)
+
+        # Styling
+        role_config = system.manager.roles.get(self.role, {})
+        bg_color = role_config.get('bubble_bg_color', '#252427')
+        text_color = role_config.get('bubble_text_color', '#999999')
+        self.setStyleSheet(
+            f"background-color: {bg_color}; color: {text_color};")
+
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        # Embedded preview
+        self.audio_preview = AudioPreview(self)
+        self.main_layout.addWidget(self.audio_preview)
+
+        self.set_message(message)
+
+    def set_message(self, message):
+        """Initialize with message content."""
+        self.msg_id = message.id
+        self.member_id = message.member_id
+        self.role = message.role
+        self.log = message.log
+        self.text = message.content
 
     def setMarkdownText(self, text):
-        filepath = get_json_value(text, 'filepath', 'Error parsing audio')
-        filename = os.path.basename(filepath)
-        super().setMarkdownText(filename)
+        self.text = text
+        filepath = get_json_value(text, 'filepath',
+                                  'Error parsing audio')
+        self.filepath = filepath
+        if filepath and os.path.exists(filepath):
+            self.audio_preview.set_filepath(filepath)
+        else:
+            self.audio_preview.filename_label.setText(
+                os.path.basename(filepath) if filepath
+                else 'Error parsing audio')
 
-    @message_button('btn_play')
-    class PlayButton(MessageButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-run-solid.png')
+    def append_text(self, text):
+        """Compatibility method for MessageBubble interface."""
+        self.text += text
+        self.setMarkdownText(self.text)
 
-        def on_clicked(self):
-            content = self.msg_container.message.content
-            filepath = get_json_value(content, 'filepath', 'Error parsing audio')
-            from utils.media import play_file
-            play_file(filepath)
+    def toPlainText(self):
+        """Compatibility method for MessageBubble interface."""
+        return self.text

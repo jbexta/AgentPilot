@@ -34,7 +34,7 @@ class BlockManager(BaseManager):
             folder_key='blocks',
             load_columns=['name', 'config'],
             default_fields={
-                'config': {'_TYPE': 'text_block'}
+                'config': {'_TYPE': 'text'}
             },
             add_item_options={'title': 'Add Block', 'prompt': 'Enter a name for the block:'},
             del_item_options={'title': 'Delete Block', 'prompt': 'Are you sure you want to delete this block?'},
@@ -50,6 +50,7 @@ class BlockManager(BaseManager):
     async def receive_block(self, name, params=None):
         print('receive block', name)
         self.load()  # todo temp, find out why model_params getting reset
+        name = name.replace('-', '_').replace(' ', '_')
         wf_config = self[name]
         async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name, main=self.system._main_gui):
             yield key, chunk
@@ -136,6 +137,10 @@ class BlockManager(BaseManager):
 
             def __call__(self, **kwargs):
                 header_prefix = kwargs.pop('header_prefix', None)
+                # Unwrap ContentWrapper objects to plain strings
+                for k, v in kwargs.items():
+                    if isinstance(v, ContentWrapper):
+                        kwargs[k] = str(v)
 
                 async def wrapper():
                     content = await self._compute(**kwargs)
@@ -171,12 +176,41 @@ class BlockManager(BaseManager):
         # System object
         all_params['system'] = self.system
 
-        # Pre-process template to add () to global block references without them
-        # Include keys from all_params to support variable substitution with headers
+        # Pre-process: convert positional args to keyword args
+        # {{ block(artist, song_desc) }} -> {{ block(artist=artist, song_desc=song_desc) }}
+        def _positional_to_kwargs(match):
+            args_str = match.group(1)
+            parts = [p.strip() for p in args_str.split(',')]
+            new_parts = []
+            for part in parts:
+                # If it's a bare identifier (no =), convert to kwarg
+                if '=' not in part and re.match(r'^[a-zA-Z_]\w*$', part):
+                    new_parts.append(f'{part}={part}')
+                else:
+                    new_parts.append(part)
+            return '(' + ', '.join(new_parts) + ')'
+
         block_names = list(set(list(self.keys()) + list(all_params.keys())))
+
         for block_name in block_names:
             if not isinstance(block_name, str): continue
-            
+
+            # Convert positional args to kwargs for this block
+            # Matches {{ block_name(args...) }} and replaces bare idents
+            pos_pattern = (
+                r'\{\{\s*' + re.escape(block_name)
+                + r'\(([^)]+)\)\s*\}\}'
+            )
+            def _replace_positional(m, bn=block_name):
+                full = m.group(0)
+                args_str = m.group(1)
+                new_args = _positional_to_kwargs(
+                    re.match(r'\(([^)]+)\)', '(' + args_str + ')')
+                )
+                return '{{ ' + bn + new_args + ' }}'
+
+            content = re.sub(pos_pattern, _replace_positional, content)
+
             # Handle headers: ## {{ block }} -> {{ block(header_prefix='##') }}
             header_pattern = r'(#{1,6})\s*\{\{\s*' + re.escape(block_name) + r'(?:\(\))?\s*\}\}'
             content = re.sub(header_pattern, r"{{ " + block_name + r"(header_prefix='\1') }}", content)

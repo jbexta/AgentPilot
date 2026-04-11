@@ -1,0 +1,61 @@
+uuid: 67feac57-afeb-4f2d-a8c3-ad02d109273b
+name: module-doc
+config:
+  _TYPE: workflow
+  name: module-doc
+  avatar_path: :/resources/icon-block.png
+  description: ''
+  members:
+  - id: '3'
+    linked_id: null
+    loc_x: 65
+    loc_y: 69
+    width: 450.0
+    height: 350.0
+    config:
+      data: |
+        # Modules
+        The codebase is highly modular and extensible, allowing anyone to extend or override almost any aspect of the app.
+
+        This document describes the different types of modules supported by the app, where they are used, how they interact, and how to create them.
+
+        {% for category in ['Core', 'GUI'] %}
+        {% set category_lower = category.lower() %}
+        ## {{ category }} Modules:
+        {% for name, controller in system.modules.type_controllers.items() if controller.load_to_path.startswith(category_lower + ".") %}
+        ### {{ name | capitalize }}
+        {% if controller.long_description and controller.long_description != "None" %}
+        {{ controller.long_description }}
+        {% else %}
+        _No description available._
+        {% endif %}
+        <details>
+          <summary>Implementations</summary>
+        {% for module_name, module in system.modules.type_controllers[name].items() %}
+        - [{{ module[3].__name__ }}](src/{{ controller.load_to_path | replace('.', '/') }}/{{ module_name }})
+        {% endfor %}
+        </details>
+        <details>
+          <summary>Create a {{ name[:-1] | capitalize }}</summary>
+        To create a {{ name[:-1] | capitalize }} module, add a new file under `src/{{ controller.load_to_path | replace('.', '/') }}/` with the name of your module, for example `my_{{ name[:-1] }}.py`.
+
+        {%  if controller.class_based %}
+        This file must contain a class definition{%  if controller.inherit_from %} that inherits from `{{ controller.inherit_from }}`{% endif %}.
+
+        Note: If more than one class is declared in the file, then you must mark your {{ name[:-1] }}  class with the decorator `@set_module_type('{{ name | capitalize }}')`.
+        {% endif %}
+        </details>
+        {% endfor %}
+        {% endfor %}
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Code Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+parent_uuid: 673d84a8-fd6b-4f41-b585-87fd53026401

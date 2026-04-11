@@ -12,7 +12,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
 from gui.fields.combo import BaseCombo
-from gui.util import find_input_key, CVBoxLayout, find_workflow_widget  # , BaseComboBox
+from gui.util import find_attribute, CVBoxLayout, find_workflow_widget  # , BaseComboBox
 from utils import sql
 from utils.helpers import convert_model_json_to_obj, block_signals
 
@@ -22,7 +22,7 @@ class InputSourceComboBox(QWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         self.parent = parent
-        self.source_member_id, _ = find_input_key(self)
+        self.source_member_id, _ = find_attribute(self, 'input_key')
 
         self.layout = CVBoxLayout(self)
 
@@ -96,7 +96,7 @@ class InputSourceComboBox(QWidget):
             structure_data = source_member_model_params.get('structure.data', [])
             structure.extend([p['attribute'] for p in structure_data])
 
-        elif source_member_type == 'prompt_block':
+        elif source_member_type == 'prompt':
             # block_type = source_member_config.get('_TYPE_PLUGIN', 'Text')
             # if block_type == 'Prompt':
             model_obj = convert_model_json_to_obj(source_member_config.get('prompt_model', {}))

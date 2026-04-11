@@ -31,10 +31,10 @@ from typing_extensions import override
 
 from utils.filesystem import get_application_path, get_all_baked_items
 from utils.helpers import display_message_box, merge_config_into_workflow_config, convert_to_safe_case, display_message
-from utils.helpers import BaseManager
+from utils.helpers import BaseManager, set_module_type
 
 from gui import system
-from gui.util import find_main_widget, save_table_config
+from gui.util import save_table_config
 from gui.widgets.config_tree import ConfigTree
 
 
@@ -50,6 +50,7 @@ def str_presenter(dumper, data):
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
 
+@set_module_type('Widgets')
 class ConfigDBTree(ConfigTree):
     """
     A widget that displays a tree of items from the db, with buttons to add and delete items.
@@ -253,6 +254,8 @@ class ConfigDBTree(ConfigTree):
             self.query_params.update({'limit': limit, 'offset': offset})
 
         kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        if callable(kind):
+            kind = kind()
         if kind:
             if not self.query_params:
                 self.query_params = {}
@@ -320,7 +323,9 @@ class ConfigDBTree(ConfigTree):
     def update_name(self):
         item_id = self.tree.get_selected_item_id()
         config = self.config_widget.get_config()
-        name = config.get('name', 'Untitled')
+        name = config.get('name')
+        if name is None:
+            return
         folder_id = self.db_connector.get_scalar(f"SELECT folder_id FROM `{self.table_name}` WHERE id = ?", (item_id,))
 
         existing_names = self.db_connector.get_results(  # where name like  f'{name}%' and id != {item_id}
@@ -345,11 +350,17 @@ class ConfigDBTree(ConfigTree):
         """
         Saves the config to the database using the tree selected ID.
         """
-        # item_id = self.get_selected_item_id()
-        # config = self.get_config()
+        # print('SAVE_CONFIG CALLED')
+        # print(f'SAVE_CONFIG: id={self.tree.get_selected_item_id()}, name={self.config_widget.get_config().get("name", "??")}')
+        # # item_id = self.get_selected_item_id()
+        # # config = self.get_config()
         item_id = self.tree.get_selected_item_id()
         config = self.config_widget.get_config()
-        name = config.get('name', 'Untitled')
+        name = config.get('name')
+        if name is None:
+            name = self.db_connector.get_scalar(
+                f"SELECT name FROM `{self.table_name}` WHERE id = ?", (item_id,)
+            )
 
         old_name = self.db_connector.get_scalar(f"SELECT name FROM {self.table_name} WHERE id = ?", (item_id,))
         # is_baked = is_baked == 1
@@ -372,13 +383,27 @@ class ConfigDBTree(ConfigTree):
         if auto_bake and is_baked:
             self.bake_item(force=True)
 
-        if is_baked and old_name != name and hasattr(self, 'get_module_file_path'):  # todo dedupe
-            old_file_path = self.get_module_file_path(item_id, module_name=old_name)
-            os.remove(old_file_path)
+        if is_baked and old_name != name:  # todo dedupe
+            from gui.pages.modules import get_module_abs_path
+            old_file_path = get_module_abs_path(item_id, module_name=old_name)
+            if old_file_path:
+                os.remove(old_file_path)
         
         if hasattr(self, 'after_save_config'):  # todo clean
             self.after_save_config(config=config)
-        # if self.table_name in ['agents', 'blocks', 'tools']:  # todo
+
+        # # Notify open workflows that a linked entity changed
+        # uuid_val = self.db_connector.get_scalar(
+        #     f"SELECT uuid FROM `{self.table_name}` WHERE id = ?",
+        #     (item_id,)
+        # )
+        # if uuid_val:
+        #     from utils.helpers import notify_linked_config_changed
+        #     notify_linked_config_changed(
+        #         f"{self.table_name}.{uuid_val}"
+        #     )
+
+        self.reload_current_row()
 
     def on_edited(self):
         if self.manager is not None:
@@ -424,7 +449,10 @@ class ConfigDBTree(ConfigTree):
             # if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
             #         and json_config.get('_TYPE', 'agent') != 'workflow'):
             if getattr(self.manager, 'config_is_workflow', False) and json_config.get('_TYPE', 'agent') != 'workflow':
-                json_config = merge_config_into_workflow_config(json_config, entity_id=item_id, entity_table=self.table_name)
+                # entity_uuid = self.db_connector.get_scalar(
+                #     f"SELECT uuid FROM `{self.table_name}` WHERE id = ?", (item_id,)
+                # )
+                json_config = merge_config_into_workflow_config(json_config, entity_table=self.table_name)  # , entity_id=entity_uuid
             self.config_widget.load_config(json_config)
             self.config_widget.load()
 
@@ -579,6 +607,8 @@ class ConfigDBTree(ConfigTree):
             api_id = find_ancestor_tree_item_id(self.parent)
             kwargs['api_id'] = api_id
         kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        if callable(kind):
+            kind = kind()
         if kind:
             kwargs['kind'] = kind
         # elif self.table_name == 'workspace_concepts':
@@ -756,7 +786,7 @@ class ConfigDBTree(ConfigTree):
                 return
             try:
                 self.db_connector.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
-                if self.table_name in ['agents', 'blocks', 'tools', 'tasks']:  # todo
+                if self.table_name in ['agents', 'blocks', 'tools', 'tasks', 'entities']:  # todo
                     self.db_connector.execute(f"UPDATE `{self.table_name}` SET `config` = json_set(config, '$.name', ?) WHERE id = ?", (text, item_id,))
                 # self.reload_current_row()
 
@@ -823,6 +853,8 @@ class ConfigDBTree(ConfigTree):
                 return
 
         kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        if callable(kind):
+            kind = kind()
         folder_key = self.folder_key.get(kind) if isinstance(self.folder_key, dict) else self.folder_key
         if callable(folder_key):  # todo dedupe
             folder_key = folder_key()
@@ -994,7 +1026,12 @@ class ConfigDBTree(ConfigTree):
         btn_duplicate.triggered.connect(self.duplicate_item)
         btn_delete.triggered.connect(self.delete_item)
 
+        self.on_context_menu(menu)
         menu.exec_(QCursor.pos())
+
+    def on_context_menu(self, menu):
+        """Hook for subclasses to add items to the context menu."""
+        pass
 
     def unbake_item(self):
         item = self.tree.currentItem()
@@ -1119,6 +1156,13 @@ class ConfigDBTree(ConfigTree):
             col_name: item_tuple[i] for i, col_name in enumerate(bake_columns)
         }
         wrapped_config['config'] = json.loads(config)
+
+        parent_id = wrapped_config.pop('parent_id', None)
+        if parent_id:
+            parent_uuid = self.db_connector.get_scalar(
+                f"SELECT uuid FROM `{table_name}` WHERE id = ?", (parent_id,))
+            if parent_uuid:
+                wrapped_config['parent_uuid'] = parent_uuid
 
         folder_id = self.db_connector.get_scalar(f"SELECT folder_id FROM `{table_name}` WHERE id = ?", (item_id,))
         if folder_id:

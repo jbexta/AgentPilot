@@ -1,12 +1,12 @@
 """
-Text Studio - Full-featured text editor similar to Notepad++.
-Provides multi-tab editing, syntax highlighting, search/replace, and file management.
+Text Studio - Full-featured text editor.
+Provides syntax highlighting, search/replace, and file management.
 """
 import os
 
 from PySide6.QtWidgets import (
     QWidget, QLabel, QGroupBox, QStatusBar,
-    QPushButton, QTabWidget, QTextEdit, QPlainTextEdit,
+    QPushButton, QTextEdit, QPlainTextEdit,
     QFileDialog, QMessageBox, QDialog, QLineEdit,
     QCheckBox
 )
@@ -18,46 +18,33 @@ from PySide6.QtGui import (
     QTextFormat, QTextOption, QKeySequence
 )
 
-from gui.util import CustomMenu, find_main_widget, CVBoxLayout, CHBoxLayout
-from utils.helpers import apply_alpha_to_hex, set_module_type
+from gui.util import CustomMenu, find_main, CVBoxLayout, CHBoxLayout
+from utils.helpers import apply_alpha_to_hex, block_signals, set_module_type
 from gui import system
 from gui.style import SECONDARY_COLOR
 
 
 @set_module_type('Studios')
 class TextStudio(QWidget):
-    """
-    Full-featured text editor studio similar to Notepad++.
-
-    Features:
-    - Multi-tab editing with file management
-    - Syntax highlighting for multiple languages
-    - Advanced search and replace with regex support
-    - File explorer/tree view
-    - Line numbers and code folding
-    - Auto-completion and bracket matching
-    - Multiple encoding support
-    - Macro recording and playback
-    """
+    """Single-file text editor studio with syntax highlighting and search/replace."""
     associated_extensions = ['txt', 'py', 'js', 'html', 'css', 'json', 'xml', 'md', 'sql', 'yaml', 'yml', 'ini', 'toml', 'cfg', 'conf', 'log', 'csv', 'tsv']
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.main = find_main_widget(self)
-        self.open_files = {}  # Track open files {filepath: editor_widget}
-        self.current_file = None
+        self.main = find_main()
+        self.filepath = None
         self.search_dialog = None
+        self.autosave_enabled = True
 
         # Build highlighter mapping from available modules
         self.highlighter_map = {}  # {extension: highlighter_class}
         self._load_highlighters()
 
-        # Tab widget for multiple files
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)
-        self.tab_widget.setMovable(True)
-        self.tab_widget.tabCloseRequested.connect(self.close_tab)
-        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        # Single editor
+        self.editor = CodeEditor()
+        self.editor.cursorPositionChanged.connect(self.update_cursor_position)
+        self.editor.selectionChanged.connect(self.update_selection_info)
+        self.editor.textChanged.connect(lambda: self.mark_modified(self.editor))
 
         # Menu bar
         self.menubar = self.MenuBar(self)
@@ -75,22 +62,19 @@ class TextStudio(QWidget):
 
         self.layout = CVBoxLayout(self)
         self.layout.addWidget(self.menubar)
-        self.layout.addWidget(self.tab_widget)
+        self.layout.addWidget(self.editor)
         self.layout.addWidget(self.status_bar)
 
     def _load_highlighters(self):
         """Load all available highlighters and build extension mapping."""
-        # Get all highlighter modules efficiently (one call)
         highlighters = system.manager.modules.get_modules_in_folder(
             'Highlighters',
             fetch_keys=('name', 'class',)
         )
 
-        # Build extension to highlighter class mapping
         for _, highlighter_class in highlighters:
             if highlighter_class and hasattr(highlighter_class, 'associated_extensions'):
                 for ext in highlighter_class.associated_extensions:
-                    # Store without the dot prefix for easier lookup
                     ext_normalized = ext.lower().lstrip('.')
                     self.highlighter_map[ext_normalized] = highlighter_class
 
@@ -101,11 +85,6 @@ class TextStudio(QWidget):
                 {
                     'text': 'File',
                     'submenu': [
-                        {
-                            'text': 'New',
-                            'shortcut': QKeySequence.New,
-                            'target': parent.new_file,
-                        },
                         {
                             'text': 'Open',
                             'shortcut': QKeySequence.Open,
@@ -122,13 +101,13 @@ class TextStudio(QWidget):
                             'target': parent.save_file_as,
                         },
                         {
-                            'text': 'Close',
-                            'shortcut': QKeySequence.Close,
-                            'target': parent.close_tab,
+                            'type': 'separator',
                         },
                         {
-                            'text': 'Close All',
-                            'target': parent.close_all_tabs,
+                            'text': 'Autosave',
+                            'checkable': True,
+                            'checked_state': lambda: parent.autosave_enabled,
+                            'target': parent.toggle_autosave,
                         },
                     ],
                 },
@@ -137,7 +116,7 @@ class TextStudio(QWidget):
                     'submenu': [
                         {
                             'type': 'create_standard',
-                            'widget': lambda: parent.tab_widget.currentWidget(),
+                            'widget': lambda: parent.editor,
                         }
                     ],
                 },
@@ -165,13 +144,13 @@ class TextStudio(QWidget):
                         {
                             'text': 'Word Wrap',
                             'checkable': True,
-                            'checked_state': lambda: parent.tab_widget.currentWidget().lineWrapMode() == QPlainTextEdit.WidgetWidth,
+                            'checked_state': lambda: parent.editor.lineWrapMode() == QPlainTextEdit.WidgetWidth,
                             'target': parent.toggle_word_wrap,
                         },
                         {
                             'text': 'Toggle Line Numbers',
                             'checkable': True,
-                            'checked_state': lambda: parent.tab_widget.currentWidget().line_number_area.isVisible() if parent.tab_widget.currentWidget() else True,
+                            'checked_state': lambda: parent.editor.line_number_area.isVisible(),
                             'target': parent.toggle_line_numbers,
                         },
                     ],
@@ -191,23 +170,11 @@ class TextStudio(QWidget):
                         },
                     ],
                 },
-            ]            
+            ]
             self.create_menubar(parent)
 
-    def new_file(self):
-        """Create a new empty file tab."""
-        editor = CodeEditor()
-        editor.cursorPositionChanged.connect(self.update_cursor_position)
-        editor.selectionChanged.connect(self.update_selection_info)
-        editor.textChanged.connect(lambda: self.mark_modified(editor))
-
-        tab_index = self.tab_widget.addTab(editor, "Untitled")
-        self.tab_widget.setCurrentIndex(tab_index)
-
-        return editor
-
     def open_file(self, filepath=None):
-        """Open a file in a new tab."""
+        """Open a file in the editor."""
         if not filepath:
             filepath, _ = QFileDialog.getOpenFileName(
                 self,
@@ -219,65 +186,49 @@ class TextStudio(QWidget):
         if not filepath:
             return
 
-        # Check if file is already open
-        for i in range(self.tab_widget.count()):
-            editor = self.tab_widget.widget(i)
-            if hasattr(editor, 'filepath') and editor.filepath == filepath:
-                self.tab_widget.setCurrentIndex(i)
-                return
-
         try:
             with open(filepath, 'r', encoding='utf-8') as file:
                 content = file.read()
 
-            editor = CodeEditor()
-            editor.setPlainText(content)
-            editor.filepath = filepath
-            editor.is_modified = False
-            editor.cursorPositionChanged.connect(self.update_cursor_position)
-            editor.selectionChanged.connect(self.update_selection_info)
-            editor.textChanged.connect(lambda: self.mark_modified(editor))
+            with block_signals(self.editor):
+                self.editor.setPlainText(content)
+                self.filepath = filepath
+                self.editor.filepath = filepath
+                self.editor.is_modified = False
 
-            # Apply syntax highlighting based on file extension
-            self.apply_syntax_highlighting(editor, filepath)
+                self.apply_syntax_highlighting(self.editor, filepath)
 
-            filename = os.path.basename(filepath)
-            tab_index = self.tab_widget.addTab(editor, filename)
-            self.tab_widget.setCurrentIndex(tab_index)
-
-            self.open_files[filepath] = editor
+                # Reset modified state after setup (highlighting may trigger textChanged)
+                self.editor.is_modified = False
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open file: {str(e)}")
 
     def save_file(self):
         """Save the current file."""
-        current_editor = self.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
-        if not hasattr(current_editor, 'filepath') or not current_editor.filepath:
+        if not self.filepath:
             self.save_file_as()
             return
 
         try:
-            with open(current_editor.filepath, 'w', encoding='utf-8') as file:
-                file.write(current_editor.toPlainText())
+            content = self.editor.toPlainText()
+            try:
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    if f.read() == content:
+                        self.editor.is_modified = False
+                        return
+            except (OSError, UnicodeDecodeError):
+                pass
+            with open(self.filepath, 'w', encoding='utf-8') as file:
+                file.write(content)
 
-            current_editor.is_modified = False
-            tab_index = self.tab_widget.currentIndex()
-            filename = os.path.basename(current_editor.filepath)
-            self.tab_widget.setTabText(tab_index, filename)
+            self.editor.is_modified = False
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
 
     def save_file_as(self):
         """Save the current file with a new name."""
-        current_editor = self.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
         filepath, _ = QFileDialog.getSaveFileName(
             self,
             "Save File As",
@@ -290,76 +241,19 @@ class TextStudio(QWidget):
 
         try:
             with open(filepath, 'w', encoding='utf-8') as file:
-                file.write(current_editor.toPlainText())
+                file.write(self.editor.toPlainText())
 
-            current_editor.filepath = filepath
-            current_editor.is_modified = False
-            tab_index = self.tab_widget.currentIndex()
-            filename = os.path.basename(filepath)
-            self.tab_widget.setTabText(tab_index, filename)
-
-            self.open_files[filepath] = current_editor
-            self.apply_syntax_highlighting(current_editor, filepath)
+            self.filepath = filepath
+            self.editor.filepath = filepath
+            self.editor.is_modified = False
+            self.apply_syntax_highlighting(self.editor, filepath)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
 
-    def close_tab(self, index):
-        """Close a tab."""
-        editor = self.tab_widget.widget(index)
-
-        if hasattr(editor, 'is_modified') and editor.is_modified:
-            reply = QMessageBox.question(
-                self,
-                "Unsaved Changes",
-                "The file has unsaved changes. Do you want to save before closing?",
-                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel
-            )
-
-            if reply == QMessageBox.Save:
-                self.save_file()
-            elif reply == QMessageBox.Cancel:
-                return
-
-        if hasattr(editor, 'filepath') and editor.filepath in self.open_files:
-            del self.open_files[editor.filepath]
-
-        self.tab_widget.removeTab(index)
-
-        # Create new tab if no tabs left
-        if self.tab_widget.count() == 0:
-            self.new_file()
-
-    def close_current_tab(self):
-        """Close the current tab."""
-        current_index = self.tab_widget.currentIndex()
-        if current_index >= 0:
-            self.close_tab(current_index)
-
-    def close_all_tabs(self):
-        """Close all open tabs."""
-        while self.tab_widget.count() > 0:
-            self.close_tab(0)
-
-    def on_tab_changed(self, index):
-        """Handle tab change."""
-        if index >= 0:
-            editor = self.tab_widget.widget(index)
-            if editor:
-                self.update_cursor_position()
-                self.update_selection_info()
-
-                # Update language combo based on file
-                if hasattr(editor, 'filepath'):
-                    self.detect_and_set_language(editor.filepath)
-
-    def on_tree_double_click(self, index):
-        """Handle double-click on file tree."""
-        model = self.file_tree.model()
-        filepath = model.filePath(index)
-
-        if os.path.isfile(filepath):
-            self.open_file(filepath)
+    def toggle_autosave(self, checked):
+        """Toggle autosave mode."""
+        self.autosave_enabled = checked
 
     def mark_modified(self, editor):
         """Mark a file as modified."""
@@ -368,32 +262,26 @@ class TextStudio(QWidget):
 
         if not editor.is_modified:
             editor.is_modified = True
-            index = self.tab_widget.indexOf(editor)
-            if index >= 0:
-                current_text = self.tab_widget.tabText(index)
-                if not current_text.endswith("*"):
-                    self.tab_widget.setTabText(index, current_text + "*")
+
+        if self.autosave_enabled and self.filepath:
+            self.save_file()
 
     def apply_syntax_highlighting(self, editor, filepath):
         """Apply syntax highlighting based on file type."""
-        ext = os.path.splitext(filepath)[1].lower()
-        # Remove the dot prefix if present
-        ext = ext.lstrip('.')
+        ext = os.path.splitext(filepath)[1].lower().lstrip('.')
 
-        # Look up highlighter class for this extension
         highlighter_class = self.highlighter_map.get(ext)
 
         if highlighter_class:
-            # Create highlighter instance with editor's document
             highlighter = highlighter_class(editor.document())
             editor.highlighter = highlighter
 
-            # Update language combo to match
-            class_name = highlighter_class.__name__
-            if class_name.endswith('Highlighter'):
-                display_name = class_name[:-11]  # Remove "Highlighter"
-            else:
-                display_name = class_name
+            # # Update language combo to match
+            # class_name = highlighter_class.__name__
+            # if class_name.endswith('Highlighter'):
+            #     display_name = class_name[:-11]  # Remove "Highlighter"
+            # else:
+            #     display_name = class_name
 
         #     index = self.language_combo.findText(display_name)
         #     if index >= 0:
@@ -427,15 +315,9 @@ class TextStudio(QWidget):
 
     def on_language_changed(self, language):
         """Handle language selection change."""
-        current_editor = self.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
         if language == "Plain Text":
-            # Remove any existing highlighter
-            current_editor.highlighter = None
+            self.editor.highlighter = None
         else:
-            # Find the highlighter class that matches this language name
             highlighter_class = None
             for ext, h_class in self.highlighter_map.items():
                 class_name = h_class.__name__
@@ -449,32 +331,28 @@ class TextStudio(QWidget):
                     break
 
             if highlighter_class:
-                highlighter = highlighter_class(current_editor.document())
-                current_editor.highlighter = highlighter
+                highlighter = highlighter_class(self.editor.document())
+                self.editor.highlighter = highlighter
             else:
-                current_editor.highlighter = None
+                self.editor.highlighter = None
 
     def update_cursor_position(self):
         """Update cursor position in status bar."""
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor:
-            cursor = current_editor.textCursor()
-            line = cursor.blockNumber() + 1
-            column = cursor.columnNumber() + 1
-            self.position_label.setText(f"Ln {line}, Col {column}")
+        cursor = self.editor.textCursor()
+        line = cursor.blockNumber() + 1
+        column = cursor.columnNumber() + 1
+        self.position_label.setText(f"Ln {line}, Col {column}")
 
     def update_selection_info(self):
         """Update selection info in status bar."""
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor:
-            cursor = current_editor.textCursor()
-            if cursor.hasSelection():
-                sel_text = cursor.selectedText()
-                sel_lines = sel_text.count('\n') + 1
-                sel_chars = len(sel_text)
-                self.selection_label.setText(f"Sel: {sel_chars} chars, {sel_lines} lines")
-            else:
-                self.selection_label.setText("")
+        cursor = self.editor.textCursor()
+        if cursor.hasSelection():
+            sel_text = cursor.selectedText()
+            sel_lines = sel_text.count('\n') + 1
+            sel_chars = len(sel_text)
+            self.selection_label.setText(f"Sel: {sel_chars} chars, {sel_lines} lines")
+        else:
+            self.selection_label.setText("")
 
     # Search operations
     def show_find_dialog(self):
@@ -484,9 +362,8 @@ class TextStudio(QWidget):
         else:
             self.search_dialog.set_mode(replace_mode=False)
 
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor and current_editor.textCursor().hasSelection():
-            self.search_dialog.search_input.setText(current_editor.textCursor().selectedText())
+        if self.editor.textCursor().hasSelection():
+            self.search_dialog.search_input.setText(self.editor.textCursor().selectedText())
 
         self.search_dialog.show()
         self.search_dialog.raise_()
@@ -499,9 +376,8 @@ class TextStudio(QWidget):
         else:
             self.search_dialog.set_mode(replace_mode=True)
 
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor and current_editor.textCursor().hasSelection():
-            self.search_dialog.search_input.setText(current_editor.textCursor().selectedText())
+        if self.editor.textCursor().hasSelection():
+            self.search_dialog.search_input.setText(self.editor.textCursor().selectedText())
 
         self.search_dialog.show()
         self.search_dialog.raise_()
@@ -520,50 +396,38 @@ class TextStudio(QWidget):
     # View operations
     def zoom_in(self):
         """Zoom in text."""
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor:
-            current_editor.zoomIn(2)
+        self.editor.zoomIn(2)
 
     def zoom_out(self):
         """Zoom out text."""
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor:
-            current_editor.zoomOut(2)
+        self.editor.zoomOut(2)
 
     def reset_zoom(self):
         """Reset zoom level."""
-        current_editor = self.tab_widget.currentWidget()
-        if current_editor:
-            font = current_editor.font()
-            font.setPointSize(10)
-            current_editor.setFont(font)
+        font = self.editor.font()
+        font.setPointSize(10)
+        self.editor.setFont(font)
 
     def toggle_line_numbers(self, checked):
         """Toggle line numbers."""
-        for i in range(self.tab_widget.count()):
-            editor = self.tab_widget.widget(i)
-            editor.line_number_area.setVisible(checked)
-            editor.setViewportMargins(editor.line_number_area_width() if checked else 0, 0, 0, 0)
+        self.editor.line_number_area.setVisible(checked)
+        self.editor.setViewportMargins(self.editor.line_number_area_width() if checked else 0, 0, 0, 0)
 
     def toggle_word_wrap(self, checked):
         """Toggle word wrap."""
-        for i in range(self.tab_widget.count()):
-            editor = self.tab_widget.widget(i)
-            if checked:
-                editor.setLineWrapMode(QPlainTextEdit.WidgetWidth)
-            else:
-                editor.setLineWrapMode(QPlainTextEdit.NoWrap)
+        if checked:
+            self.editor.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        else:
+            self.editor.setLineWrapMode(QPlainTextEdit.NoWrap)
 
     def toggle_whitespace(self, checked):
         """Toggle whitespace visibility."""
-        for i in range(self.tab_widget.count()):
-            editor = self.tab_widget.widget(i)
-            option = editor.document().defaultTextOption()
-            if checked:
-                option.setFlags(option.flags() | QTextOption.ShowTabsAndSpaces)
-            else:
-                option.setFlags(option.flags() & ~QTextOption.ShowTabsAndSpaces)
-            editor.document().setDefaultTextOption(option)
+        option = self.editor.document().defaultTextOption()
+        if checked:
+            option.setFlags(option.flags() | QTextOption.ShowTabsAndSpaces)
+        else:
+            option.setFlags(option.flags() & ~QTextOption.ShowTabsAndSpaces)
+        self.editor.document().setDefaultTextOption(option)
 
 
 class CodeEditor(QPlainTextEdit):
@@ -692,6 +556,13 @@ class SearchDialog(QDialog):
 
     def __init__(self, parent, replace_mode=False):
         super().__init__(parent)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowCloseButtonHint
+            | Qt.WindowStaysOnTopHint
+        )
         self.text_studio = parent
         self.replace_mode = replace_mode
 
@@ -772,10 +643,7 @@ class SearchDialog(QDialog):
 
     def find_next(self):
         """Find next occurrence."""
-        current_editor = self.text_studio.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
+        editor = self.text_studio.editor
         search_text = self.search_input.text()
         if not search_text:
             return
@@ -788,27 +656,24 @@ class SearchDialog(QDialog):
                 regex.setPatternOptions(QRegularExpression.NoPatternOption)
             else:
                 regex.setPatternOptions(QRegularExpression.CaseInsensitiveOption)
-            found = current_editor.find(regex, flags)
+            found = editor.find(regex, flags)
         else:
-            found = current_editor.find(search_text, flags)
+            found = editor.find(search_text, flags)
 
         if not found:
             # Wrap around to beginning
-            cursor = current_editor.textCursor()
+            cursor = editor.textCursor()
             cursor.movePosition(QTextCursor.Start)
-            current_editor.setTextCursor(cursor)
+            editor.setTextCursor(cursor)
 
             if self.regex.isChecked():
-                current_editor.find(regex, flags)
+                editor.find(regex, flags)
             else:
-                current_editor.find(search_text, flags)
+                editor.find(search_text, flags)
 
     def find_previous(self):
         """Find previous occurrence."""
-        current_editor = self.text_studio.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
+        editor = self.text_studio.editor
         search_text = self.search_input.text()
         if not search_text:
             return
@@ -821,31 +686,28 @@ class SearchDialog(QDialog):
                 regex.setPatternOptions(QRegularExpression.NoPatternOption)
             else:
                 regex.setPatternOptions(QRegularExpression.CaseInsensitiveOption)
-            found = current_editor.find(regex, flags)
+            found = editor.find(regex, flags)
         else:
-            found = current_editor.find(search_text, flags)
+            found = editor.find(search_text, flags)
 
         if not found:
             # Wrap around to end
-            cursor = current_editor.textCursor()
+            cursor = editor.textCursor()
             cursor.movePosition(QTextCursor.End)
-            current_editor.setTextCursor(cursor)
+            editor.setTextCursor(cursor)
 
             if self.regex.isChecked():
-                current_editor.find(regex, flags)
+                editor.find(regex, flags)
             else:
-                current_editor.find(search_text, flags)
+                editor.find(search_text, flags)
 
     def replace(self):
         """Replace current selection."""
         if not self.replace_mode:
             return
 
-        current_editor = self.text_studio.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
-        cursor = current_editor.textCursor()
+        editor = self.text_studio.editor
+        cursor = editor.textCursor()
         if cursor.hasSelection():
             cursor.insertText(self.replace_input.text())
             self.find_next()
@@ -855,10 +717,7 @@ class SearchDialog(QDialog):
         if not self.replace_mode:
             return
 
-        current_editor = self.text_studio.tab_widget.currentWidget()
-        if not current_editor:
-            return
-
+        editor = self.text_studio.editor
         search_text = self.search_input.text()
         replace_text = self.replace_input.text()
 
@@ -866,9 +725,9 @@ class SearchDialog(QDialog):
             return
 
         # Move to beginning
-        cursor = current_editor.textCursor()
+        cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.Start)
-        current_editor.setTextCursor(cursor)
+        editor.setTextCursor(cursor)
 
         count = 0
         flags = self.get_search_flags()
@@ -880,13 +739,13 @@ class SearchDialog(QDialog):
             else:
                 regex.setPatternOptions(QRegularExpression.CaseInsensitiveOption)
 
-            while current_editor.find(regex, flags):
-                cursor = current_editor.textCursor()
+            while editor.find(regex, flags):
+                cursor = editor.textCursor()
                 cursor.insertText(replace_text)
                 count += 1
         else:
-            while current_editor.find(search_text, flags):
-                cursor = current_editor.textCursor()
+            while editor.find(search_text, flags):
+                cursor = editor.textCursor()
                 cursor.insertText(replace_text)
                 count += 1
 

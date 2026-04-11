@@ -9,12 +9,13 @@ from typing_extensions import override
 
 from gui import system
 from gui.widgets.config_widget import ConfigWidget
-from utils.helpers import display_message, block_signals, \
-    merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
+from utils.helpers import IMAGE_EXTS, display_message, block_signals, \
+    merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema, \
+    save_linked_config
 from utils import sql
 
 from plugins.workflows.members.workflow import Workflow
-from gui.util import IconButton, CHBoxLayout, CVBoxLayout, ToggleIconButton, colorize_pixmap, save_table_config, find_main_widget
+from gui.util import IconButton, CHBoxLayout, CVBoxLayout, ToggleIconButton, colorize_pixmap, find_main, save_table_config
 
 from gui.widgets.config_fields import ConfigFields
 from plugins.workflows.widgets.workflow_settings import WorkflowSettings
@@ -25,7 +26,7 @@ class ChattableWorkflowWidget(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent
-        self.main = find_main_widget(self)
+        self.main = find_main()
         self.workflow = kwargs.get('workflow', None)
         self.kind = kwargs.get('kind', 'CHAT')
 
@@ -37,12 +38,14 @@ class ChattableWorkflowWidget(ConfigWidget):
         self.input_widget = self.ChatInputWidget(self)
 
         workflow_editable = kwargs.get('workflow_editable', True)
+        collapsible = kwargs.get('collapsible', False)
 
         # if self.show_settings and not self.workflow_settings:
         if not self.workflow_settings:
             self.workflow_settings = WorkflowSettings(
                 parent=self,
                 workflow_editable=workflow_editable,
+                collapsible=collapsible,
             )
 
         if workflow_editable:
@@ -58,26 +61,6 @@ class ChattableWorkflowWidget(ConfigWidget):
         else:
             self.layout.addWidget(self.workflow_settings)
             self.layout.addWidget(self.message_collection, 1)
-
-
-        # # if self.show_settings and not self.workflow_settings:
-        # if not self.workflow_settings:
-        #     self.page_splitter = QSplitter(Qt.Vertical)
-        #     self.page_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        #     self.page_splitter.setChildrenCollapsible(False)
-
-        #     self.workflow_settings = WorkflowSettings(
-        #         parent=self,
-        #         workflow_editable=kwargs.get('workflow_editable', True),
-        #     )
-
-        #     self.page_splitter.addWidget(self.workflow_settings)
-        #     self.page_splitter.addWidget(self.message_collection)
-        #     self.page_splitter.setSizes([350, 1000])
-
-        #     self.layout.addWidget(self.page_splitter, 1)
-        # else:
-        #     self.layout.addWidget(self.message_collection, 1)
 
         self.layout.addWidget(self.attachment_bar)
         self.layout.addSpacing(3)
@@ -122,6 +105,11 @@ class ChattableWorkflowWidget(ConfigWidget):
             return
         config = self.workflow_settings.get_config()
 
+        # Sync back to linked source entity
+        linked_id = self.workflow_settings.linked_id
+        if linked_id:
+            save_linked_config(linked_id, config)
+
         save_table_config(
             ref_widget=self,
             table_name='contexts',
@@ -156,8 +144,11 @@ class ChattableWorkflowWidget(ConfigWidget):
 
             if next_expected_member_type == 'user':  # todo clean  # !memberdiff! #
                 # attachments = [filepath for filepath in self.attachment_bar.attachments]
-                image_attachments = [attachment for attachment in self.attachment_bar.attachments if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'))]
-                for attachment in image_attachments:
+                image_attachments = [
+                    attachment for attachment in self.attachment_bar.attachments 
+                    if any(attachment.filename.lower().endswith(ext) for ext in IMAGE_EXTS)
+                ]
+                for attachment in image_attachments:  # todo other media types
                     image_filepath = attachment.filepath
                     if os.path.exists(image_filepath):
                         self.workflow.save_message('image', json.dumps({"filepath": image_filepath}), member_id=as_member_id)
@@ -232,10 +223,10 @@ class ChattableWorkflowWidget(ConfigWidget):
 
         self.workflow_settings.header_widget.widgets[1].btn_prev_context.setEnabled(True)
 
-    def new_context(self, 
-        copy_context_id: int = None, 
-        entity_id: int = None, 
-        entity_table: str = None, 
+    def new_context(self,
+        copy_context_id: int = None,
+        entity_id: str = None,
+        entity_table: str = None,
         config=None,
         kind=None,
     ):
@@ -249,7 +240,7 @@ class ChattableWorkflowWidget(ConfigWidget):
             )
             sql.execute("""
                 INSERT INTO contexts (
-                    kind, 
+                    kind,
                     config
                 )
                 SELECT
@@ -261,7 +252,7 @@ class ChattableWorkflowWidget(ConfigWidget):
         else:
             if entity_id is not None:
                 config = json.loads(
-                    sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
+                    sql.get_scalar(f"SELECT config FROM `{entity_table}` WHERE uuid = ?",
                                 (entity_id,))
                 )
                 config = merge_config_into_workflow_config(config, entity_id=entity_id, entity_table=entity_table)
@@ -397,6 +388,9 @@ class ChattableWorkflowWidget(ConfigWidget):
 
         def update_for_next_member(self):
             """Update UI based on the next expected member type"""
+            if not self.parent.workflow:
+                self.set_non_user_mode()
+                return
             next_expected_member = self.parent.workflow.next_expected_member()
             if not next_expected_member:
                 # Default to user mode
@@ -440,9 +434,8 @@ class ChattableWorkflowWidget(ConfigWidget):
 
             @override
             def load(self):
-                workflow = self.parent.parent.workflow
-                workflow_params = workflow.config.get('params', [])
-                # convert all keys to lowercase
+                chattable = self.parent.parent
+                workflow_params = chattable.workflow_settings.get_config().get('params', [])
                 workflow_params = [{k.lower(): v for k, v in param.items()} for param in workflow_params]
                 param_schema = params_to_schema(workflow_params)
                 if param_schema != self.schema:
@@ -460,7 +453,9 @@ class ChattableWorkflowWidget(ConfigWidget):
 
             def save_config(self):
                 params_config = self.get_config()
-                self.parent.parent.workflow.params = {k.lower(): v for k, v in params_config.items()}
+                workflow = self.parent.parent.workflow
+                if workflow:
+                    workflow.params = {k.lower(): v for k, v in params_config.items()}
 
         class MessageText(QTextEdit):
             enterPressed = Signal()

@@ -21,7 +21,6 @@ workflow patterns.
 """
 
 import json
-import pprint
 from typing import Optional, Dict, List, Any
 
 from typing_extensions import override
@@ -78,11 +77,20 @@ class Workflow(Member):
                 config = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,), load_json=True) or {}
                 self.config = config
 
+                # Re-pull linked config from source entity
+                linked_id = config.get('linked_id')
+                if linked_id:
+                    from utils.helpers import resolve_linked_config
+                    resolved = resolve_linked_config(linked_id)
+                    if resolved is not None:
+                        resolved['linked_id'] = linked_id
+                        self.config = resolved
+
             else:
                 # # Create new context
                 kind_init_members = {'CHAT': 'agent'}  # todo
                 if not self.config:
-                    init_member_config = {'_TYPE': kind_init_members.get(kind, 'text_block')}
+                    init_member_config = {'_TYPE': kind_init_members.get(kind, 'text')}
                     self.config = init_member_config
                 sql.execute("INSERT INTO contexts (kind, config, name) VALUES (?, ?, ?)", (kind, json.dumps(self.config), self.chat_title))
                 self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,))
@@ -97,6 +105,12 @@ class Workflow(Member):
         self.autorun = True
         # from core.behaviors import DefaultBehavior
         self.behaviour = None
+
+        self._visited_linked_ids = set()
+        if self._parent_workflow:
+            self._visited_linked_ids = getattr(
+                self._parent_workflow, '_visited_linked_ids', set()
+            )
 
         self.load()
         self.receivable_function = self.behaviour.receive
@@ -226,6 +240,18 @@ class Workflow(Member):
 
     @override
     def load(self):
+        # Re-resolve root linked config from source entity
+        if not self._parent_workflow:
+            linked_id = self.config.get('linked_id')
+            if linked_id:
+                from utils.helpers import resolve_linked_config
+                resolved = resolve_linked_config(linked_id)
+                if resolved is not None:
+                    resolved['linked_id'] = linked_id
+                    self.config = merge_config_into_workflow_config(
+                        resolved
+                    )
+
         workflow_options = self.config.get('options', {})
         self.autorun = workflow_options.get('autorun', True)
         self.load_members()
@@ -267,6 +293,20 @@ class Workflow(Member):
                 pass
             entity_id = member_dict.get('agent_id', None)
             member_config = member_dict.get('config', {})
+
+            # Resolve linked config from source entity at runtime
+            linked_id = member_dict.get('linked_id', None)
+            if linked_id:
+                if linked_id in self._visited_linked_ids:
+                    members.remove(member_dict)
+                    iterable = iter(members)
+                    continue
+                self._visited_linked_ids.add(linked_id)
+                from utils.helpers import resolve_linked_config
+                resolved = resolve_linked_config(linked_id)
+                if resolved is not None:
+                    member_config = resolved
+                    member_dict['config'] = resolved
             loc_x = member_dict.get('loc_x', 50)
             loc_y = member_dict.get('loc_y', 0)
 
@@ -394,7 +434,7 @@ class Workflow(Member):
         next_member = next((member for member in members
                     if member.turn_output is None),
                     None)
-        print('Next expected member: ', next_member.member_id)
+        # print('Next expected member: ', next_member.member_id)
         return next_member
 
     def next_expected_is_last_member(self) -> bool:
@@ -427,6 +467,7 @@ class Workflow(Member):
         for member in self.members.values():
             member.last_output = None
             member.turn_output = None
+            # member.condition_passed = True
             if isinstance(member, Workflow):
                 member.reset_last_outputs()
 

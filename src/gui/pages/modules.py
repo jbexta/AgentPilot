@@ -20,14 +20,14 @@ extend Agent Pilot's capabilities through custom and third-party modules.
 """
 
 from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy, QMessageBox
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget, QMessageBox, QSizePolicy
 
 from gui import system
 from gui.widgets.config_widget import ConfigWidget
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
-from gui.util import IconButton, find_main_widget, CHBoxLayout, CVBoxLayout
+from gui.util import find_main, CVBoxLayout, CHBoxLayout, IconButton, FramelessResizeMixin
 from utils import sql
 from utils.helpers import display_message, set_module_type
 
@@ -84,58 +84,14 @@ class Page_Module_Settings(ConfigDBTree):
         )
         self.splitter.setSizes([400, 1000])
     
-    def get_module_file_path(self, item_id, module_name=None):  # folder_name, module_name, module_config):
-        is_baked = sql.get_scalar('SELECT baked FROM modules WHERE id = ?', (item_id,)) == 1
-        if not is_baked:
-            return None
+    def load(self, **kwargs):
+        super().load(**kwargs)
+        disabled_ids = sql.get_results(
+            "SELECT id FROM modules WHERE COALESCE(json_extract(config, '$.enabled'), 1) = 0",
+            return_type='list'
+        )
+        self.tree._disabled_ids = disabled_ids
 
-        # Get module data from database
-        module_config = sql.get_scalar('SELECT config FROM modules WHERE id = ?', (item_id,), load_json=True)
-        folder_id = sql.get_scalar('SELECT folder_id FROM modules WHERE id = ?', (item_id,))
-        if module_name is None:
-            module_name = sql.get_scalar('SELECT name FROM modules WHERE id = ?', (item_id,))
-        
-        if not module_config or not module_name:
-            print(f"Module data not found for id {item_id}")
-            return
-            
-        # Get folder name (module type) from folder_id
-        folder_name = None
-        if folder_id:
-            folder_name = sql.get_scalar('SELECT name FROM folders WHERE id = ?', (folder_id,))
-
-        if not folder_name:
-            print(f"Folder not found for module {module_name}")
-            return
-            
-        # Get source code from config
-        source_code = module_config.get('data', '')
-        if not source_code:
-            print(f"No source code found in module {module_name}")
-            return
-
-        type_controller = self.manager.type_controllers.get(folder_name.lower())
-        base_path = getattr(type_controller, 'load_to_path', None)
-        if not base_path:
-            display_message(
-                message=f"Unknown module type: {folder_name}",
-                icon=QMessageBox.Warning,
-            )
-            return
-        
-        # Join the description and source code
-        description = module_config.get('description', '')
-        if description != '':
-            source_code = f'"""\n{description}\n"""\n\n{source_code}'
-            
-        # Construct file path
-        from pathlib import Path
-        
-        base_path = f"src/{base_path.replace('.', '/')}"
-        file_path = Path(base_path) / f"{module_name.lower()}.py"
-
-        return file_path
-    
     def unbake_item(self):
         item_id = self.get_selected_item_id()
         if not item_id:
@@ -153,7 +109,7 @@ class Page_Module_Settings(ConfigDBTree):
         module_config = sql.get_scalar('SELECT config FROM modules WHERE id = ?', (item_id,), load_json=True)
         
         source_code = module_config.get('data', '')
-        file_path = self.get_module_file_path(item_id)
+        file_path = get_module_abs_path(item_id)
         
         # Check if file exists and ask for confirmation if not forcing
         if file_path.exists():
@@ -190,6 +146,30 @@ class Page_Module_Settings(ConfigDBTree):
                 icon=QMessageBox.Critical,
             )
     
+    def on_context_menu(self, menu):
+        item_id = self.get_selected_item_id()
+        if not item_id:
+            return
+        enabled = sql.get_scalar(
+            "SELECT COALESCE(json_extract(config, '$.enabled'), 1) FROM modules WHERE id = ?",
+            (item_id,)
+        )
+        menu.addSeparator()
+        btn = menu.addAction('Enable' if not enabled else 'Disable')
+        btn.triggered.connect(lambda: self.toggle_module_enabled(item_id, enabled))
+
+    def toggle_module_enabled(self, module_id, currently_enabled):
+        new_val = 0 if currently_enabled else 1
+        sql.execute("""
+            UPDATE modules SET config = json_set(config, '$.enabled', ?)
+            WHERE id = ?
+        """, (new_val, module_id))
+        system.manager.load()
+        main = find_main()
+        main.main_pages.build_schema()
+        if 'settings' in main.main_pages.pages:
+            main.main_pages.pages['settings'].build_schema()
+
     def on_item_selected(self):
         super().on_item_selected()
 
@@ -207,77 +187,6 @@ class Page_Module_Settings(ConfigDBTree):
         if not controller:
             return
         
-    # def extra_data(self):
-    #     from gui import system
-    #     extra_data = []
-    #     module_types = {name: controller for name, controller in system.manager.modules.type_controllers.items() if name is not None}
-    #     for module_type in module_types:
-    #         type_folder_id = get_module_type_folder_id(module_type)
-    #         module_type_modules = system.manager.modules.get_modules_in_folder(
-    #             module_type=module_type,
-    #             fetch_keys=('name', 'class',)
-    #         )
-    #         for module_name, module_class in module_type_modules:
-    #             # if module_class is None:
-    #             #     print(f"Module class for {module_name} in {module_type} is None, skipping.")
-    #             #     continue
-    #             extra_data.append((module_name, module_name, 1, type_folder_id))
-
-    #     return extra_data
-
-    # # def extra_data(self):
-    # #     from gui import system
-    # #     extra_data = []
-    # #     module_types = {name: controller for name, controller in system.manager.modules.type_controllers.items() if name is not None}
-    # #     for module_type in module_types:
-    # #         type_folder_id = get_module_type_folder_id(module_type)
-    # #         module_type_modules = system.manager.modules.get_modules_in_folder(
-    # #             module_type=module_type,
-    # #             fetch_keys=('name', 'class',)
-    # #         )
-    # #         for module_name, module_class in module_type_modules:
-    # #             # if module_class is None:
-    # #             #     print(f"Module class for {module_name} in {module_type} is None, skipping.")
-    # #             #     continue
-    # #             extra_data.append((module_name, module_name, 1, type_folder_id))
-
-    # #     return extra_data
-    # #             add_module(
-    # #                 module_class=module_class,
-    # #                 module_name=module_name,
-    # #                 folder_name=module_type,
-    # #             )
-    # #     from gui import system
-    # #     import inspect
-
-    # #     # Get the module name and folder (type) from the DB
-    # #     module_name = sql.get_scalar('SELECT name FROM modules WHERE id = ?', (item_id,))
-    # #     folder_id = sql.get_scalar('SELECT folder_id FROM modules WHERE id = ?', (item_id,))
-    # #     if not module_name or not folder_id:
-    # #         return None
-    # #     folder_name = sql.get_scalar('SELECT name FROM folders WHERE id = ?', (folder_id,))
-    # #     if not folder_name:
-    # #         return None
-
-    # #     # Try to get the class from source
-    # #     module_class = system.manager.modules.get_module_class(folder_name, module_name)
-    # #     if not module_class:
-    # #         return None
-
-    # #     try:
-    # #         module_file_path = inspect.getfile(module_class)
-    # #         with open(module_file_path, 'r', encoding='utf-8') as file:
-    # #             module_source = file.read()
-    # #         return {
-    # #             'data': module_source,
-    # #             'file_path': module_file_path,
-    # #             'module_class': module_class.__name__,
-    # #             'module_type': folder_name,
-    # #         }
-    # #     except Exception as e:
-    # #         print(f"Error getting inferred data for module {module_name}: {e}")
-    # #         return None
-
 class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -288,8 +197,8 @@ class Module_Config_Widget(ConfigJoined):
     class Module_Config_Fields(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            # self.IS_DEV_MODE = True
-            self.main = find_main_widget(self)
+            # # self.IS_DEV_MODE = True
+            # self.main = find_main()
             self.status = 'unloaded'  # 'loaded', 'unloaded', 'modified', 'error', 'externally modified'
             self.schema = [
                 {
@@ -435,8 +344,8 @@ class Module_Config_Widget(ConfigJoined):
                 'Externally Modified': '#B94343',
             }
             can_reimport = status in ['Modified', 'Unloaded']
-            self.load_button.setVisible(can_reimport)
-            self.unload_button.setVisible(status == 'Loaded')
+            self.load_button_wgt.setVisible(can_reimport)
+            self.unload_button_wgt.setVisible(status == 'Loaded')
             self.lbl_status.setText(text)
             self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
 
@@ -445,116 +354,280 @@ class Module_Config_Widget(ConfigJoined):
             if not module_id:
                 return
 
-            module = system.manager.modules.load_module(module_id)
-            if isinstance(module, Exception):
-                self.set_status('Error', f"Error: {str(module)}")
-            else:
+            try:
+                row = sql.get_results(
+                    "SELECT m.id, m.uuid, m.name, m.config, m.metadata, "
+                    "(SELECT fp.name FROM folders fp WHERE fp.id = m.folder_id) AS folder_path "
+                    "FROM modules m WHERE m.id = ?",
+                    (module_id,)
+                )
+                if not row:
+                    self.set_status('Error', 'Module not found in database')
+                    return
+                row = row[0]
+                module_name = row[2]
+                folder_name = row[5]
+                if not folder_name:
+                    self.set_status('Error', 'Module folder not found')
+                    return
+                controller = system.manager.modules.type_controllers.get(folder_name.lower())
+                if not controller:
+                    self.set_status('Error', f'No controller for type: {folder_name}')
+                    return
+                module_path = controller.get_module_path(module_name)
+                controller.load_db_module(module_path, row)
                 self.set_status('Loaded')
-                if system.manager.modules.get_cell(module_id, 'type') == 'pages':
-                    main = find_main_widget(self)
+                if folder_name.lower() == 'pages':
+                    main = find_main()
                     main.main_pages.build_schema()
-                    # main.page_settings.build_schema()
+            except Exception as e:
+                self.set_status('Error', f"Error: {str(e)}")
 
         def unload(self):
             module_id = self.get_item_id()
             if not module_id:
                 return
 
-            system.manager.modules.unload_module(module_id)
+            module_name = sql.get_scalar(
+                "SELECT name FROM modules WHERE id = ?", (module_id,)
+            )
+            folder_id = sql.get_scalar(
+                "SELECT folder_id FROM modules WHERE id = ?", (module_id,)
+            )
+            folder_name = sql.get_scalar(
+                "SELECT name FROM folders WHERE id = ?", (folder_id,)
+            ) if folder_id else None
+
+            if folder_name and module_name:
+                controller = system.manager.modules.type_controllers.get(folder_name.lower())
+                if controller:
+                    import sys as _sys
+                    module_path = controller.get_module_path(module_name)
+                    if module_path in _sys.modules:
+                        del _sys.modules[module_path]
+                    if module_name in controller:
+                        del controller[module_name]
+
             self.set_status('Unloaded')
-            if system.manager.modules.get_cell(module_id, 'type') == 'pages':
-                main = find_main_widget(self)
+            if folder_name and folder_name.lower() == 'pages':
+                main = find_main()
                 main.main_pages.build_schema()
-                # main.page_settings.build_schema()
 
 
-class PageEditor(ConfigWidget):
-    def __init__(self, main, module_id):
+def get_module_file_path(module_id, module_name=None):
+    """Resolve a module ID to a relative file path.
+
+    Parameters
+    ----------
+    module_id : int
+        Database ID of the module.
+    module_name : str, optional
+        Module name override. Queried from DB if not provided.
+
+    Returns
+    -------
+    pathlib.Path or None
+        Relative path like ``src/gui/pages/foo.py``, or ``None``
+        if the module cannot be resolved.
+    """
+    from pathlib import Path
+
+    module_config = sql.get_scalar(
+        'SELECT config FROM modules WHERE id = ?',
+        (module_id,), load_json=True,
+    )
+    folder_id = sql.get_scalar(
+        'SELECT folder_id FROM modules WHERE id = ?',
+        (module_id,),
+    )
+    if module_name is None:
+        module_name = sql.get_scalar(
+            'SELECT name FROM modules WHERE id = ?',
+            (module_id,),
+        )
+
+    if not module_config or not module_name:
+        return None
+
+    folder_name = None
+    if folder_id:
+        folder_name = sql.get_scalar(
+            'SELECT name FROM folders WHERE id = ?',
+            (folder_id,),
+        )
+    if not folder_name:
+        print(f'Folder name not found for module {module_name} in folder {folder_id}')
+        return None
+
+    type_controller = system.manager.modules.type_controllers.get(
+        folder_name.lower(),
+    )
+    load_to_path = getattr(type_controller, 'load_to_path', None)
+    if not load_to_path:
+        print(f'Load to path not found for module {module_name} in folder {folder_name}')
+        return None
+
+    base_path = f"src/{load_to_path.replace('.', '/')}"
+    return Path(base_path) / f"{module_name.lower()}.py"
+
+
+def get_module_abs_path(module_id, module_name=None):
+    """Resolve a module ID to an absolute file path.
+
+    Combines :func:`get_module_file_path` with the Application
+    project's ``working_dir``.
+
+    Returns
+    -------
+    pathlib.Path or None
+    """
+    from pathlib import Path
+
+    rel_path = get_module_file_path(module_id, module_name=module_name)
+    if rel_path is None:
+        return None
+
+    app_config = sql.get_scalar(
+        "SELECT config FROM projects WHERE name = 'Application'",
+        load_json=True,
+    )
+    if not app_config:
+        return None
+
+    working_dir = app_config.get('working_dir', '')
+    if not working_dir:
+        return None
+
+    return Path(working_dir) / rel_path
+
+
+class PageEditor(FramelessResizeMixin, ConfigWidget):
+    def __init__(self, main, module_name):
         super().__init__(parent=main)
+        from plugins.projects.gui.project_types.application import (
+            ApplicationProject,
+        )
 
         self.main = main
-        self.module_id = module_id
-        self.layout = CVBoxLayout(self)  # contains a titlebar (title, close button) and a module config widget
+        self.module_name = module_name
+        self.layout = CVBoxLayout(self)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setFixedWidth(500)
+        self.init_frameless_resize()
+        self.setMinimumSize(300, 200)
+        self.resize(500, self.main.height())
+        self._snapped = True
+        self._unsnapped_height = self.main.height()
+        self._snap_threshold = 20
 
-        # create title bar with title and close button
+        # Title bar with close button
         self.titlebar = QWidget(parent=self)
-        self.titlebar_layout = CHBoxLayout(self.titlebar)
-        self.titlebar_layout.setContentsMargins(4, 4, 4, 4)
+        self.titlebar_layout = QHBoxLayout(self.titlebar)
         self.lbl_title = QLabel(parent=self.titlebar)
-        self.lbl_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.lbl_title.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Preferred,
+        )
         font = self.lbl_title.font()
         font.setBold(True)
         self.lbl_title.setFont(font)
         self.titlebar_layout.addWidget(self.lbl_title)
-        self.btn_close = IconButton(parent=self.titlebar, icon_path=':/resources/close.png', size=22)
+        self.btn_close = IconButton(
+            parent=self.titlebar,
+            icon_path=':/resources/close.png',
+            # icon_size_percent=0.5,
+            size=20,
+        )
         self.btn_close.clicked.connect(self.close)
         self.titlebar_layout.addWidget(self.btn_close)
-
         self.layout.addWidget(self.titlebar)
 
-        self.config_widget = self.PageEditorWidget(parent=self, module_id=module_id)
-        self.config_widget.build_schema()
-        self.layout.addWidget(self.config_widget)
+        self.lbl_title.setText(f'Editing module > {module_name}')
 
-        self.setFixedHeight(self.main.height())
+        # Application project widget
+        self.project_widget = ApplicationProject(parent=self)
+        self.project_widget.build_schema()
+        self.layout.addWidget(self.project_widget)
 
-        module_manager = system.manager.modules
-        page_name = module_manager.module_names.get(module_id, None)
-        if not page_name:
-            return
-        self.lbl_title.setText(f'Editing module > {page_name}')
+        # Hide the Project_Fields row (Path picker + project type)
+        self.project_widget.widgets[0].hide()
+
+        # Hide the 'Block Maps' tab
+        bottom_tabs = self.project_widget.widgets[2]
+        for i in range(bottom_tabs.content.count()):
+            if bottom_tabs.content.tabText(i) == 'Block Maps':
+                bottom_tabs.content.setTabVisible(i, False)
+                break
 
     def close(self):
+        if hasattr(self, 'project_widget'):
+            poll_timer = getattr(self.project_widget, '_poll_timer', None)
+            if poll_timer:
+                poll_timer.stop()
         self.hide()
 
+    def _move_window(self, global_pos):
+        if self._snapped:
+            diff = global_pos.x() - self._mouse_global_pos.x()
+            if abs(diff) < self._snap_threshold:
+                return
+            self._snapped = False
+            self.resize(self.width(), self._unsnapped_height)
+
+        super()._move_window(global_pos)
+
+        right_edge = self.x() + self.width()
+        main_left = self.main.x()
+        if abs(right_edge - main_left) < self._snap_threshold:
+            self._unsnapped_height = self.height()
+            self._snapped = True
+            self._snap_to_main()
+
+    def _snap_to_main(self):
+        self.move(self.main.x() - self.width(), self.main.y())
+        self.resize(self.width(), self.main.height())
+
     def showEvent(self, event):
-        # SHOW THE POPUP TO THE LEFT HAND SIDE OF THE MAIN WINDOW, MINUS 350
-        top_left = self.main.rect().topLeft()
-        top_left_global = self.main.mapToGlobal(top_left)
-        top_left_global.setX(top_left_global.x() - self.width())
-        self.move(top_left_global)
+        self._snap_to_main()
         super().showEvent(event)
 
     def load(self):
-        self.config_widget.load()
+        project_id = sql.get_scalar(
+            "SELECT id FROM projects WHERE name = 'Application'",
+        )
+        app_config = sql.get_scalar(
+            "SELECT config FROM projects WHERE name = 'Application'",
+            load_json=True,
+        )
+        if not app_config:
+            return
+        self.project_widget.load_config(app_config)
 
-    class PageEditorWidget(Module_Config_Widget):
-        def __init__(self, parent, module_id):
-            super().__init__(parent=parent)
-            self.module_id = module_id
-            self.data_source = {
-                'table_name': 'modules',
-                'item_id': module_id,
-            }
-            self.code_ast = None
+        file_tree = self.project_widget.widgets[1]
+        file_tree.load()
 
-        # def load(self):
-        #     item_id = self.module_id
-        #     table_name = self.data_target['table_name']
-        #     json_config = json.loads(sql.get_scalar(f"""
-        #         SELECT
-        #             `config`
-        #         FROM `{table_name}`
-        #         WHERE id = ?
-        #     """, (item_id,)))
-        #     if ((table_name == 'entities' or table_name == 'blocks' or table_name == 'tools')
-        #             and json_config.get('_TYPE', 'agent') != 'workflow'):
-        #         json_config = merge_config_into_workflow_config(json_config)
-        #     self.load_config(json_config)
-        #     super().load()
-        #
-        # def update_config(self):
-        #     config = self.get_config()
-        #
-        #     save_table_config(
-        #         ref_widget=self,
-        #         table_name='modules',
-        #         item_id=self.module_id,
-        #         value=json.dumps(config),
-        #     )
-        #
-        #     main = find_main_widget(self)
-        #     main.system.modules.load(import_modules=False)
-        #     self.widgets[0].load()
+        # Load the tasks tree with the correct project ID
+        if project_id:
+            bottom_tabs = self.project_widget.widgets[2]
+            tasks_tree = bottom_tabs.pages.get('Chat')
+            if tasks_tree:
+                tasks_tree.kind = f'PROJECT:{project_id}'
+                tasks_tree.folder_key = f'project:{project_id}:task'
+                tasks_tree.load()
+
+        controller = system.manager.modules.type_controllers.get('pages')
+        if controller and controller.load_to_path:
+            import os
+            module_file = self.module_name.lower() + '.py'
+
+            # Core path
+            core_path = os.path.join(
+                'src', controller.load_to_path.replace('.', os.sep), module_file,
+            )
+            if os.path.isfile(core_path):
+                file_tree.navigate_to(os.path.abspath(core_path))
+            else:
+                # Plugin paths
+                for fs_path, _dotted in controller.get_plugin_module_dirs():
+                    candidate = os.path.join(fs_path, module_file)
+                    if os.path.isfile(candidate):
+                        file_tree.navigate_to(os.path.abspath(candidate))
+                        break

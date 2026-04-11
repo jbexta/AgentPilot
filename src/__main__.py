@@ -4,14 +4,6 @@ from gui.main import launch
 
 os.environ['LITELLM_LOG'] = 'ERROR'
 
-# import fal_client
-
-# # Returns a list of all available FAL models
-# models = fal_client.models.list()
-
-# for model in models:
-#     print(model["id"], "-", model.get("description"))
-
 SHOW_TRACE = False # True #   
 APP_DIR = os.path.dirname(__file__)
 exclude_classes = []  # ['DraggableMember', 'CustomGraphicsView']

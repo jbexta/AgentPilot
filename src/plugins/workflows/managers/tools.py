@@ -33,7 +33,7 @@ class ToolManager(BaseManager):
             table_name='tools',
             load_columns=['uuid', 'config'],
             default_fields={
-                'config': {'_TYPE': 'code_block'}
+                'config': {'_TYPE': 'code'}
             },
             config_is_workflow=True,
         )

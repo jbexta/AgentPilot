@@ -21,14 +21,15 @@ import json
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QCursor, Qt
+from PySide6.QtGui import QCursor
 
-from gui.util import save_table_config, find_breadcrumb_widget, BreadcrumbWidget, CVBoxLayout
-from utils.helpers import block_signals, convert_to_safe_case
+from gui.util import find_main, get_selected_pages, save_table_config, find_attribute, BreadcrumbWidget, CVBoxLayout
+from utils.helpers import convert_to_safe_case, set_module_type
 
 from utils import sql
 
 
+@set_module_type('Widgets')
 class ConfigWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -173,6 +174,8 @@ class ConfigWidget(QWidget):
 
         # else:
         config.update(self.config)  # todo, needed?
+        # if 'name' in self.config:
+        #     print(f'GET_CONFIG: name={self.config["name"]}, id={id(self)}, class={self.__class__.__name__}')
 
         if getattr(self, 'config_widget', None):
             config.update(self.config_widget.get_config())
@@ -245,7 +248,7 @@ class ConfigWidget(QWidget):
         self.load_config(config)
 
     def update_breadcrumbs(self):
-        breadcrumb_widget = find_breadcrumb_widget(self)
+        breadcrumb_widget = find_attribute(self, 'breadcrumb_widget')
         if not breadcrumb_widget:
             return
         breadcrumb_widget.load()
@@ -312,19 +315,34 @@ class ConfigWidget(QWidget):
             widget.setEnabled(True)
             widget.setVisible(True)
 
-    # def enterEvent(self, event):
-    #     from gui.util import find_attribute
-    #     if find_attribute(self, 'user_editing', False):
-    #         self.toggle_edit_bar(True)
+    _in_edit_bar_event = False
 
-    # def leaveEvent(self, event):
-    #     widget_under_mouse = QApplication.widgetAt(QCursor.pos())
-    #     if self.edit_bar and (widget_under_mouse is self.edit_bar or
-    #                           self.isAncestorOf(widget_under_mouse)):
-    #         return
+    def enterEvent(self, event):
+        if self._in_edit_bar_event:
+            return
+        from gui.util import find_attribute
+        if find_attribute(self, 'user_editing', False):
+            self._in_edit_bar_event = True
+            try:
+                self.toggle_edit_bar(True)
+            finally:
+                self._in_edit_bar_event = False
 
-    #     self.toggle_edit_bar(False)
-    
+    def leaveEvent(self, event):
+        if self._in_edit_bar_event:
+            return
+        self._in_edit_bar_event = True
+        try:
+            widget_under_mouse = QApplication.widgetAt(QCursor.pos())
+            if self.edit_bar and (widget_under_mouse is self.edit_bar or
+                                  self.isAncestorOf(widget_under_mouse)):
+                return
+
+            self.toggle_edit_bar(False)
+            self.show_first_parent_edit_bar()
+        finally:
+            self._in_edit_bar_event = False
+
     def resizeEvent(self, event):
         super().resizeEvent(event)  # Temporarily disabled to break resize loop
         pass
@@ -345,6 +363,18 @@ class ConfigWidget(QWidget):
         # if self.splitter.orientation() != orientation:
         #     with block_signals(self.splitter):
         #         self.splitter.setOrientation(orientation)
+
+    def update_page_map(self):
+        """Persist the current page/tab/tree selection state to the DB."""
+
+
+        main = find_main()
+        if main:
+            path = get_selected_pages(main.main_pages)
+            sql.execute(
+                "UPDATE settings SET value = ? WHERE `field` = 'page_path'",
+                (json.dumps(path),),
+            )
 
     def get_edit_bar(self):
         edit_bar = getattr(self, 'edit_bar', None)
@@ -389,21 +419,21 @@ class ConfigWidget(QWidget):
         for btn in self.findChildren(OptionsButton):
             btn.setVisible(state)
 
-    # def toggle_edit_bar(self, state):
-    #     self.edit_bar_timer.stop()
-    #     if state:
-    #         from gui.util import find_attribute
-    #         user_editing = find_attribute(self, 'user_editing', False)
-    #         user_editable = find_attribute(self, 'user_editable', False)
-    #         if not user_editing or not user_editable:
-    #             return
-    #         if not self.edit_bar:
-    #             from gui.util import EditBar
-    #             self.edit_bar = EditBar(self)
-    #         self.edit_bar_timer.start(500)
-    #     else:
-    #         if self.edit_bar:
-    #             self.edit_bar.hide()
+    def toggle_edit_bar(self, state):
+        self.edit_bar_timer.stop()
+        if state:
+            from gui.util import find_attribute
+            user_editing = find_attribute(self, 'user_editing', False)
+            user_editable = find_attribute(self, 'user_editable', False)
+            if not user_editing or not user_editable:
+                return
+            if not self.edit_bar:
+                from gui.util import EditBar
+                self.edit_bar = EditBar(self)
+            self.edit_bar_timer.start(500)
+        else:
+            if self.edit_bar:
+                self.edit_bar.hide()
 
     def edit_bar_delayed_show(self):
         if self.edit_bar:

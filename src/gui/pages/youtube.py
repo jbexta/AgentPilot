@@ -2,12 +2,8 @@
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_fields import ConfigFields
-from gui.widgets.config_table import BaseTableModel, BaseTableWidget, ConfigTable
-from gui.util import find_ancestor_tree_widget
-from gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_table import ConfigTable
 from utils.sql import define_table
-from utils.helpers import display_message
-from utils.youtube import YouTubeManager
 
 define_table('youtube_channels')
 define_table('youtube_channel_playlists', relations=['channel_id'])
@@ -170,14 +166,8 @@ class Page_Youtube(ConfigDBTree):
                     readonly=False,
                     layout_type='horizontal',
                     tree_header_hidden=True,
-                    # config_widget=self.Youtuber_Config_Widget(parent=self),
-                    # folder_key='youtubers',
-                    # support_item_nesting=True,
                     searchable=True,
-                    # add_item_options={'title': 'Add channel', 'prompt': 'Enter channel URL or handle (e.g., @username):'},
-                    # del_item_options={'title': 'Delete channel', 'prompt': 'Are you sure you want to delete this channel?'},
                 )
-                # self.splitter.setSizes([400, 1000])
 
 
         class Channel_Info_Widget(ConfigFields):
@@ -253,65 +243,3 @@ class Page_Youtube(ConfigDBTree):
                     ],
                     auto_label_width=True,
                 )
-
-        # class Videos_Table_Widget(ConfigWidget):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         from gui.util import CVBoxLayout
-
-        #         self.layout = CVBoxLayout(self)
-        #         self.table = BaseTableWidget(self, full_row_select=True)
-        #         self.model = BaseTableModel()
-        #         self.table.setModel(self.model)
-
-        #         self.layout.addWidget(self.table)
-        #         self.setMinimumHeight(300)
-
-        #     def load(self):
-        #         parent_tree = find_ancestor_tree_widget(self)
-        #         item_id = parent_tree.get_selected_item_id()
-
-        #         if not item_id:
-        #             self.model.set_data([], [], [])
-        #             return
-
-        #         try:
-        #             import json
-        #             metadata = parent_tree.db_connector.get_scalar(
-        #                 f"SELECT metadata FROM {parent_tree.table_name} WHERE id = ?",
-        #                 (item_id,),
-        #                 load_json=True
-        #             )
-
-        #             if not metadata or 'videos' not in metadata:
-        #                 self.model.set_data([], [], [])
-        #                 return
-
-        #             videos = metadata['videos']
-        #             headers = ['Title', 'Duration', 'Upload Date', 'Views', 'URL']
-
-        #             data = []
-        #             for video in videos:
-        #                 duration = YouTubeManager.format_duration(video.get('duration', 0))
-        #                 upload_date = YouTubeManager.format_upload_date(video.get('upload_date', ''))
-        #                 views = YouTubeManager.format_view_count(video.get('view_count', 0))
-
-        #                 data.append([
-        #                     video.get('title', 'Unknown'),
-        #                     duration,
-        #                     upload_date,
-        #                     views,
-        #                     video.get('url', ''),
-        #                 ])
-
-        #             self.model.set_data(data, headers)
-
-        #             for i in range(len(headers)):
-        #                 if i == 0:
-        #                     self.table.horizontalHeader().setSectionResizeMode(i, self.table.horizontalHeader().ResizeMode.Stretch)
-        #                 else:
-        #                     self.table.resizeColumnToContents(i)
-
-        #         except Exception as e:
-        #             display_message(f"Failed to load videos: {str(e)}", "error")
-        #             self.model.set_data([], [], [])

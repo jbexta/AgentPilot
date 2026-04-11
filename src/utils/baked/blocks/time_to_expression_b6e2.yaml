@@ -1,0 +1,57 @@
+uuid: b6e2c7a1-4f3e-4e2a-9b7d-8c2f1e5d3a4b
+name: time-to-expression
+config:
+  _TYPE: workflow
+  name: time-to-expression
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 107
+    loc_y: 107
+    width: 450.0
+    height: 350.0
+    config:
+      prompt_model:
+        _model_name: gpt-5.2-chat-latest
+        kind: CHAT
+        provider: litellm
+        model_params: {}
+      data: |2
+
+        You are tasked with converting an rrule into a human language expression of time.
+
+        <rrule_conversion_example>
+        <current_datetime>
+        08-05-2025  11:37
+        </current_datetime>
+        <rrule>
+        [A valid rrule]
+        </rrule>
+        <answer>
+        [Only the natural language expression of time]
+        </answer>
+        </expression_conversion_example>
+
+        Here is the rrule string you need to convert:
+        <time_expression>
+        {{ time }}
+        </time_expression>
+
+        Write only the natural language expression of the rrule string inside the <answer> tag.
+      _TYPE: prompt
+      name: Prompt block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params:
+  - name: None
+    description: None
+    type: String
+    req: true
+parent_id: null
+folder_path: Time expressions

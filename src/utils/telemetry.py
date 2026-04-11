@@ -1,9 +1,5 @@
 from posthog import Posthog
 
-# from utils.security import decrypt_string
-
-# from utils.security import xor_encrypt_decrypt
-
 posthog = None
 my_uuid = ''
 enabled = False

@@ -1,0 +1,79 @@
+uuid: 1803d335-a121-4913-84de-77f29f0d7bec
+name: lyrics_gen
+config:
+  _TYPE: workflow
+  name: lyrics_gen
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 71
+    loc_y: 95
+    width: 450.0
+    height: 350.0
+    config:
+      prompt_model:
+        _model_name: claude-sonnet-4-6
+        kind: CHAT
+        provider: litellm
+        model_params:
+          temperature: 0.8499999999999999
+          structure.data: []
+          xml_roles.data: []
+      data: |-
+        # Role:
+        You are a professional songwriter{% if genre is defined %} specializing in {{ genre }}{% endif %}.
+        {% if writing_style is defined %}Your writing style is {{ writing_style }}.{% endif %}
+
+        # Task
+        Write{% if language is defined %}{{ language }}{% endif %} lyrics for a song{% if song_name is defined %} titled `{{ song_name }}`{% endif %}.
+        The lyrics must make sense semantically.
+        {% if song_name is defined %}The lyrics do **not** necessarily have to be completely centered around the song title{% endif %}
+
+        {% if topic is defined %}- **Topic:** {{ topic }}
+        {% endif %}{% if pacing is defined %}- **Pacing:** {{ pacing }}
+        {% endif %}{% if rhyme_scheme is defined %}- **Rhyme Scheme:** {{ rhyme_scheme }}
+        {% endif %}{% if artist is defined %}- **Artist:** {{ artist }}
+        {% endif %}{% if song_desc is defined %}- **Song Description:** {{ song_desc }}
+        {% endif %}
+
+        # Format
+        Format the sections [VERSE, BRIDGE, CHORUS etc] in square brackets with 2 newlines between each.
+        Do not output the song name.
+
+        Example output:
+
+        [SECTION]
+        SECTION LYRICS
+
+        [SECTION]
+        SECTION LYRICS
+
+        [SECTION]
+        SECTION LYRICS
+
+        [SECTION]
+        SECTION LYRICS
+
+        [SECTION]
+        SECTION LYRICS
+      _TYPE: prompt
+      name: Prompt
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params:
+  - name: artist
+    description: ''
+    type: String
+    req: true
+  - name: song_desc
+    description: ''
+    type: String
+    req: true
+parent_id: null
+folder_path: Music

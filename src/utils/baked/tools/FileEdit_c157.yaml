@@ -1,0 +1,25 @@
+uuid: c157ddb2-0760-4188-adca-ec82f681809e
+name: FileEdit
+config:
+  _TYPE: workflow
+  name: FileEdit
+  avatar_path: :/resources/icon-tool-small.png
+  description: ''
+  members:
+  - id: '2'
+    linked_id: null
+    loc_x: 177
+    loc_y: 102
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: code
+      name: Code Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+folder_path: Computer/Filesystem

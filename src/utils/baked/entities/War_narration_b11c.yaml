@@ -1,0 +1,43 @@
+uuid: b11c0278-75fb-4f0e-9abb-0cae3757bc85
+name: War narration
+config:
+  _TYPE: workflow
+  name: War narration
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 20
+    loc_y: 64
+    width: 450.0
+    height: 350.0
+    config:
+      _TYPE: user
+      name: You
+  - id: '2'
+    linked_id: entities.111
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      chat.model:
+        _model_name: gpt-5.2-chat-latest
+        kind: CHAT
+        provider: litellm
+        model_params: {}
+      chat.display_markdown: true
+      chat.sys_msg: ''
+      chat.preload.data: []
+      _format_block_keys:
+      - chat.sys_msg
+      name: Agent
+      _TYPE: agent
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []

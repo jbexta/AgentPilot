@@ -1,0 +1,25 @@
+uuid: 2372c19b-cdc7-4df0-890e-760ae4c6536d
+name: CreateModule
+config:
+  _TYPE: workflow
+  name: CreateModule
+  avatar_path: :/resources/icon-tool-small.png
+  description: ''
+  members:
+  - id: '1'
+    linked_id: tools.21
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      _TYPE: code
+      name: Code Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+folder_path: Modules

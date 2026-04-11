@@ -33,7 +33,7 @@ class ModuleComboBox(BaseCombo):
 
             self.clear()
             for module_name in modules:
-                self.addItem(module_name)  # , module_id)
+                self.addItem(module_name, module_name)
             self.addItem('< New Module >', '<NEW>')
 
     def on_index_changed(self, index):
@@ -55,3 +55,5 @@ class ModuleComboBox(BaseCombo):
             else:
                 # If dialog was cancelled or empty input, revert to previous selection
                 self.setCurrentText('Default')
+        if self.parent:
+            self.parent.update_config()
