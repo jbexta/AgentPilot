@@ -1,10 +1,3 @@
-"""Environments Page Module.
-
-Management page for execution environments. Environments define runtime
-contexts for code execution — Docker containers, restricted sandboxes,
-or the local interpreter.
-"""
-
 from PySide6.QtWidgets import QLabel, QHBoxLayout, QWidget
 from PySide6.QtGui import Qt
 

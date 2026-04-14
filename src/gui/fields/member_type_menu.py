@@ -1,11 +1,3 @@
-"""
-Member type menu field widget for member type selection.
-
-This module provides a MemberTypeMenu field widget that extends IconButton to create
-a button that opens a dropdown menu for member type selection. It provides a simple
-interface for selecting different member types through a contextual menu.
-"""
-
 import json
 from functools import partial
 from PySide6.QtWidgets import QMenu

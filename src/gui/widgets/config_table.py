@@ -1,23 +1,3 @@
-"""Configuration Table Widget Module.
-
-This module provides the ConfigTable widget, a base class for table-based configuration
-widgets in Agent Pilot. It provides a flat list interface without folder capabilities,
-ideal for simpler data management scenarios.
-
-Key Features:
-- Abstract base class for table-based configuration widgets
-- Extensible design for specialized table implementations
-- Dual-panel interface with table view and configuration widget
-- Filtering and search capabilities for table items
-- Table button controls for common operations
-- Integration with the configuration system
-- No folder/hierarchical organization (flat list only)
-
-The ConfigTable serves as an alternative to ConfigTree for scenarios where
-hierarchical organization is not needed, providing consistent behavior and
-appearance for table-based widgets.
-"""
-
 import datetime
 import json
 from decimal import Decimal

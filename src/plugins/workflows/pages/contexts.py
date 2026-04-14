@@ -1,24 +1,3 @@
-"""
-Contexts Page Module.
-
-This module provides the conversation contexts (chats) management page for the
-Agent Pilot GUI interface. The page enables users to view, organize, and manage
-their conversation history with agents and workflows, including branching
-conversations and chat organization.
-
-Key Features:
-- Conversation history viewing and management
-- Chat organization with folder structures
-- Conversation branching and threading support
-- Search and filtering of conversation history
-- Chat deletion and archival operations
-- Integration with the workflow execution system
-- Conversation metadata and statistics
-
-The page extends ConfigDBTree to provide database-backed conversation management
-with intuitive organization and navigation capabilities.
-"""
-
 from gui.util import find_main
 from gui.widgets.config_db_tree import ConfigDBTree
 

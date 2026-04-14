@@ -1,35 +1,3 @@
-"""Module Manager Module.
-
-This module provides the ModuleManager class for managing dynamic loading and unloading of
-modules within the Agent Pilot system. The module system enables runtime extension and
-customization of application functionality through pluggable components.
-
-Key Features:
-- Dynamic module loading and unloading at runtime
-- Multi-type module support (managers, pages, widgets, environments, providers, etc.)
-- Automatic module discovery and registration
-- Configuration hashing for change detection
-- Module type-based organization and folder mapping
-- Integration with the database for module persistence
-- Support for custom module development and deployment
-
-Module Types Supported:
-- Managers: System-level management components
-- Connectors: Modules that handle connections to databases
-- Pages: GUI page components for the interface
-- Widgets: Reusable UI widget components
-- Environments: Execution environment providers
-- Providers: AI model and service providers
-- Members: Workflow member components
-- Roles: Chat message display components
-- Behaviors: Agent behavior definitions
-- Fields: Form field components
-- Daemons: Background tasks or periodic jobs
-
-The ModuleManager enables Agent Pilot's extensible architecture, allowing developers to
-create custom modules that integrate seamlessly with the core application.
-"""  # unchecked
-
 import importlib
 import inspect
 import json
@@ -130,6 +98,21 @@ class ModuleManager(BaseManager):
         kwargs['folder_id'] = get_module_type_folder_id(module_type) if module_type else None
 
         super().add(name, **kwargs)
+
+        # Materialise the module on disk so Claude Code / IDEs can see a
+        # real file. In source mode we auto-bake (real source-import
+        # path + __file__). In frozen mode we write to the mirror
+        # alongside the executable but keep ``baked=0`` because the
+        # bundled source isn't writable.
+        if type_controller is None:
+            return
+        is_frozen = getattr(sys, 'frozen', False)
+        if is_frozen:
+            type_controller.write_mirror_file(name)
+        else:
+            auto_bake = self.system.config.get('system.auto_bake', False)
+            if auto_bake:
+                type_controller.bake_module(name)
 
     # def test_modules(self):
     #     for module_type in self.type_controllers:
@@ -256,9 +239,16 @@ class ModulesController(BaseManager):
         # Create and execute module
         config = json.loads(config)
         source_code = config.get('data', '')
+
+        from gui.pages.modules import get_module_abs_path
+        mirror_path = get_module_abs_path(db_id, module_name=module_name)
+        origin = str(mirror_path) if mirror_path and os.path.isfile(mirror_path) else None
+
         loader = VirtualModuleLoader(source_code)
-        spec = importlib.util.spec_from_loader(module_path, loader)
+        spec = importlib.util.spec_from_loader(module_path, loader, origin=origin)
         module = importlib.util.module_from_spec(spec)
+        if origin:
+            module.__file__ = origin
         sys.modules[module_path] = module
         try:
             spec.loader.exec_module(module)
@@ -274,6 +264,66 @@ class ModulesController(BaseManager):
         hash = metadata.get('hash')
         self[module_name] = (db_id, uuid, module_name, config, cls, kind_folder, metadata, hash, 0, folder_path)
 
+    def _resolve_module_db_id(self, module_name):
+        folder_id = (
+            get_module_type_folder_id(self.module_type)
+            if self.module_type else None
+        )
+        return sql.get_scalar(
+            "SELECT id FROM modules WHERE name = ? AND folder_id = ?",
+            (module_name, folder_id),
+        )
+
+    def _write_module_source_to_disk(self, module_name):
+        """Write this module's DB source to ``get_module_abs_path``.
+
+        Returns the path that was written, or ``None`` if the module or
+        its target path cannot be resolved. Creates parent directories
+        as needed; overwrites any existing file.
+        """
+        from gui.pages.modules import get_module_abs_path
+
+        db_id = self._resolve_module_db_id(module_name)
+        if db_id is None:
+            return None
+        config = sql.get_scalar(
+            "SELECT config FROM modules WHERE id = ?",
+            (db_id,), load_json=True,
+        ) or {}
+        source_code = config.get('data', '')
+        target = get_module_abs_path(db_id, module_name=module_name)
+        if target is None:
+            return None
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, 'w', encoding='utf-8') as f:
+            f.write(source_code)
+        return target
+
+    def bake_module(self, module_name):
+        """Write the module to ``src/<load_to_path>/<name>.py`` and mark
+        the DB row as ``baked=1`` so subsequent loads use the real
+        source-import path.
+
+        Idempotent: safe to call on an already-baked module.
+        """
+        target = self._write_module_source_to_disk(module_name)
+        if target is None:
+            return None
+        db_id = self._resolve_module_db_id(module_name)
+        if db_id is not None:
+            sql.execute(
+                "UPDATE modules SET baked = 1 WHERE id = ?", (db_id,)
+            )
+        return target
+
+    def write_mirror_file(self, module_name):
+        """Write the module's source to the on-disk mirror without
+        touching the ``baked`` flag. Used in frozen mode so Claude Code
+        and the user's IDE can see a real file while the DB loader
+        still owns module execution.
+        """
+        return self._write_module_source_to_disk(module_name)
+
     def load_source_modules(self):
         """
         Loads source modules by discovering them, importing, extracting their classes,
@@ -286,13 +336,24 @@ class ModulesController(BaseManager):
 
         # Discover modules from other plugins that provide this module type
         plugin_module_infos = self.discover_plugin_modules()
-        all_module_infos = discovered_module_infos | plugin_module_infos
-        
+        # Iterate core first, plugins second so that plugin-sourced modules
+        # always win the ``self[module_name]`` assignment when a same-named
+        # module exists in both (e.g. a stale bug-written core duplicate of
+        # a plugin module). Plugin modules carry the 11th-slot origin that
+        # ``get_module_file_path`` needs to route writes correctly; a core
+        # entry would leave it ``None`` and writes would drift back to the
+        # core codebase. Using a set union here would be non-deterministic.
+        all_module_infos = list(discovered_module_infos) + list(plugin_module_infos)
+
         folder_id = get_module_type_folder_id(self.module_type)
         for cls, module_path_str, kind_folder in all_module_infos:
             module_name = module_path_str.split('.')[-1]
             module = sys.modules[module_path_str]
-            source_code = inspect.getsource(module)
+            try:
+                source_code = inspect.getsource(module)
+            except TypeError:
+                # DB-backed VirtualModuleLoader override; already tracked in DB.
+                continue
             config = {'data': source_code, "name": module_name}
             metadata = get_metadata(config)
 
@@ -322,6 +383,18 @@ class ModulesController(BaseManager):
                     config['enabled'] = bool(db_enabled)
 
             if cls:  # Ensure a class was indeed found and extracted
+                # In-memory-only 11th slot: the parent package dotted path
+                # when the module was discovered under ``src/plugins/...``
+                # (e.g. ``plugins.my_plugin.providers`` for a module at
+                # ``plugins.my_plugin.providers.foo``), else ``None``. Used
+                # by ``gui.pages.modules.get_module_file_path`` to route
+                # bake / mirror writes back to the plugin directory instead
+                # of the core ``load_to_path``. Repopulated on each startup.
+                plugin_package = (
+                    module_path_str.rsplit('.', 1)[0]
+                    if module_path_str.startswith('plugins.')
+                    else None
+                )
                 self[module_name] = (
                     db_id,  # DB id (may be None if not in database)
                     None,  # UUID (not applicable for source modules)
@@ -333,6 +406,7 @@ class ModulesController(BaseManager):
                     hash_config(config), # Hash
                     1,  # Baked (source modules are baked)
                     '',  # Folder path (can be derived if needed, or left empty)
+                    plugin_package,  # Plugin parent package (in-memory only)
                 )
 
     def discover_modules(self, package_path: str, discovered_items=None):
@@ -363,7 +437,16 @@ class ModulesController(BaseManager):
             # Let's call it inner_module_full_path for clarity.
             inner_module_full_path = name
 
-            if name.split('.')[-1] == 'base' or name.split('.')[-1].startswith('_'):  # Check simple name part
+            leaf = name.split('.')[-1]
+            if leaf == 'base' or leaf.startswith('_'):
+                continue
+            # ``gui`` and ``core`` are reserved for the plugin-root layout
+            # (handled by ``get_plugin_module_dirs``) and are never valid as
+            # nested directories inside a module-type folder. Skipping them
+            # here prevents the recursive walk from picking up stray
+            # subfolders by those names and silently registering modules
+            # under colliding simple names / writing bakes to the wrong path.
+            if is_pkg and leaf in ('gui', 'core'):
                 continue
 
             if is_pkg:

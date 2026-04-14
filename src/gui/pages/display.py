@@ -1,23 +1,3 @@
-"""Display Page Module.
-
-This module provides the display and appearance settings page for the Agent Pilot
-GUI interface. The page enables users to customize the visual appearance,
-themes, and display preferences of the application to suit their preferences
-and accessibility needs.
-
-Key Features:
-- Theme and color scheme customization
-- Font and text size configuration
-- Display layout and organization options
-- Accessibility settings and preferences
-- Visual appearance customization
-- Real-time preview of display changes
-- Integration with application styling systems
-
-The page provides comprehensive display customization options to enhance
-the user experience and accessibility of the Agent Pilot interface.
-"""  # unchecked
-
 import json
 
 from PySide6.QtCore import QTimer
@@ -114,31 +94,34 @@ class Page_Display_Settings(ConfigJoined):
 
     def get_current_display_config(self):
         display_page = self.widgets[1]
-        roles_config_temp = sql.get_results("""
-            SELECT name, config
-            FROM roles
-            """, return_type='dict'
-                                            )
-        roles_config = {role_name: json.loads(config) for role_name, config in roles_config_temp.items()}
+        # Roles table is deprecated — bubble colours live on bubble module classes
+        # and bubbles use a transparent background, so per-bubble theme colour
+        # detection is no-longer applicable. Only display.* settings are returned.
+        # roles_config_temp = sql.get_results("""
+        #     SELECT name, config
+        #     FROM roles
+        #     """, return_type='dict'
+        #                                     )
+        # roles_config = {role_name: json.loads(config) for role_name, config in roles_config_temp.items()}
 
         current_config = {
-            'assistant': {
-                'bubble_bg_color': roles_config['assistant']['bubble_bg_color'],
-                'bubble_text_color': roles_config['assistant']['bubble_text_color'],
-            },
-            'code': {
-                'bubble_bg_color': roles_config['code']['bubble_bg_color'],
-                'bubble_text_color': roles_config['code']['bubble_text_color'],
-            },
+            # 'assistant': {
+            #     'bubble_bg_color': roles_config['assistant']['bubble_bg_color'],
+            #     'bubble_text_color': roles_config['assistant']['bubble_text_color'],
+            # },
+            # 'code': {
+            #     'bubble_bg_color': roles_config['code']['bubble_bg_color'],
+            #     'bubble_text_color': roles_config['code']['bubble_text_color'],
+            # },
             'display': {
                 'primary_color': display_page.primary_color_wgt.get_value(),
                 'secondary_color': display_page.secondary_color_wgt.get_value(),
                 'text_color': display_page.text_color_wgt.get_value(),
             },
-            'user': {
-                'bubble_bg_color': roles_config['user']['bubble_bg_color'],
-                'bubble_text_color': roles_config['user']['bubble_text_color'],
-            },
+            # 'user': {
+            #     'bubble_bg_color': roles_config['user']['bubble_bg_color'],
+            #     'bubble_text_color': roles_config['user']['bubble_text_color'],
+            # },
         }
         return current_config
 
@@ -201,44 +184,48 @@ class Page_Display_Settings(ConfigJoined):
                     'display.secondary_color': self.all_themes[theme_name]['display']['secondary_color'],
                     'display.text_color': self.all_themes[theme_name]['display']['text_color'],
                 },
-                'roles': {}
+                # 'roles': {}
             }
             # patch settings table
             sql.execute("""
                 UPDATE `settings` SET `value` = json_patch(value, ?) WHERE `field` = 'app_config'
             """, (json.dumps(patch_dicts['settings']),))
 
-            # todo all roles dynamically
-            if 'user' in self.all_themes[theme_name]:
-                patch_dicts['roles']['user'] = {
-                    'bubble_bg_color': self.all_themes[theme_name]['user']['bubble_bg_color'],
-                    'bubble_text_color': self.all_themes[theme_name]['user']['bubble_text_color'],
-                }
-                # patch user role
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'user'
-                """, (json.dumps(patch_dicts['roles']['user']),))
-            if 'assistant' in self.all_themes[theme_name]:
-                patch_dicts['roles']['assistant'] = {
-                    'bubble_bg_color': self.all_themes[theme_name]['assistant']['bubble_bg_color'],
-                    'bubble_text_color': self.all_themes[theme_name]['assistant']['bubble_text_color'],
-                }
-                # patch assistant role
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'assistant'
-                """, (json.dumps(patch_dicts['roles']['assistant']),))
-            if 'code' in self.all_themes[theme_name]:
-                patch_dicts['roles']['code'] = {
-                    'bubble_bg_color': self.all_themes[theme_name]['code']['bubble_bg_color'],
-                    'bubble_text_color': self.all_themes[theme_name]['code']['bubble_text_color'],
-                }
-                # patch code role
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'code'
-                """, (json.dumps(patch_dicts['roles']['code']),))
+            # Roles table is deprecated — bubbles use a transparent background
+            # and inherit the page colour, so theme primary_color already
+            # effectively re-colours bubbles. Per-role patches are no-ops.
+            #
+            # # todo all roles dynamically
+            # if 'user' in self.all_themes[theme_name]:
+            #     patch_dicts['roles']['user'] = {
+            #         'bubble_bg_color': self.all_themes[theme_name]['user']['bubble_bg_color'],
+            #         'bubble_text_color': self.all_themes[theme_name]['user']['bubble_text_color'],
+            #     }
+            #     # patch user role
+            #     sql.execute("""
+            #         UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'user'
+            #     """, (json.dumps(patch_dicts['roles']['user']),))
+            # if 'assistant' in self.all_themes[theme_name]:
+            #     patch_dicts['roles']['assistant'] = {
+            #         'bubble_bg_color': self.all_themes[theme_name]['assistant']['bubble_bg_color'],
+            #         'bubble_text_color': self.all_themes[theme_name]['assistant']['bubble_text_color'],
+            #     }
+            #     # patch assistant role
+            #     sql.execute("""
+            #         UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'assistant'
+            #     """, (json.dumps(patch_dicts['roles']['assistant']),))
+            # if 'code' in self.all_themes[theme_name]:
+            #     patch_dicts['roles']['code'] = {
+            #         'bubble_bg_color': self.all_themes[theme_name]['code']['bubble_bg_color'],
+            #         'bubble_text_color': self.all_themes[theme_name]['code']['bubble_text_color'],
+            #     }
+            #     # patch code role
+            #     sql.execute("""
+            #         UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'code'
+            #     """, (json.dumps(patch_dicts['roles']['code']),))
 
             page_settings = self.parent.parent
-            system.manager.load_manager('roles')
+            # system.manager.load_manager('roles')
             system.manager.load_manager('config')
 
             app_config = system.manager.config

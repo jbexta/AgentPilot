@@ -1,16 +1,3 @@
-"""
-Media upload field widget for configurable media file selection and upload.
-
-This module provides a MediaUpload field widget that combines a text input
-for manual URL entry with a browse button for local file selection. Files
-under 1MB are base64-encoded as data URIs; larger files are uploaded to
-the provider's CDN via the resolved provider instance.
-
-When used inside a studio context (a parent with a timeline), an extra
-popup button appears allowing the user to reference timeline audio or
-individual clips as media sources.
-"""
-
 import base64
 import json
 import mimetypes

@@ -28,8 +28,10 @@ config:
         provider: litellm
         model_params:
           temperature: 0.6
+          structure.data: []
+          xml_roles.data: []
       chat.display_markdown: true
-      chat.sys_msg: reply in block capitals
+      chat.sys_msg: reply in block capitals {{ gg }}
       chat.preload.data: []
       computer_use.enabled: false
       computer_use.grace_period: 3.0

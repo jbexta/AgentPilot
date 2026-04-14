@@ -1,7 +1,3 @@
-"""
-Text Studio - Full-featured text editor.
-Provides syntax highlighting, search/replace, and file management.
-"""
 import os
 
 from PySide6.QtWidgets import (

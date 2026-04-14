@@ -1,19 +1,3 @@
-"""Configuration Pages Widget Module.
-
-This module provides the ConfigPages widget, a vertically tabbed interface container that
-organizes multiple configuration widgets into a unified widget. It enables
-the creation of complex, multi-section configuration dialogs with consistent
-navigation and layout management.
-
-Key Features:
-- Multi-page tabbed configuration interface
-- Dynamic page loading and configuration management
-- Consistent navigation and layout across pages
-- Integration with the configuration system
-
-The ConfigPages widget is used for components that require multiple pages.
-"""
-
 import json
 
 from PySide6.QtWidgets import *

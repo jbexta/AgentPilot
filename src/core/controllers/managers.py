@@ -1,13 +1,3 @@
-"""
-Controller for Manager modules.
-
-Each Manager module contains a class that can optionally derive from Manager.
-
-The class can optionally implement the following attributes:
-
-- 
-"""
-
 from core.managers.modules import ModulesController
 
 

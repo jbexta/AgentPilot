@@ -1,8 +1,3 @@
-"""Condition popup button field widget.
-
-Opens a popup for configuring a CEL condition (enabled toggle + expression).
-"""
-
 from gui.util import IconButton
 
 

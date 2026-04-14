@@ -1,12 +1,3 @@
-"""
-Controller for Bubble modules.
-
-Each bubble module contains a class that derives from MessageBubble.
-
-The class can optionally implement the following methods:
-
-The class can optionally define buttons to be added to the bubble.
-"""
 from core.managers.modules import ModulesController
 from utils.helpers import convert_to_safe_case
 

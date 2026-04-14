@@ -37,6 +37,9 @@ class ToolApprovalBubble(MessageBubble):
     Resolves the member's ``_approval_future`` when user decides.
     """
 
+    bubble_bg_color = '#2d2a1e'
+    bubble_text_color = '#d4a844'
+
     def __init__(self, parent, message):
         super().__init__(parent=parent, message=message)
 

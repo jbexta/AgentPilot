@@ -1,13 +1,3 @@
-"""
-Popup button field widget for configurable member selection dialogs.
-
-This module provides a MemberPopupButton field widget that extends IconButton to create
-a button that opens a popup dialog for member configuration. It supports different
-member types and optional namespaces, providing an interface for complex member
-selection and configuration. The widget integrates with the configuration system
-and provides popup-based member management functionality.
-"""  # unchecked
-
 from gui.util import IconButton
 
 

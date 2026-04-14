@@ -143,6 +143,9 @@ class GeneralProject(ConfigJoined):
                 )
                 self.load(select_id=last_insert_id)
 
+            def update_name(self):
+                pass
+
             class Project_Chat_Widget(ChattableWorkflowWidget):
                 def __init__(self, parent):
                     super().__init__(
@@ -152,9 +155,15 @@ class GeneralProject(ConfigJoined):
                     )
 
                 def load_config(self, json_config=None):
-                    project_id = find_ancestor_tree_item_id(self.parent)
-                    self.kind = f'PROJECT:{project_id}'
-                    super().load_config(json_config)
+                    parent_kind = self.parent.kind
+                    if callable(parent_kind):
+                        parent_kind = parent_kind()
+                    self.kind = parent_kind
+                    task_id = self.parent.get_selected_item_id()
+                    if task_id is not None:
+                        self.goto_context(task_id)
+                    else:
+                        super().load_config(json_config)
 
         class Block_Maps(ConfigJoined):
             def __init__(self, parent):

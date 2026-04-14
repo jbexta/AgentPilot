@@ -1840,7 +1840,7 @@ class BaseTreeWidget(QTreeWidget):
         sql.execute(f"UPDATE `{self.parent.table_name}` SET folder_id = ? WHERE id = ?", (to_folder_id, dragging_item_id))
         
         is_baked = self.parent.is_tree_item_baked()
-        auto_bake = True  # system.manager.config.get('system.auto_bake', False)  # todo dedupe
+        auto_bake = system.manager.config.get('system.auto_bake', False)
         if auto_bake and is_baked:
             self.parent.bake_item(force=True)
         if hasattr(self.parent, 'on_edited'):
@@ -1861,7 +1861,7 @@ class BaseTreeWidget(QTreeWidget):
         sql.execute(f"UPDATE `{self.parent.table_name}` SET parent_id = ? WHERE id = ?", (to_item_id, dragging_item_id))
         
         is_baked = self.parent.is_tree_item_baked()
-        auto_bake = True  # system.manager.config.get('system.auto_bake', False)  # todo dedupe
+        auto_bake = system.manager.config.get('system.auto_bake', False)
         if auto_bake and is_baked:
             self.parent.bake_item(force=True)
         if hasattr(self.parent, 'on_edited'):
@@ -2643,7 +2643,7 @@ def save_table_config(table_name, item_id, value, ref_widget=None, key_field='co
                         WHERE id = ?
                     """, (json.dumps(metadata), item_id,))
 
-    auto_bake = True  # system.manager.config.get('system.auto_bake', False)  # todo dedupe
+    auto_bake = system.manager.config.get('system.auto_bake', False)
     if auto_bake and is_baked and ref_widget is not None and hasattr(ref_widget, 'bake_item'):
         old_name = sql.get_scalar(f"SELECT name FROM {table_name} WHERE id = ?", (item_id,))
         ref_widget.bake_item(force=True)

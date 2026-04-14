@@ -1,11 +1,3 @@
-"""
-File picker field widget for configurable file selection.
-
-This module provides a FilePicker field widget that extends QWidget to create
-an interactive file selection interface. It includes a text input for manual entry
-and a browse button for file dialogs. Integrates with the configuration system for file path settings.
-"""
-
 from PySide6.QtWidgets import QSizePolicy, QWidget, QLineEdit, QFileDialog, QHBoxLayout
 
 from gui.util import IconButton

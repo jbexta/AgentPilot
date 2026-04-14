@@ -171,7 +171,7 @@ class BaseManager(dict):
                     # query = f"UPDATE `{self.table_name}` SET {set_query} WHERE `uuid` = ?"
                     self.db_connector.execute(f"UPDATE `{self.table_name}` SET {set_query} WHERE `uuid` = ?", values)
                     return
-                
+
             self.db_connector.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})", values)
 
         except IntegrityError:

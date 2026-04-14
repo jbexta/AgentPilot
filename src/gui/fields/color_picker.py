@@ -1,12 +1,3 @@
-"""
-Color picker field widget for configurable color selection.
-
-This module provides a ColorPickerWidget field that extends QPushButton to create
-an interactive color picker. It displays the selected color as the button background
-and opens a color dialog when clicked. Supports RGBA color values and automatically
-integrates with the configuration system.
-"""  # unchecked
-
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor, Qt
 from PySide6.QtWidgets import QColorDialog, QPushButton

@@ -1,15 +1,3 @@
-"""
-Controller for Page modules.
-
-Each Page module contains a class that can derive from any Widget module, which themselves derive from ConfigWidget or QWidget.
-While it's ok to derive from QWidget directly, it's recommended to derive from ConfigWidget instead.
-
-The class can optionally implement the following attributes:
-- display_name
-- page_type
-- icon_path
-
-"""
 from core.managers.modules import ModulesController
 from utils.helpers import convert_to_safe_case
 

@@ -1,25 +1,3 @@
-
-"""Configuration JSON Tree Widget Module.
-
-This module provides the ConfigJsonTree widget, a specialized tree view component
-for managing JSON-based configuration data. It extends the ConfigTree functionality
-to support JSON serialization/deserialization and provides a tree interface for
-hierarchical JSON configuration structures.
-
-Key Features:
-- JSON-based configuration data management
-- Tree view interface for hierarchical JSON structures
-- Add/delete operations for JSON tree items
-- Automatic JSON serialization and deserialization
-- Integration with the configuration system
-- Field-based editing for JSON values
-- Visual feedback for JSON structure validation
-
-The ConfigJsonTree widget is used throughout Agent Pilot for managing complex
-configuration structures that need to be stored as JSON in the configuration
-system while providing an intuitive tree-based editing interface.
-"""  # unchecked
-
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap

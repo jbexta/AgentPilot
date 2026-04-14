@@ -1,25 +1,3 @@
-"""Workflow Settings Widget Module.
-
-This module provides the WorkflowSettings widget, a comprehensive interface for
-configuring and designing AI workflows in Agent Pilot. The widget includes a
-visual workflow designer with drag-and-drop functionality, member configuration,
-and real-time workflow visualization.
-
-Key Features:
-- Visual workflow designer with graphical member representation
-- Drag-and-drop workflow construction and modification
-- Member configuration and relationship management
-- Real-time workflow execution flow visualization
-- Multi-member workflow support with parallel and sequential execution
-- Input/output configuration for workflow parameters
-- Visual feedback for workflow state and connections
-- Integration with the workflow execution system
-
-The WorkflowSettings widget enables users to create complex multi-agent
-workflows through an intuitive visual interface while maintaining precise
-control over member configurations and execution flow.
-"""  # unchecked
-
 import json
 import math
 import sqlite3
@@ -2773,6 +2751,11 @@ class MemberConfigWidget(ConfigWidget):
 
 
 class HeaderFields(ConfigJoined):
+    NARROW_THRESHOLD = 450
+    NARROW_INDENT = 50
+    NARROW_TITLE_Y = 25
+    NARROW_TITLE_H = 22
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
@@ -2802,6 +2785,31 @@ class HeaderFields(ConfigJoined):
             sp = config_fields.link_wgt.sizePolicy()
             sp.setRetainSizeWhenHidden(True)
             config_fields.link_wgt.setSizePolicy(sp)
+        self._is_narrow = None
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not hasattr(self, 'context_bar'):
+            return
+        is_narrow = self.width() < self.NARROW_THRESHOLD
+        if is_narrow != self._is_narrow:
+            self._is_narrow = is_narrow
+            if is_narrow:
+                self.layout.removeWidget(self.context_bar)
+                self.context_bar.setParent(self)
+                self.context_bar.show()
+                self.context_bar.raise_()
+            else:
+                self.context_bar.layout.setContentsMargins(0, 0, 0, 0)
+                self.layout.insertWidget(1, self.context_bar)
+            self.setFixedHeight(50)
+        if is_narrow:
+            self.context_bar.setGeometry(
+                self.NARROW_INDENT,
+                self.NARROW_TITLE_Y,
+                max(0, self.width() - self.NARROW_INDENT),
+                self.NARROW_TITLE_H,
+            )
 
     def load_config(self, json_config=None):
         if json_config:
@@ -2854,7 +2862,8 @@ class HeaderFields(ConfigJoined):
             if not self.is_member_header:
                 workflow_settings = self.parent.parent
                 is_readonly = not getattr(workflow_settings, 'workflow_editable', True)
-            
+
+
             self.schema = [
                 {
                     'text': 'Avatar',

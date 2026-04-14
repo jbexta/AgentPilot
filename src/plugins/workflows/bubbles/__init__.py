@@ -19,10 +19,10 @@ import platform
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QUrl
+from PySide6.QtCore import QSize, QTimer, QUrl
 from PySide6.QtGui import QTextCursor, QTextOption, Qt, QDesktopServices
 
-from gui import system
+from gui import system as gui_system
 from gui.util import IconButton, find_chat_widget
 from utils.helpers import apply_alpha_to_hex
 from utils import sql
@@ -30,7 +30,30 @@ from utils import sql
 import mistune
 
 
+def get_bubble_attr(role, attr, default=None):
+    """Look up a styling attribute for a role via its bubble module class.
+
+    Replaces the old ``system.manager.roles.get(role, {}).get(attr, default)``
+    pattern. The role name is the bubble module filename — this reads the
+    attribute from the class discovered by the modules controller.
+    """
+    modules = gui_system.manager.modules.get_modules_in_folder(
+        'Bubbles', fetch_keys=('name', 'class'),
+    )
+    cls = next(
+        (c for n, c in modules if n.lower() == role.lower()),
+        MessageBubble,
+    )
+    return getattr(cls, attr, default)
+
+
 class MessageBubble(QTextEdit):
+    bubble_bg_color = '#00000000'
+    bubble_bg_opacity = 1.0
+    bubble_text_color = '#ffd1d1d1'
+    bubble_image_size = 25
+    show_bubble = True
+
     def __init__(self, parent, message, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent
@@ -38,6 +61,14 @@ class MessageBubble(QTextEdit):
         self.member_id: str = None
         print(f"MessageBubble: {message.id} {message.member_id} {message.role}")
         self.setContentsMargins(5, 0, 0, 0)
+
+        # Per-instance style overrides via kwargs (default to class attrs).
+        self.bubble_bg_color = kwargs.get('bubble_bg_color', self.bubble_bg_color)
+        self.bubble_text_color = kwargs.get('bubble_text_color', self.bubble_text_color)
+        self.bubble_bg_opacity = kwargs.get('bubble_bg_opacity', self.bubble_bg_opacity)
+        if self.bubble_bg_opacity != 1.0:
+            self.bubble_bg_color = apply_alpha_to_hex(
+                self.bubble_bg_color, self.bubble_bg_opacity)
 
         self.role: str = None
         self.log = None
@@ -97,10 +128,13 @@ class MessageBubble(QTextEdit):
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
 
-        role_config = system.manager.roles.get(self.role, {})
-        bg_color = role_config.get('bubble_bg_color', '#252427')
-        text_color = role_config.get('bubble_text_color', '#999999')
-        self.setStyleSheet(f"background-color: {bg_color}; color: {text_color};")
+        # role_config = system.manager.roles.get(self.role, {})
+        # bg_color = role_config.get('bubble_bg_color', '#252427')
+        # text_color = role_config.get('bubble_text_color', '#999999')
+        self.setStyleSheet(
+            f"background-color: {self.bubble_bg_color}; "
+            f"color: {self.bubble_text_color};"
+        )
 
     def extract_code_blocks(self, text):
         """Extracts code blocks, their first and last line number, and their language from a block of text"""
@@ -206,17 +240,17 @@ class MessageBubble(QTextEdit):
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
 
-        font = system.manager.config.get('display.text_font', '')
-        size = system.manager.config.get('display.text_size', 15)
+        font = gui_system.manager.config.get('display.text_font', '')
+        size = gui_system.manager.config.get('display.text_size', 15)
 
         cursor = self.textCursor()  # Get the current QTextCursor
         cursor_position = cursor.position()  # Save the current cursor position
         anchor_position = cursor.anchor()  # Save the anchor position for selection
 
-        role_config = system.manager.roles.get(self.role, {})
-
-        bubble_text_color = role_config.get('bubble_text_color', '#d1d1d1')
-        link_color = system.manager.config.get('display.link_color', '#438BB9')
+        # role_config = system.manager.roles.get(self.role, {})
+        # bubble_text_color = role_config.get('bubble_text_color', '#d1d1d1')
+        bubble_text_color = self.bubble_text_color
+        link_color = gui_system.manager.config.get('display.link_color', '#438BB9')
         hover_link_color = apply_alpha_to_hex(link_color, 0.7)
 
         if self.enable_markdown and not self.is_edit_mode:
@@ -248,8 +282,11 @@ class MessageBubble(QTextEdit):
             doc.setDefaultFont(font_obj)
             self.setDocument(doc)
             # Restore colors through stylesheet
-            bg_color = role_config.get('bubble_bg_color', '#252427')
-            self.setStyleSheet(f"background-color: {bg_color}; color: {bubble_text_color};")
+            # bg_color = role_config.get('bubble_bg_color', '#252427')
+            self.setStyleSheet(
+                f"background-color: {self.bubble_bg_color}; "
+                f"color: {bubble_text_color};"
+            )
 
         # Restore the cursor position and selection
         new_cursor = QTextCursor(self.document())  # New cursor from the updated document
@@ -355,20 +392,42 @@ class MessageBubble(QTextEdit):
 
 
     def sizeHint(self):
+        import math
         # Clone the document to avoid altering the state of the real one.
         doc = self.document().clone()
         margins = self.contentsMargins()
+
+        # Chrome that eats into the viewport width: frame on both sides, the
+        # QTextEdit's internal document margin, and a small safety buffer so
+        # sub-pixel rounding in idealWidth() doesn't cause the last glyph to wrap.
+        frame = self.frameWidth() * 2
+        doc_margin = int(doc.documentMargin() * 2)
+        chrome = frame + doc_margin + 2
 
         # --- Step 1: Determine the maximum available width for the bubble's text.
         chat_widget = find_chat_widget(self)
         # main = find_main_widget(self)
         max_text_width = 400  # A sensible default width.
 
+        # Horizontal overhead next to the bubble inside its MessageContainer:
+        # avatar column (~25 when shown), action-button column (~64 for two
+        # buttons + spacing), branch-indicator strip, and layout padding. We
+        # subtract a flat estimate so the resulting hint_width — which adds
+        # margins and chrome back on — still fits inside chat_widget.width()
+        # without triggering a horizontal scrollbar.
+        other_columns = 110
+
         if chat_widget:  #  and hasattr(main, 'main_pages'):
             try:
                 # This calculation can be fragile during UI setup.
                 # We subtract a bit more to account for layout spacing, scrollbars, etc.
-                available_width = chat_widget.width()  # - main.main_pages.settings_sidebar.width() - 60
+                available_width = (
+                    chat_widget.width()
+                    - chrome
+                    - margins.left()
+                    - margins.right()
+                    - other_columns
+                )  # - main.main_pages.settings_sidebar.width() - 60
                 if available_width > 0:
                     max_text_width = available_width
             except AttributeError:
@@ -378,7 +437,7 @@ class MessageBubble(QTextEdit):
         # --- Step 2: Calculate the text's "ideal" unwrapped width.
         # Set text width to -1 to tell the layout to calculate the size without any wrapping.
         doc.setTextWidth(-1)
-        ideal_content_width = doc.idealWidth() # + 6
+        ideal_content_width = math.ceil(doc.idealWidth()) # + 6
 
         # --- Step 3: Determine the actual width the bubble should use.
         # It should be as wide as its content, but no wider than the maximum allowed.
@@ -389,11 +448,17 @@ class MessageBubble(QTextEdit):
         doc.setTextWidth(final_text_width)
         text_height = doc.size().height()
 
-        # --- Step 5: Return the total size, including the widget's margins.
-        hint_width = final_text_width + margins.left() + margins.right()
-        hint_height = text_height + margins.top() + margins.bottom()
+        # --- Step 5: Return the total size, including the widget's margins and chrome.
+        hint_width = final_text_width + margins.left() + margins.right() + chrome
+        hint_height = text_height + margins.top() + margins.bottom() + frame
 
         return QSize(hint_width, hint_height)
+
+    def minimumSizeHint(self):
+        # QTextEdit's default minimumSizeHint inherits from QAbstractScrollArea
+        # and is several lines tall, which leaves a fat empty bubble for short
+        # messages. Defer to sizeHint so the bubble can shrink to its content.
+        return self.sizeHint()
 
     # # def sizeHint(self):
     # #     doc = self.document().clone()
@@ -539,10 +604,39 @@ class MessageBubble(QTextEdit):
             self.reload_following_bubbles()
 
         def reload_following_bubbles(self):
+            from PySide6.QtCore import QPointF
+            from PySide6.QtGui import QCursor, QEnterEvent
+            click_pos = QCursor.pos()
+
             chat_widget = find_chat_widget(self)
             chat_widget.message_collection.remove_messages_since(self.bubble_id)
             chat_widget.workflow.message_history.load()
             chat_widget.message_collection.refresh()
+
+            # The rebuild destroyed this bubble and recreated it under the
+            # cursor — Qt won't send an enterEvent because the pointer never
+            # moved. Deferring one event-loop tick lets Qt finish the pending
+            # layout pass on the new bubbles; after that, walk the freshly
+            # laid-out chat_bubbles, find the MessageBubble containing the
+            # click position, and synthesize an enter on it so its hover
+            # handler shows the branch buttons.
+            def _refire_enter():
+                for cont in chat_widget.message_collection.chat_bubbles:
+                    bubble = cont.bubble
+                    if not isinstance(bubble, MessageBubble):
+                        continue
+                    local = bubble.mapFromGlobal(click_pos)
+                    if bubble.rect().contains(local):
+                        QApplication.sendEvent(
+                            bubble,
+                            QEnterEvent(
+                                QPointF(local),
+                                QPointF(local),
+                                QPointF(click_pos),
+                            ),
+                        )
+                        return
+            QTimer.singleShot(0, _refire_enter)
 
         def update_buttons(self):
             pass

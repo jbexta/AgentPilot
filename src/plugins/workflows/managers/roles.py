@@ -17,13 +17,13 @@ allowing administrators to define different permission levels and capabilities
 for various user types within the Agent Pilot ecosystem.
 """  # unchecked
 
-from utils.helpers import BaseManager
-
-
-class RoleManager(BaseManager):
-    def __init__(self, system):
-        super().__init__(
-            system,
-            table_name='roles',
-            load_columns=['name', 'config']
-        )
+# from utils.helpers import BaseManager
+#
+#
+# class RoleManager(BaseManager):
+#     def __init__(self, system):
+#         super().__init__(
+#             system,
+#             table_name='roles',
+#             load_columns=['name', 'config']
+#         )

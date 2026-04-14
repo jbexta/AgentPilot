@@ -1,26 +1,3 @@
-
-"""Settings Page Module.
-
-This module provides the main settings and configuration page for the Agent Pilot
-application. The settings page offers comprehensive access to all application
-configurations, including system settings, plugin management, database operations,
-and user preferences.
-
-Key Features:
-- Application-wide configuration management
-- Plugin installation and management
-- Database backup and restore operations
-- System preferences and customization options
-- Import/export functionality for configurations
-- Advanced settings for power users
-- Multi-tab organization for different setting categories
-- Real-time configuration updates
-
-The page provides a centralized location for all administrative and configuration
-tasks, enabling users to customize their Agent Pilot experience and manage
-system-level operations.
-"""  # unchecked
-
 from PySide6.QtWidgets import QMessageBox
 from typing_extensions import override
 

@@ -1,23 +1,3 @@
-
-"""Agent Manager Module.
-
-This module provides the AgentManager class for managing AI agents within the Agent Pilot system.
-Agents are intelligent entities that can interact with users, execute workflows, and utilize tools
-to accomplish tasks. The AgentManager handles CRUD operations, configuration management, and
-organizational features for agents.
-
-Key Features:
-- Agent creation, modification, and deletion
-- Configuration management with workflow support
-- Folder-based organization for agent categorization
-- Database persistence with UUID tracking
-- Integration with the workflow execution system
-
-The AgentManager extends BaseManager to provide specialized functionality for agent entities,
-distinguishing them from other entity types like contacts while maintaining consistent data management
-patterns throughout the application.
-"""  # unchecked
-
 from utils.helpers import BaseManager
 
 

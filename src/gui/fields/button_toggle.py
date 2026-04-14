@@ -1,11 +1,3 @@
-"""
-Toggle button field widget for configurable toggle buttons.
-
-This module provides a ButtonToggle field widget that extends ToggleIconButton
-to create configurable toggle buttons. It automatically connects to the parent's
-update_config method and provides value management for boolean toggle states.
-"""  # unchecked
-
 from gui.util import ToggleIconButton
 
 

@@ -202,6 +202,9 @@ class Text(QWidget):
     def clear_value(self):
         self.widget.clear()
 
+    def setReadOnly(self, readonly):
+        self.widget.setReadOnly(readonly)
+
 
 class CTextEdit(QPlainTextEdit):
     def __init__(self, parent=None, fold_mode='xml', enhancement_key=None, wrap_text=False, format_blocks=True):

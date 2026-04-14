@@ -1,9 +1,3 @@
-"""Probability Settings Widget.
-
-Provides mode selection (Uniform / Gaussian) with conditional
-fields for configuring the Probability member.
-"""
-
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from utils.helpers import set_module_type

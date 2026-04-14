@@ -1,28 +1,3 @@
-
-"""
-User Settings Widget for Agent Pilot.
-
-This module provides a comprehensive configuration widget for managing user settings
-and preferences within the Agent Pilot application. It organizes user configuration
-options into multiple pages including personal information and chat preferences.
-
-Key Features:
-• Multi-page configuration interface with Info and Chat settings
-• User information management and profile configuration
-• Chat preferences and behavior customization
-• Integration with the ConfigPages architecture for organized layout
-• Member ID tracking for user-specific configurations
-• Dynamic page-based navigation and settings organization
-• Real-time configuration updates and persistence
-• Support for user personalization and preference management
-
-The UserSettings widget extends ConfigPages to provide a paginated interface for
-managing user preferences and account settings. It serves as a central hub in the
-Agent Pilot user interface for personal configuration, allowing users to customize
-their experience, manage their profile information, and configure chat behavior
-preferences throughout the application.
-"""  # unchecked
-
 from PySide6.QtGui import Qt
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_tabs import ConfigTabs

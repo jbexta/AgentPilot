@@ -1,26 +1,3 @@
-
-"""Code Block Member Module.
-
-This module provides the CodeBlock member, a programmable block that can execute
-code in various programming languages within workflows. Code blocks enable
-dynamic computation, data processing, and integration with external systems
-through code execution in managed environments.
-
-Key Features:
-- Multi-language code execution (Python, JavaScript, etc.)
-- Environment and virtual environment management
-- Secure code execution with environment isolation
-- Dynamic code generation and AST manipulation
-- Integration with the workflow execution system
-- Variable and state management across executions
-- Error handling and execution logging
-- Support for asynchronous code execution
-
-Code blocks provide powerful computational capabilities for workflows,
-enabling complex data processing, API integrations, and custom logic
-execution within the Agent Pilot ecosystem.
-"""
-
 import ast
 import json
 from textwrap import dedent

@@ -1,16 +1,3 @@
-"""Claude Code Settings Widget Module.
-
-This module provides the ClaudeCodeSettings widget, a tabbed configuration interface
-for customizing Claude Code execution parameters and tool availability.
-
-Key Features:
-- Model selection for Claude Code
-- System message customization
-- Built-in Claude Code tool toggles (Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch)
-- Custom tools selection from database
-- Schema-driven configuration with real-time updates
-"""
-
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_tabs import ConfigTabs
 from gui.widgets.config_joined import ConfigJoined
@@ -68,9 +55,12 @@ class ClaudeCodeSettings(ConfigTabs):
                     'num_lines': 12,
                     'default': '',
                     'stretch_x': True,
+                    'stretch_y': True,
+                    'wrap_text': True,
+                    'highlighter': 'xml',
+                    'fold_mode': 'xml',
                     'format_blocks': True,
                     'enhancement_key': 'system_message',
-                    'stretch_y': True,
                     'label_position': 'top',
                 },
             ]

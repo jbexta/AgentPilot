@@ -1,26 +1,3 @@
-
-"""
-Contact Settings Widget for Agent Pilot.
-
-This module provides a specialized configuration widget for managing contact/user avatar settings
-and related personal information within the Agent Pilot application. It allows users to configure
-their visual representation and identification details.
-
-Key Features:
-• Avatar image selection and management with configurable diameter display
-• Contact information fields configuration and validation
-• Automatic field alignment for centered display layout
-• Support for image file handling and preview functionality
-• Dynamic field updating based on member/contact selection
-• Validation and error handling for contact data integrity
-• Seamless integration with the parent widget architecture
-
-The ContactSettings widget extends ConfigFields to provide a specialized interface for
-managing user contact information and avatar settings. It serves as a key component
-in the Agent Pilot user interface for personalizing the user experience and maintaining
-contact data consistency throughout the application.
-"""  # unchecked
-
 from PySide6.QtGui import Qt
 from gui.widgets.config_fields import ConfigFields
 from utils.helpers import set_module_type

@@ -1,23 +1,3 @@
-"""API Manager Module.
-
-This module provides the APIManager class for managing API configurations and credentials
-within the Agent Pilot system. The APIManager handles secure storage and retrieval of
-API keys, client configurations, and provider settings for various AI services and
-external integrations.
-
-Key Features:
-- Secure API key and credential management
-- Provider plugin configuration and integration
-- Client key generation and management
-- Database persistence for API configurations
-- Support for multiple AI service providers
-- Integration with the LiteLLM provider system
-
-The APIManager enables Agent Pilot to connect with various AI model providers,
-external services, and APIs while maintaining secure credential storage and
-flexible configuration management for different integration scenarios.
-"""  # unchecked
-
 import json
 import os
 

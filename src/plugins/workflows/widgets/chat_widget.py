@@ -15,7 +15,7 @@ from utils.helpers import IMAGE_EXTS, display_message, block_signals, \
 from utils import sql
 
 from plugins.workflows.members.workflow import Workflow
-from gui.util import IconButton, CHBoxLayout, CVBoxLayout, ToggleIconButton, colorize_pixmap, find_main, save_table_config
+from gui.util import IconButton, CHBoxLayout, CVBoxLayout, ToggleIconButton, colorize_pixmap, find_main, save_table_config, find_ancestor_tree_widget
 
 from gui.widgets.config_fields import ConfigFields
 from plugins.workflows.widgets.workflow_settings import WorkflowSettings
@@ -189,8 +189,7 @@ class ChattableWorkflowWidget(ConfigWidget):
             )
         finally:
             self.end_turn()
-            if self.__class__.__name__ == 'Page_Chat':
-                await self.try_generate_title()
+            await self.try_generate_title()
 
     def new_sentence(self, role, member_id, sentence):
         with self.workflow.message_history.thread_lock:
@@ -337,12 +336,19 @@ class ChattableWorkflowWidget(ConfigWidget):
             # title = system.manager.providers.get_scalar(prompt, single_line=True, model_obj=model_obj)
             title = title.replace('\n', ' ').strip("'").strip('"')
             
-            context_buttons = self.workflow_settings.header_widget.widgets[1]
-            title_label = context_buttons.title_label
-            with block_signals(title_label):
-                title_label.setText(title)
-                title_label.setCursorPosition(0)
-            context_buttons.title_edited(title)
+            header = self.workflow_settings.header_widget
+            if hasattr(header, 'context_bar'):
+                title_label = header.context_bar.title_label
+                with block_signals(title_label):
+                    title_label.setText(title)
+                    title_label.setCursorPosition(0)
+                header.context_bar.title_edited(title)
+
+            tree_widget = find_ancestor_tree_widget(self)
+            if tree_widget:
+                item = tree_widget.tree.currentItem()
+                if item:
+                    item.setText(0, title)
             
         except Exception as e:
             display_message(
@@ -463,8 +469,9 @@ class ChattableWorkflowWidget(ConfigWidget):
             def __init__(self, parent):
                 super().__init__(parent)
                 self.parent = parent
-                # Set minimum height
-                self.setMinimumHeight(51)
+                # Match the standalone SendButton height so the two controls
+                # sit at the same size when empty.
+                self.setMinimumHeight(30)
                 
                 self.setProperty("class", "msgbox")
 
@@ -520,7 +527,10 @@ class ChattableWorkflowWidget(ConfigWidget):
                 self.on_resize()
 
             def sizeHint(self):
-                content_height = min(700, self.document().size().height())
+                content_height = max(
+                    self.minimumHeight(),
+                    min(700, self.document().size().height()),
+                )
                 return QSize(self.width(), content_height)
 
             # files = []

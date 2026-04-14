@@ -1,7 +1,3 @@
-"""
-Video Studio - Full-featured video editor similar to Kdenlive.
-Provides timeline editing, multi-track support, effects, transitions, and export.
-"""
 from functools import partial
 import json
 import os

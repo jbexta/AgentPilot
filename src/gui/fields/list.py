@@ -1,11 +1,3 @@
-"""
-List field widget for managing dynamic lists of field items.
-
-This module provides a List field widget that can contain multiple instances of
-any other field type. It allows users to add and remove items dynamically, making
-it suitable for managing arrays of configuration values.
-"""
-
 from PySide6.QtWidgets import QWidget, QPushButton, QHBoxLayout
 
 from gui.util import CVBoxLayout, get_field_widget

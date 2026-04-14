@@ -1,27 +1,3 @@
-
-"""
-Notification Settings Widget for Agent Pilot.
-
-This module provides a specialized configuration widget for managing notification settings
-and visual notification properties within the Agent Pilot application. It enables users
-to customize notification appearance, behavior, and styling preferences.
-
-Key Features:
-• Color customization for notification display and theming
-• Notification field configuration through ConfigFields integration
-• Support for visual notification styling and appearance settings
-• Integration with the Agent Pilot notification system
-• Real-time notification preview and configuration updates
-• Support for mini avatar display in notifications
-• Dynamic notification behavior configuration
-• Seamless integration with the parent widget architecture
-
-The NotifSettings widget extends ConfigJoined to provide a unified interface for
-configuring notification appearance and behavior. It serves as a key component in the
-Agent Pilot user interface for customizing the notification experience, allowing users
-to personalize how notifications are displayed and interact with the application.
-"""  # unchecked
-
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from utils.helpers import set_module_type

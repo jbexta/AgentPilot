@@ -30,7 +30,10 @@ config:
           structure.data: []
           xml_roles.data: []
       chat.fast: true
-      chat.sys_msg: ''
+      chat.sys_msg: |-
+        {{ overview }}
+
+        {% if current_page %}The user is currently viewing the file: `{{ current_page }}`{% endif  %}
       builtin_tools.bash: true
       builtin_tools.read: true
       builtin_tools.write: true

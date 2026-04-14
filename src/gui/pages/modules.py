@@ -1,24 +1,3 @@
-"""
-Modules Page Module.
-
-This module provides the modules management page for the Agent Pilot GUI interface.
-The page enables users to manage, install, and configure the various module types
-that extend Agent Pilot's functionality, including custom pages, widgets, providers,
-and other extensible components.
-
-Key Features:
-- Module installation and uninstallation
-- Module type management (managers, pages, widgets, etc.)
-- Runtime module loading and configuration
-- Module dependency tracking
-- Custom module development support
-- Module status monitoring and updates
-- Integration with the dynamic module system
-
-The page provides comprehensive module lifecycle management, enabling users to
-extend Agent Pilot's capabilities through custom and third-party modules.
-"""
-
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget, QMessageBox, QSizePolicy
 
@@ -104,42 +83,45 @@ class Page_Module_Settings(ConfigDBTree):
         if not item_id:
             return
 
-        # # Get module data from database
         module_name = sql.get_scalar('SELECT name FROM modules WHERE id = ?', (item_id,))
-        module_config = sql.get_scalar('SELECT config FROM modules WHERE id = ?', (item_id,), load_json=True)
-        
-        source_code = module_config.get('data', '')
         file_path = get_module_abs_path(item_id)
-        
+        if file_path is None:
+            return
+
         # Check if file exists and ask for confirmation if not forcing
-        if file_path.exists():
-            if not force:
-                retval = QMessageBox.question(
-                    self,
-                    "File Exists",
-                    f"The file {file_path} already exists. Do you want to overwrite it?",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                if retval != QMessageBox.Yes:
-                    return
-        
+        if file_path.exists() and not force:
+            retval = QMessageBox.question(
+                self,
+                "File Exists",
+                f"The file {file_path} already exists. Do you want to overwrite it?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if retval != QMessageBox.Yes:
+                return
+
+        folder_id = sql.get_scalar(
+            'SELECT folder_id FROM modules WHERE id = ?', (item_id,)
+        )
+        folder_name = sql.get_scalar(
+            'SELECT name FROM folders WHERE id = ?', (folder_id,)
+        ) if folder_id else None
+        controller = system.manager.modules.type_controllers.get(
+            folder_name.lower().replace(' ', '_')
+        ) if folder_name else None
+        if controller is None:
+            display_message(
+                message=f"No controller for module type: {folder_name}",
+                icon=QMessageBox.Warning,
+            )
+            return
+
         try:
-            # Ensure directory exists
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write source code to file
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(source_code)
-            
-            # Update the module to mark it as baked
-            sql.execute('UPDATE modules SET baked = 1 WHERE id = ?', (item_id,))
-            
+            controller.bake_module(module_name)
             if not force:
                 display_message(
                     message=f"Successfully baked module {module_name} to {file_path}",
                     icon=QMessageBox.Information,
                 )
-            
         except Exception as e:
             display_message(
                 message=f"Error baking module {module_name}: {e}",
@@ -183,7 +165,7 @@ class Page_Module_Settings(ConfigDBTree):
         folder_name = sql.get_scalar('SELECT name FROM folders WHERE id = ?', (folder_id,))
         if not folder_name:
             return
-        controller = self.manager.type_controllers.get(folder_name.lower())
+        controller = self.manager.type_controllers.get(folder_name.lower().replace(' ', '_'))
         if not controller:
             return
         
@@ -370,7 +352,7 @@ class Module_Config_Widget(ConfigJoined):
                 if not folder_name:
                     self.set_status('Error', 'Module folder not found')
                     return
-                controller = system.manager.modules.type_controllers.get(folder_name.lower())
+                controller = system.manager.modules.type_controllers.get(folder_name.lower().replace(' ', '_'))
                 if not controller:
                     self.set_status('Error', f'No controller for type: {folder_name}')
                     return
@@ -399,7 +381,7 @@ class Module_Config_Widget(ConfigJoined):
             ) if folder_id else None
 
             if folder_name and module_name:
-                controller = system.manager.modules.type_controllers.get(folder_name.lower())
+                controller = system.manager.modules.type_controllers.get(folder_name.lower().replace(' ', '_'))
                 if controller:
                     import sys as _sys
                     module_path = controller.get_module_path(module_name)
@@ -460,14 +442,26 @@ def get_module_file_path(module_id, module_name=None):
         return None
 
     type_controller = system.manager.modules.type_controllers.get(
-        folder_name.lower(),
+        folder_name.lower().replace(' ', '_'),
     )
     load_to_path = getattr(type_controller, 'load_to_path', None)
     if not load_to_path:
         print(f'Load to path not found for module {module_name} in folder {folder_name}')
         return None
 
+    # If this module was discovered under ``src/plugins/...`` at startup,
+    # route the write back to its original plugin directory rather than the
+    # core ``load_to_path``. ``load_source_modules`` stores the parent
+    # package dotted path (e.g. ``plugins.my_plugin.providers``) in the
+    # in-memory-only 11th slot of the controller's per-module tuple, which
+    # reconstructs both supported plugin layouts verbatim.
+    entry = type_controller.get(module_name) if type_controller else None
+    plugin_package = entry[10] if isinstance(entry, tuple) and len(entry) > 10 else None
+    if plugin_package:
+        return Path('src') / plugin_package.replace('.', '/') / f"{module_name.lower()}.py"
+
     base_path = f"src/{load_to_path.replace('.', '/')}"
+
     return Path(base_path) / f"{module_name.lower()}.py"
 
 
@@ -482,23 +476,13 @@ def get_module_abs_path(module_id, module_name=None):
     pathlib.Path or None
     """
     from pathlib import Path
+    from utils.filesystem import get_application_path
 
     rel_path = get_module_file_path(module_id, module_name=module_name)
     if rel_path is None:
         return None
 
-    app_config = sql.get_scalar(
-        "SELECT config FROM projects WHERE name = 'Application'",
-        load_json=True,
-    )
-    if not app_config:
-        return None
-
-    working_dir = app_config.get('working_dir', '')
-    if not working_dir:
-        return None
-
-    return Path(working_dir) / rel_path
+    return Path(get_application_path()) / rel_path
 
 
 class PageEditor(FramelessResizeMixin, ConfigWidget):

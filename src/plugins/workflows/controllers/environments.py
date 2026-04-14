@@ -1,10 +1,3 @@
-"""
-Controller for Environment modules.
-
-Each Environment module contains a class that derives from Environment.
-
-The class can optionally implement the following methods:
-"""
 from core.managers.modules import ModulesController
 
 

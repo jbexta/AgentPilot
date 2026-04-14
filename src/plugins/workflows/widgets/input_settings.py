@@ -1,26 +1,3 @@
-"""
-Input Settings Widget for Agent Pilot.
-
-This module provides a comprehensive configuration widget for managing input field settings
-and conditional logic within the Agent Pilot application. It combines multiple configuration
-interfaces to create a unified input configuration experience.
-
-Key Features:
-• Composite widget combining input fields and conditional logic settings
-• Vertical layout organization for optimal user experience
-• Integration with ConfigFields for basic input configuration
-• Support for conditional input behavior and validation rules
-• Dynamic configuration updates with real-time validation
-• Error handling and user feedback through message dialogs
-• JSON tree configuration for complex input structures
-• Seamless integration with the parent widget architecture
-
-The InputSettings widget extends ConfigJoined to provide a unified interface for
-configuring input field behavior and conditional logic. It serves as a central component
-in the Agent Pilot system for managing user input configurations, enabling flexible
-and dynamic input handling throughout the application.
-"""  # unchecked
-
 from PySide6.QtWidgets import QMessageBox
 
 from gui.widgets.config_fields import ConfigFields

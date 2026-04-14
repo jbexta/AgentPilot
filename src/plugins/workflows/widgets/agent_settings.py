@@ -1,26 +1,3 @@
-
-"""Agent Settings Widget Module.
-
-This module provides the AgentSettings widget, a comprehensive tabbed interface
-for configuring AI agents in Agent Pilot. It organizes agent configuration into
-multiple specialized pages covering all aspects of agent behavior, from message
-handling to voice integration.
-
-Key Features:
-- Multi-page tabbed interface for agent configuration
-- Message configuration with model selection and parameters
-- Preload settings for agent initialization
-- Tool integration and management
-- Group chat configuration for multi-agent scenarios
-- Voice integration settings and configuration
-- Schema-driven configuration with validation
-- Real-time configuration updates and persistence
-
-The AgentSettings widget serves as the primary interface for defining agent
-behavior, capabilities, and integration settings, providing a structured
-approach to agent configuration management.
-"""  # unchecked
-
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_json_tree import ConfigJsonTree
 from gui.widgets.config_tabs import ConfigTabs

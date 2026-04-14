@@ -1,12 +1,3 @@
-"""
-Integer field widget for configurable integer number input.
-
-This module provides an Integer field widget that extends QSpinBox to create
-configurable numeric input fields for integer values. It supports customizable
-minimum/maximum ranges, step values, and automatically integrates with the
-configuration system. Includes an option_schema for field configuration.
-"""  # unchecked
-
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QSlider, QSpinBox, QWidget, QLabel
 

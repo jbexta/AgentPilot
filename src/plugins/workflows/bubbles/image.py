@@ -1,26 +1,3 @@
-"""Image Message Role GUI Module.
-
-This module provides the ImageBubble class, a specialized message role
-for displaying images in the chat interface. Image roles handle image
-loading, display, zoom functionality, and various image formats within
-conversations.
-
-Key Features:
-- Image display and rendering capabilities
-- Support for multiple image formats and sources
-- Zoom and pan functionality for image viewing
-- Image loading from files and URLs
-- Error handling for invalid or corrupted images
-- Integration with the message role framework
-- Dynamic image sizing and scaling
-- Image metadata and path handling
-- Automatic polling for queued image generation requests
-
-Image roles provide a rich visual interface for viewing images
-within conversations, enabling multimedia communication and
-visual content sharing with AI systems.
-"""
-
 import asyncio
 import json
 import os
@@ -38,6 +15,11 @@ from gui import system
 
 
 class ImageBubble(QWidget):
+    bubble_bg_color = '#00000000'
+    bubble_text_color = '#ff949494'
+    bubble_image_size = 25
+    show_bubble = True
+
     def __init__(self, parent, message):
         super().__init__(parent=parent)
         self.parent = parent
@@ -60,11 +42,13 @@ class ImageBubble(QWidget):
         self.main_layout.setSpacing(5)
 
         # Styling
-        role_config = system.manager.roles.get(self.role, {})
-        bg_color = role_config.get('bubble_bg_color', '#252427')
-        text_color = role_config.get('bubble_text_color', '#999999')
+        # role_config = system.manager.roles.get(self.role, {})
+        # bg_color = role_config.get('bubble_bg_color', '#252427')
+        # text_color = role_config.get('bubble_text_color', '#999999')
         self.setStyleSheet(
-            f"background-color: {bg_color}; color: {text_color};")
+            f"background-color: {self.bubble_bg_color}; "
+            f"color: {self.bubble_text_color};"
+        )
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 

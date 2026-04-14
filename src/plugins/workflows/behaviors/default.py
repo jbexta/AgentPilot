@@ -1,25 +1,3 @@
-"""Default Behavior System Module.
-
-This module provides the DefaultBehavior class, which implements the standard
-execution behavior for workflows in Agent Pilot. The default behavior manages
-the sequential and parallel execution of workflow members, handling task
-coordination, message flow, and member interaction patterns.
-
-Key Features:
-- Workflow member execution coordination
-- Sequential and parallel task execution
-- Asynchronous member processing and management
-- Message flow control and filtering
-- Member state tracking and management
-- Error handling and workflow recovery
-- Integration with the workflow execution system
-- Support for various member types and configurations
-
-The default behavior serves as the core execution engine for most
-workflows, providing reliable and efficient execution patterns for
-multi-member AI interactions and automations.
-"""  # unchecked
-
 import asyncio
 import json
 

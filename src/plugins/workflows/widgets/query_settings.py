@@ -1,9 +1,3 @@
-"""Query Settings Widget.
-
-Provides method selection (Execute / Get scalar / Get results) with
-a conditional return_type dropdown for configuring the Query member.
-"""
-
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from utils.helpers import set_module_type

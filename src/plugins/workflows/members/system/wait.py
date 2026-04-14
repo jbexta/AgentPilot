@@ -1,21 +1,3 @@
-"""Wait System Member Module.
-
-This module provides the Wait member, a system utility for pausing or delaying
-workflow execution for a specified duration. Wait steps enable workflows to
-introduce time-based delays, synchronize with external events, or throttle
-processing.
-
-Key Features:
-- Pause workflow execution for a configurable duration
-- Support for seconds, minutes, or custom time units
-- Useful for rate-limiting, polling, or timed actions
-- Can be used to synchronize with external systems or events
-
-Wait steps allow workflows to control timing, pacing, and synchronization,
-enabling more flexible and robust automation.
-
-"""
-
 from typing import Dict, Any, Union
 
 from plugins.workflows.members import Member

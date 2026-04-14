@@ -70,69 +70,72 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
 
 
     # ############################# ROLES ############################### #
-
-    reset_table(
-        table_name='roles',
-        item_configs={
-            "user": {
-                "bubble_bg_color": "#ff222332",
-                "bubble_text_color": "#ffd1d1d1",
-                "bubble_image_size": 25,
-                "module": "user_bubble",
-            },
-            "assistant": {
-                "bubble_bg_color": "#ff171822",
-                "bubble_text_color": "#ffb2bbcf",
-                "bubble_image_size": 25,
-                "module": "assistant_bubble",
-            },
-            "system": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ff949494",
-                "bubble_image_size": 25,
-            },
-            "audio": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ff949494",
-                "bubble_image_size": 25,
-                "module": "audio_bubble",
-            },
-            "code": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ff949494",
-                "bubble_image_size": 25,
-                "module": "code_bubble",
-            },
-            "tool": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ffb2bbcf",
-                "bubble_image_size": 25,
-                "module": "tool_bubble",
-            },
-            "output": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ff818365",
-                "bubble_image_size": 25,
-            },
-            "result": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ff818365",
-                "bubble_image_size": 25,
-                "module": "result_bubble",
-            },
-            "image": {
-                "bubble_bg_color": "#00000000",
-                "bubble_text_color": "#ff949494",
-                "bubble_image_size": 25,
-                "module": "image_bubble",
-            },
-            "instruction": {
-                "bubble_bg_color": "#00ffffff",
-                "bubble_text_color": "#ff818365",
-                "bubble_image_size": 25,
-            },
-        }
-    )
+    # Roles table is no longer the source of truth for bubble styling.
+    # Bubble styling is defined as class attributes on bubble modules in
+    # src/plugins/workflows/bubbles/ (see MessageBubble + subclasses).
+    #
+    # reset_table(
+    #     table_name='roles',
+    #     item_configs={
+    #         "user": {
+    #             "bubble_bg_color": "#ff222332",
+    #             "bubble_text_color": "#ffd1d1d1",
+    #             "bubble_image_size": 25,
+    #             "module": "user_bubble",
+    #         },
+    #         "assistant": {
+    #             "bubble_bg_color": "#ff171822",
+    #             "bubble_text_color": "#ffb2bbcf",
+    #             "bubble_image_size": 25,
+    #             "module": "assistant_bubble",
+    #         },
+    #         "system": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ff949494",
+    #             "bubble_image_size": 25,
+    #         },
+    #         "audio": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ff949494",
+    #             "bubble_image_size": 25,
+    #             "module": "audio_bubble",
+    #         },
+    #         "code": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ff949494",
+    #             "bubble_image_size": 25,
+    #             "module": "code_bubble",
+    #         },
+    #         "tool": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ffb2bbcf",
+    #             "bubble_image_size": 25,
+    #             "module": "tool_bubble",
+    #         },
+    #         "output": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ff818365",
+    #             "bubble_image_size": 25,
+    #         },
+    #         "result": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ff818365",
+    #             "bubble_image_size": 25,
+    #             "module": "result_bubble",
+    #         },
+    #         "image": {
+    #             "bubble_bg_color": "#00000000",
+    #             "bubble_text_color": "#ff949494",
+    #             "bubble_image_size": 25,
+    #             "module": "image_bubble",
+    #         },
+    #         "instruction": {
+    #             "bubble_bg_color": "#00ffffff",
+    #             "bubble_text_color": "#ff818365",
+    #             "bubble_image_size": 25,
+    #         },
+    #     }
+    # )
 
     # ############################# THEMES ############################### #
 

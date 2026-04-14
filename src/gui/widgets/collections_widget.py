@@ -1,13 +1,3 @@
-"""Collections Widget Module.
-
-Tree view widget for organizing media assets (video, image, audio) that can be
-added to the Video Studio timeline.
-
-Supports two types of folders:
-- Local folders: Stored in the filesystem under `collections/`
-- Global folders: Stored in the `settings` table, accessible across all projects
-"""
-
 import json
 import os
 import shutil

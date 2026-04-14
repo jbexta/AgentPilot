@@ -1,12 +1,3 @@
-"""
-Controller for Controller modules.
-
-Each Controller module contains a class that derives from ModulesController.
-
-The class can optionally implement the following methods:
-- initial_content(module_name)
-"""
-
 from core.managers.modules import ModulesController
 
 

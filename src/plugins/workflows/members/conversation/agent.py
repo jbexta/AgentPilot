@@ -1,25 +1,3 @@
-"""Agent Conversation Member Module.
-
-This module provides the Agent member, a conversational AI participant that
-can engage in multi-turn conversations, process messages, and generate
-intelligent responses. Agents serve as the primary AI entities within
-workflows, capable of reasoning, problem-solving, and natural language interaction.
-
-Key Features:
-- Multi-turn conversation management and context retention
-- AI language model integration with configurable parameters
-- System message and personality configuration
-- Structured and unstructured response generation
-- Tool calling and function execution capabilities
-- Message history tracking and conversation state management
-- Integration with various AI model providers
-- Workflow parameter passing and configuration
-
-Agents enable sophisticated AI interactions within workflows, providing
-natural language processing, reasoning, and conversational capabilities
-for complex multi-agent scenarios.
-"""
-
 from typing import Any
 
 from gui import system

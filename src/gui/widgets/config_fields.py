@@ -1,24 +1,3 @@
-
-"""Configuration Fields Widget Module.
-
-This module provides the ConfigFields widget, a dynamic form generator that creates
-configuration interfaces based on schema definitions. It supports a wide variety
-of extensible field types defined under `gui/fields/`. Provides consistent styling and behavior across all configuration
-forms in Agent Pilot.
-
-Key Features:
-- Schema-driven dynamic form generation
-- Support for multiple field types
-- Extensible field type system
-- Real-time configuration updates and validation
-- Flexible layout management with customizable field alignment
-- Automatic value binding and persistence
-- Conditional field visibility and validation
-
-The ConfigFields widget enables rapid development of configuration interfaces
-while maintaining consistency and providing a rich user experience.
-"""
-
 from functools import partial
 import inspect
 
@@ -251,7 +230,10 @@ class ConfigFields(ConfigWidget):
                 widget.setVisible(False)
 
             if readonly:
-                widget.setEnabled(False)
+                if hasattr(widget, 'setReadOnly'):
+                    widget.setReadOnly(True)
+                else:
+                    widget.setEnabled(False)
 
         if row_layout:
             self.layout.addLayout(row_layout)

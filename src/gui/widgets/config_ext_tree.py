@@ -1,24 +1,3 @@
-
-"""Configuration External Tree Widget Module.
-
-This module provides the ConfigExtTree widget, an extended JSON tree widget that
-supports external data fetching and asynchronous operations. It combines the
-functionality of ConfigJsonTree with external data source integration and
-real-time data updates.
-
-Key Features:
-- External data fetching with asynchronous operations
-- Real-time data updates through signal-slot mechanism
-- Timer-based refresh capabilities
-- Integration with external data sources
-- Threaded data retrieval for UI responsiveness
-- Signal-based communication for fetched data
-
-The ConfigExtTree widget extends the standard JSON tree functionality to support
-dynamic data loading from external sources while maintaining the tree interface
-for configuration management.
-"""  # unchecked
-
 from PySide6.QtCore import Signal, Slot, QRunnable, QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt

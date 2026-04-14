@@ -1,17 +1,3 @@
-"""Configuration Side Tabs Widget Module.
-
-This module provides the ConfigSideTabs widget, which creates a vertical
-collection of collapsible, resizable sections. Each section has a title header
-with a dropdown arrow to expand or collapse the content.
-
-Key Features:
-- Vertical layout of collapsible sections with splitter handles
-- Resizable sections that redistribute space on collapse
-- Click-to-toggle expansion state
-- Integration with the configuration system
-- Config propagation across sections
-"""
-
 from PySide6.QtWidgets import QWidget, QFrame, QSplitter, QLabel
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont

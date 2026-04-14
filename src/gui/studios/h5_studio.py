@@ -1,8 +1,3 @@
-"""
-H5 Studio - HDF5 file viewer and editor.
-Provides tree navigation, dataset viewing, and metadata display for HDF5 files.
-Optimized for large datasets with lazy loading and pagination.
-"""
 import os
 
 import h5py

@@ -1,27 +1,3 @@
-
-"""
-Configuration widget for organizing multiple configuration pages in a tabbed interface.
-
-This module provides the ConfigTabs widget, which creates a tabbed interface for organizing
-multiple configuration pages or sections. The widget extends ConfigCollection to provide
-tab-based navigation between different configuration components.
-
-Key features:
-- Tabbed interface for organizing multiple configuration pages
-- Dynamic tab creation and management functionality
-- Automatic schema building for all contained tab widgets
-- Optional tab bar hiding for embedded usage scenarios
-- Breadcrumb navigation integration
-- User-editable tabs
-
-The widget is essential for Agent Pilot's configuration system, providing an organized way
-to present complex configuration interfaces that span multiple categories or sections.
-It's commonly used in settings pages, agent configurations, and other multi-faceted
-configuration scenarios where logical grouping improves user experience.
-"""
-
-
-
 from PySide6.QtWidgets import *
 from typing_extensions import override
 

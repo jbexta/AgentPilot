@@ -1,0 +1,29 @@
+Error executing module gui.pages.okokok: name 'ConfigWidget' is not defined
+Error extracting class from module plugins.workflows.primitives.boolean: type 'bool' is not an acceptable base type
+Error extracting class from module plugins.workflows.primitives.boolean: type 'bool' is not an acceptable base type
+Loading manager: modules
+Error executing module gui.pages.okokok: name 'ConfigWidget' is not defined
+Error extracting class from module plugins.workflows.primitives.boolean: type 'bool' is not an acceptable base type
+Error extracting class from module plugins.workflows.primitives.boolean: type 'bool' is not an acceptable base type
+Loading manager: agents
+Loading manager: apis
+Loading manager: blocks
+Loading manager: config
+Loading manager: daemons
+Loading manager: environments
+Loading manager: models
+Loading manager: projects
+Loading manager: providers
+Loading manager: skills
+Loading manager: tools
+Loading manager: venvs
+qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1 LGPL version 2.1 or later
+INFO:core.managers.daemons:Daemon tasks started (task <Task pending name='daemon:tasks' coro=<DaemonManager._run_daemon() running at /home/jb/CursorProjects/AgentPilot/src/core/managers/daemons.py:68>>)
+INFO:core.managers.daemons:Starting daemon tasks
+schedule_upcoming_tasks
+All tasks scheduled: ['9e7b339b-ce62-4a51-bcbe-03848cc7b7d7']
+Integer.set_value(): Invalid value: None
+Integer.set_value(): Invalid value: None
+MessageBubble: 19057 7 user
+MessageBubble: 19064 8 assistant
+QThread: Destroyed while thread is still running

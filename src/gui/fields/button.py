@@ -1,11 +1,3 @@
-"""
-Button field widget for configurable icon buttons.
-
-This module provides a Button field widget that extends IconButton to serve as
-a configurable field component. It integrates with the configuration system
-while providing icon-based button functionality.
-"""
-
 from gui.util import IconButton
 
 

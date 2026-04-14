@@ -1,37 +1,22 @@
-"""User Message Role GUI Module.
-
-This module provides the UserBubble class, a specialized message role
-for displaying user messages in the chat interface. User roles enable
-message editing, resending, and user interaction controls within the
-conversation view.
-
-Key Features:
-- User message display and editing capabilities
-- Message resending and retry functionality
-- Editable message content and formatting
-- Interactive message controls and buttons
-- Integration with workflow execution
-- Branch management for message editing
-- Message history and version control
-- Theme and styling support
-
-User roles provide an interactive interface for users to view, edit,
-and manage their messages within conversations, enabling flexible
-communication with AI systems.
-"""  # unchecked
-
 import qasync
 
+from gui import system as gui_system
 from plugins.workflows.bubbles import MessageBubble, MessageButton
 from utils.helpers import message_button
 
 
 class UserBubble(MessageBubble):
+    bubble_text_color = '#ffd1d1d1'
+    bubble_bg_opacity = 0.15
+
     def __init__(self, parent, message):
+        text_color = gui_system.manager.config.get(
+            'display.text_color', '#ffcacdd5')
         super().__init__(
             parent=parent,
             message=message,
             readonly=False,
+            bubble_bg_color=text_color,
         )
 
     @message_button('btn_resend')

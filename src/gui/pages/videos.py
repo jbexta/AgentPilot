@@ -1,24 +1,3 @@
-"""Video Studio Page Module.
-
-This module provides a comprehensive video editing interface for Agent Pilot,
-enabling users to create, edit, and export video projects similar to Kdenlive.
-
-Key Features:
-- Multi-track timeline editing with drag-and-drop
-- Real-time video preview with playback controls
-- Media bin for organizing imported media files
-- Effects and transitions library
-- Clip manipulation (trim, split, cut, delete, move)
-- Project save/load functionality
-- Video export capabilities
-- Multiple video/audio tracks support
-- Zoom controls for precise editing
-- Playhead scrubbing and position control
-
-The page provides a full-featured non-linear video editing experience while
-maintaining consistency with the Agent Pilot interface.
-"""
-
 from gui.studios.video_studio import VideoStudio
 from gui.widgets.config_db_tree import ConfigDBTree
 from utils.helpers import set_module_type

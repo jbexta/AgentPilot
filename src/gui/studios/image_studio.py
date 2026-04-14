@@ -1,7 +1,3 @@
-"""
-Image Studio - Full-featured image editor similar to Photoshop.
-Provides layer-based editing, drawing tools, filters, and export functionality.
-"""
 import json
 import os
 from dataclasses import dataclass

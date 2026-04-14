@@ -1,23 +1,3 @@
-"""LiteLLM Provider Module.
-
-This module provides the LiteLLM provider integration for Agent Pilot, enabling
-connection to over 100 different AI model providers through a unified interface.
-LiteLLM serves as the primary AI model integration layer, supporting text generation,
-structured outputs, and various model configurations.
-
-Key Features:
-- Support for 100+ AI model providers (OpenAI, Anthropic, Google, etc.)
-- Unified API interface for different model providers
-- Structured output generation with Instructor integration
-- Asynchronous and synchronous completion support
-- Network connectivity validation and error handling
-- Model configuration and parameter management
-- Integration with Agent Pilot's model management system
-
-The LiteLLM provider enables Agent Pilot to work with virtually any AI model
-provider while maintaining consistent interfaces and functionality.
-"""  # unchecked
-
 import json
 import os
 import asyncio

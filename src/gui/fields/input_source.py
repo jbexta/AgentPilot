@@ -1,13 +1,3 @@
-"""
-Input source selection field widget for workflow connections.
-
-This module provides an InputSourceComboBox field widget that enables users to
-select and configure input sources for workflow connections. It supports multiple
-source types including 'Output' and 'Structure' sources, with dynamic options
-based on the selected source type. The widget integrates with the workflow system
-to provide contextual source options based on available members and their configurations.
-"""  # unchecked
-
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
@@ -174,7 +164,9 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            roles = sql.get_results("SELECT name FROM roles", return_type='list')
+            # roles = sql.get_results("SELECT name FROM roles", return_type='list')
+            from gui import system
+            roles = system.manager.modules.get_modules_in_folder('Bubbles')
             with block_signals(self):
                 self.clear()
                 self.addItem('  Any role', '<ANY>')

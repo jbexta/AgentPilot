@@ -1,25 +1,3 @@
-"""Notification System Member Module.
-
-This module provides the Notif member, a system utility for sending
-notifications and alerts within workflows. Notifications enable workflows
-to communicate status updates, alerts, and important information to users
-or external systems.
-
-Key Features:
-- System notification and alert generation
-- Integration with notification systems and services
-- Configurable notification content and formatting
-- Workflow status and progress reporting
-- User alert and messaging capabilities
-- External system notification support
-- Event-driven notification triggering
-- Message templating and dynamic content
-
-Notifications enable workflows to provide feedback, alerts, and status
-updates to users and external systems, enhancing the user experience
-and workflow monitoring capabilities.
-"""
-
 from typing import Dict, Any
 
 from plugins.workflows.members import Member

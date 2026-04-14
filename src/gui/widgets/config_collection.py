@@ -1,23 +1,3 @@
-"""Configuration Collection Widget Module.
-
-This module provides the ConfigCollection widget, a container widget that manages
-multiple configuration pages or components in a collection-based interface. It
-serves as a base class for widgets that need to manage multiple configuration
-entities with shared operations.
-
-Key Features:
-- Collection-based configuration management
-- Multiple page/component handling
-- Shared configuration operations across collection items
-- Integration with the configuration system
-- Message display and user interaction dialogs
-- Safe case conversion for configuration keys
-- Database integration for persistent configuration
-
-The ConfigCollection widget provides a foundation for managing groups of related
-configuration items with consistent behavior and operations across the collection.
-"""  # unchecked
-
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 from typing_extensions import override
 

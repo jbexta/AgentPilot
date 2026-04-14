@@ -1,5 +1,3 @@
-"""Base media settings widget shared by Image, Video, and Audio settings."""
-
 import asyncio
 import os
 

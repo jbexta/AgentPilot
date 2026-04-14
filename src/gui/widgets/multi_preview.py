@@ -1,11 +1,3 @@
-"""Multi-media preview grid widget.
-
-Displays a collection of media files (images, videos, audio) in a
-two-column grid.  Remote URLs are downloaded asynchronously.  Also
-supports polling for async generation results via the provider
-abstraction (``get_request_status`` / ``get_request_result``).
-"""
-
 import asyncio
 import os
 import tempfile

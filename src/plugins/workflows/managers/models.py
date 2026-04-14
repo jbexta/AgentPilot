@@ -1,7 +1,3 @@
-"""
-Models Manager Module.
-"""  # unchecked
-
 import json
 import os
 

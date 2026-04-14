@@ -1,10 +1,3 @@
-"""Probability Flow Member Module.
-
-Rolls against a user-configured percentage (0-100) and yields
-a pass/fail system message, introducing randomness into workflows.
-Supports Uniform (flat chance) and Gaussian (bell curve) modes.
-"""
-
 import random
 
 from plugins.workflows.members import Member

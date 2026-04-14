@@ -1,9 +1,3 @@
-"""Job Hunter Page Module.
-
-Search for jobs across multiple APIs, auto-apply through ATS endpoints,
-generate tailored cover letters via LLM, and track applications.
-"""
-
 import asyncio
 import json
 import webbrowser

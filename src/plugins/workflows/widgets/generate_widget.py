@@ -1,13 +1,3 @@
-"""Reusable Generate button widget.
-
-Provides a ConfigFields subclass with a single Generate button that
-runs a model asynchronously and pushes results to the nearest
-MultiPreview widget found in the parent chain.
-
-Subclasses must override ``get_current_model()`` to return the
-model_obj dict used by ``system.manager.models.run_model``.
-"""
-
 import asyncio
 import json
 import os

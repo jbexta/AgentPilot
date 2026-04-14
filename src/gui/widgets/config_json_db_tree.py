@@ -1,26 +1,3 @@
-"""
-Configuration widget for displaying and managing JSON-stored database references in a tree view.
-
-This module provides the ConfigJsonDBTree widget, which creates a tree-based interface for
-managing collections of database items that are referenced by ID in JSON configuration fields.
-The widget displays items from a specified database table and allows users to add/remove items
-from the collection.
-
-Key features:
-- Tree view display of database items with custom icons and field visibility
-- Add/remove functionality with integrated tree buttons
-- Flexible schema support for different database table structures
-- JSON configuration storage of item ID collections
-- Customizable field display and tree appearance options
-- Read-only mode support for display-only scenarios
-- Horizontal or vertical layout configuration
-- Integration with Agent Pilot's SQL database layer
-
-The widget is commonly used throughout Agent Pilot for managing collections of related items
-like agents, models, tools, or other database entities that need to be referenced in
-configuration settings.
-"""  # unchecked
-
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override

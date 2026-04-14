@@ -1,14 +1,3 @@
-"""
-Controller for Daemon modules.
-
-Each Daemon module contains a class that derives from Daemon.
-
-The class must implement the following methods:
-- __init__(self, **kwargs)
-- start(self)
-- stop(self)
-"""
-
 from core.managers.modules import ModulesController
 
 

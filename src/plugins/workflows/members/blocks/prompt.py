@@ -1,24 +1,3 @@
-"""Prompt Block Member Module.
-
-This module provides the PromptBlock member, an AI-powered block that processes
-text prompts through language models to generate intelligent responses. Prompt
-blocks serve as the core building blocks for AI interactions within workflows,
-enabling sophisticated text generation, reasoning, and conversational capabilities.
-
-Key Features:
-- AI language model integration and prompt processing
-- Configurable model selection and parameters
-- Dynamic prompt generation and templating
-- Integration with the LLM member framework
-- Message handling and conversation context management
-- Structured and unstructured text generation
-- Support for various AI model providers
-- Workflow integration and parameter passing
-
-Prompt blocks enable users to create intelligent workflows that leverage
-large language models for text generation, analysis, and reasoning tasks.
-"""
-
 from typing import Any
 
 from plugins.workflows.members import LlmMember

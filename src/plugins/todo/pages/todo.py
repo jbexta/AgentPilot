@@ -1,9 +1,3 @@
-"""Todo Page Module.
-
-Provides a todo list page for managing tasks with priorities,
-due dates, and completion status.
-"""
-
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
@@ -15,7 +9,7 @@ define_table('todo')
 
 @set_module_type('Pages')
 class Page_Todo(ConfigDBTree):
-    display_name = 'Todo!'
+    display_name = 'Todo!!!!!'
     icon_path = ':/resources/icon-todo.png'
     page_type = 'main'
 
@@ -88,14 +82,14 @@ class Page_Todo(ConfigDBTree):
 
     class Todo_Config_Widget(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent)
+            super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.Todo_Config_Fields(parent=self),
             ]
 
         class Todo_Config_Fields(ConfigFields):
             def __init__(self, parent):
-                super().__init__(parent=parent)
+                super().__init__(parent=parent, layout_type='vertical')
                 self.schema = [
                     {
                         'text': 'Done',

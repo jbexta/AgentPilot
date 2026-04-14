@@ -1,12 +1,3 @@
-"""
-Controller for Widget modules.
-
-Each widget module contains a class that derives from QWidget.
-
-The class can optionally implement the following methods:
-
-"""
-
 from core.managers.modules import ModulesController
 
 

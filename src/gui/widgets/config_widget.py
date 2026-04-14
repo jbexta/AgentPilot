@@ -1,22 +1,3 @@
-"""Configuration Widget Module.
-
-This module provides the base ConfigWidget class that serves as the foundation for
-all configuration widgets in Agent Pilot. The ConfigWidget enables dynamic
-configuration UI generation based on schema definitions, loading and saving
-configuration data, and other common functionality.
-
-Key Features:
-- Schema-driven UI default generation
-- Database persistence for configuration data
-- Real-time configuration updates and validation
-- Edit mode management
-- Integration with the configuration system
-- Extensible widget framework for custom configuration types
-
-The ConfigWidget is extended by specialized configuration widgets to provide
-tailored interfaces for different types of settings and components.
-"""
-
 import json
 
 from PySide6.QtCore import QTimer

@@ -1,24 +1,3 @@
-"""System Page Module.
-
-This module provides the system-level configuration and management page for the
-Agent Pilot GUI interface. The page enables administrators to configure core
-system settings, manage system resources, monitor application performance,
-and handle system-level operations.
-
-Key Features:
-- System configuration and administration
-- Performance monitoring and resource management
-- System security and authentication settings
-- Integration with external services and APIs
-- System maintenance and diagnostic tools
-- Backup and recovery operations
-- Logging and audit trail management
-- Advanced system troubleshooting capabilities
-
-The page provides comprehensive system administration tools for maintaining
-and optimizing the Agent Pilot installation and infrastructure.
-"""
-
 import json
 import re
 

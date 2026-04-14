@@ -1080,24 +1080,25 @@ class Main(FramelessResizeMixin, QMainWindow):
         if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'finance_config'"):
             sql.execute("INSERT INTO settings (field, value) VALUES ('finance_config', '{}')")
 
-        # update the json field  `roles`.`config`, set 'hide_bubbles' to
-        audio_config = json.dumps({"bubble_bg_color": "#003b3b3b", "bubble_text_color": "#ff818365"})
-        sql.execute("UPDATE roles SET config = ? WHERE name = 'audio'", (audio_config,))
+        # Roles table is deprecated — bubble styling lives on bubble module classes.
+        # # update the json field  `roles`.`config`, set 'hide_bubbles' to
+        # audio_config = json.dumps({"bubble_bg_color": "#003b3b3b", "bubble_text_color": "#ff818365"})
+        # sql.execute("UPDATE roles SET config = ? WHERE name = 'audio'", (audio_config,))
 
         # add enhancement_blocks to settings table
         if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'enhancement_blocks'"):
             sql.execute("INSERT INTO settings (field, value) VALUES ('enhancement_blocks', '{}')")
 
-        # if 'modules' is in `roles`.`config` WHERE `name` = 'user'
-        has_module_field = sql.get_scalar("SELECT json_extract(config, '$.module') FROM roles WHERE name = 'user'")
-        if not has_module_field:
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'audio'", ('AudioBubble',))
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'code'", ('CodeBubble',))
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'tool'", ('ToolBubble',))
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'result'", ('ResultBubble',))
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'image'", ('ImageBubble',))
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'user'", ('UserBubble',))
-            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'assistant'", ('AssistantBubble',))
+        # # if 'modules' is in `roles`.`config` WHERE `name` = 'user'
+        # has_module_field = sql.get_scalar("SELECT json_extract(config, '$.module') FROM roles WHERE name = 'user'")
+        # if not has_module_field:
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'audio'", ('AudioBubble',))
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'code'", ('CodeBubble',))
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'tool'", ('ToolBubble',))
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'result'", ('ResultBubble',))
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'image'", ('ImageBubble',))
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'user'", ('UserBubble',))
+        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'assistant'", ('AssistantBubble',))
 
         sql.ensure_column_in_tables(
             tables=[

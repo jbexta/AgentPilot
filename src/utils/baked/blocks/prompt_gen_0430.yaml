@@ -14,11 +14,12 @@ config:
     height: 350.0
     config:
       prompt_model:
-        _model_name: gpt-5.2-chat-latest
+        _model_name: gpt-5.3-chat-latest
         kind: CHAT
         provider: litellm
         model_params:
-          temperature: 0.6
+          structure.data: []
+          xml_roles.data: []
       data: |-
         Today you will be writing instructions to an eager, helpful, but inexperienced and unworldly AI assistant who needs careful instruction and examples to understand how best to behave. I will explain a task to you. You will write instructions that will direct the assistant on how best to accomplish the task consistently, accurately, and correctly. Here are some examples of tasks and instructions.
 
@@ -502,5 +503,4 @@ config:
     description: None
     type: String
     req: true
-parent_id: null
 folder_path: Enhancement

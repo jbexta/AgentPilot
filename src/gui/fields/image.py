@@ -1,14 +1,3 @@
-"""
-Image field widget for configurable image selection and display.
-
-This module provides an Image field widget that extends QLabel to create
-an interactive image picker and display component. It supports circular and
-rectangular image display, drag-and-drop functionality, and popup-based
-image selection via ImageSettings. The widget automatically handles image
-loading, scaling, and path management, integrating with the configuration
-system for persistent image storage.
-"""
-
 from PySide6.QtCore import QEvent, QTimer, Signal
 from PySide6.QtGui import QColor, Qt, QPainter, QPainterPath
 from PySide6.QtWidgets import QApplication, QLabel, QWidget

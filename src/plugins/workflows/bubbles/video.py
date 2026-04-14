@@ -1,26 +1,3 @@
-"""Video Message Role GUI Module.
-
-This module provides the VideoBubble class, a specialized message role
-for displaying videos in the chat interface. Video roles handle video
-loading, display, playback controls, and various video formats within
-conversations.
-
-Key Features:
-- Video display and rendering capabilities
-- Support for multiple video formats and sources
-- Playback controls (play, pause, seek, volume)
-- Video loading from files and URLs
-- Error handling for invalid or corrupted videos
-- Integration with the message role framework
-- Dynamic video sizing and scaling
-- Video metadata and path handling
-- Automatic polling for queued video generation requests
-
-Video roles provide a rich multimedia interface for viewing videos
-within conversations, enabling visual content sharing and
-media communication with AI systems.
-"""
-
 from PySide6.QtWidgets import QWidget, QLabel, QSizePolicy
 
 from gui.media_previews.video import VideoPreview
@@ -31,6 +8,11 @@ from gui import system
 
 
 class VideoBubble(QWidget):
+    bubble_bg_color = '#00000000'
+    bubble_text_color = '#ffd1d1d1'
+    bubble_image_size = 25
+    show_bubble = True
+
     def __init__(self, parent, message):
         super().__init__(parent=parent)
         self.parent = parent
@@ -57,11 +39,13 @@ class VideoBubble(QWidget):
         self.main_layout.setSpacing(5)
 
         # Apply styling
-        role_config = system.manager.roles.get(self.role, {})
-        bg_color = role_config.get('bubble_bg_color', '#252427')
-        text_color = role_config.get('bubble_text_color', '#999999')
+        # role_config = system.manager.roles.get(self.role, {})
+        # bg_color = role_config.get('bubble_bg_color', '#252427')
+        # text_color = role_config.get('bubble_text_color', '#999999')
         self.setStyleSheet(
-            f"background-color: {bg_color}; color: {text_color};")
+            f"background-color: {self.bubble_bg_color}; "
+            f"color: {self.bubble_text_color};"
+        )
 
         # Set size policy
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)

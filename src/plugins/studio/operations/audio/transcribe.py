@@ -1,5 +1,3 @@
-"""Transcribe audio to SRT subtitles."""
-
 import asyncio
 import json
 import os

@@ -1,25 +1,3 @@
-"""Workflow Member Module.
-
-This module provides the Workflow class, a member type that can contain and execute
-other members in coordinated sequences. Workflows enable the creation of complex
-multi-agent interactions, parallel execution, and sophisticated AI orchestration
-patterns within Agent Pilot.
-
-Key Features:
-- Multi-member workflow composition and execution
-- Parallel and sequential member execution patterns
-- Member communication and data flow management
-- Workflow state management and persistence
-- Message history tracking and branching
-- Dynamic member configuration and parameter passing
-- Integration with the workflow execution system
-- Recursive workflow support for nested compositions
-
-The Workflow member enables users to create sophisticated AI interactions
-by combining multiple agents, blocks, and other members into coordinated
-workflow patterns.
-"""
-
 import json
 from typing import Optional, Dict, List, Any
 

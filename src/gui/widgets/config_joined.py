@@ -1,21 +1,3 @@
-"""Configuration Joined Widget Module.
-
-This module provides the ConfigJoined widget, a container that combines
-multiple configuration widgets into a single unified interface. It supports both
-vertical and horizontal layouts and provides configuration propagation across
-joined widgets.
-
-Key Features:
-- Flexible layout management (vertical/horizontal)
-- Unified configuration interface for complex interfaces
-- Configuration propagation from joined widgets
-- Resizable widget support
-
-The ConfigJoined widget enables the creation of complex configuration interfaces
-by combining multiple specialized configuration widgets into a cohesive unit
-with shared configuration management.
-"""
-
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override

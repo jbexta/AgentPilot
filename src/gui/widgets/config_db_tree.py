@@ -1,24 +1,3 @@
-"""Configuration Database Tree Widget Module.
-
-This module provides the ConfigDBTree widget, a specialized tree view component
-that combines database-backed data management with hierarchical configuration
-interfaces. It serves as the foundation for most management pages in Agent Pilot,
-providing consistent CRUD operations and configuration management.
-
-Key Features:
-- Database-integrated tree view with real-time synchronization
-- Dual-panel interface with item list and configuration details
-- Manager integration for specialized data handling
-- Folder-based organization with drag-and-drop support
-- Search and filtering capabilities
-- Baked data integration for default configurations
-- Context menu operations for item management
-- Splitter layout with customizable panel sizes
-
-The ConfigDBTree is extended by page-specific classes to provide tailored
-interfaces for agents, blocks, tools, and other manageable entities.
-"""
-
 import json
 import os
 import sqlite3
@@ -379,7 +358,7 @@ class ConfigDBTree(ConfigTree):
             value=json.dumps(config),
         )
 
-        auto_bake = True  # system.manager.config.get('system.auto_bake', False)  # todo dedupe
+        auto_bake = system.manager.config.get('system.auto_bake', False)
         if auto_bake and is_baked:
             self.bake_item(force=True)
 
@@ -759,7 +738,6 @@ class ConfigDBTree(ConfigTree):
                 )
                 return
             # self.reload_current_row()
-            self.save_config()
             self.load()
 
         else:
@@ -791,7 +769,7 @@ class ConfigDBTree(ConfigTree):
                 # self.reload_current_row()
 
                 is_baked = self.is_tree_item_baked()
-                auto_bake = True  # system.manager.config.get('system.auto_bake', False)  # todo dedupe
+                auto_bake = system.manager.config.get('system.auto_bake', False)
                 if auto_bake and is_baked:
                     self.bake_item(force=True)
 
@@ -1011,7 +989,7 @@ class ConfigDBTree(ConfigTree):
                 menu.addSeparator()
                 is_baked = self.is_tree_item_baked()
                 if is_baked:
-                    auto_bake = True  # system.manager.config.get('system.auto_bake', True)
+                    auto_bake = system.manager.config.get('system.auto_bake', False)
                     if not auto_bake:
                         btn_bake = menu.addAction('Bake')
                         btn_bake.triggered.connect(self.bake_item)

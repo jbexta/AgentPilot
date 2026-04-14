@@ -1,14 +1,3 @@
-"""
-Model selection field widget for configurable AI model choices.
-
-This module provides a ModelComboBox field widget that extends BaseCombo to create
-a sophisticated dropdown for selecting AI models from various providers. It includes
-an integrated options button for model parameter configuration, supports model
-filtering by kind (chat, completion, etc.), and provides a popup interface for
-advanced model settings. The widget automatically organizes models by provider
-and handles model configuration persistence.
-"""  # unchecked
-
 import json
 
 from PySide6.QtCore import QPoint, QTimer

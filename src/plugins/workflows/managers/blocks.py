@@ -1,23 +1,3 @@
-
-"""Block Manager Module.
-
-This module provides the BlockManager class for managing reusable content blocks within the Agent Pilot system.
-Blocks are modular components that can contain text, prompts, code, or entire workflows, allowing for
-consistent reuse across different agents and workflows. The BlockManager handles block creation, execution,
-and parameter substitution with placeholder resolution.
-
-Key Features:
-- Block creation, modification, and deletion with workflow support
-- Recursive placeholder resolution and parameter substitution
-- Asynchronous block execution and streaming responses
-- Template-based content generation with nested block references
-- Caching mechanisms for improved performance
-- Integration with the workflow execution system
-
-Blocks support various types including text blocks, prompt blocks, and complex workflow blocks,
-making them fundamental building blocks for creating sophisticated AI interactions and automations.
-"""  # unchecked
-
 import asyncio
 import re
 from jinja2 import DebugUndefined, Environment, BaseLoader

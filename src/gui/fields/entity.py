@@ -1,11 +1,3 @@
-"""
-Entity selector field widget for browsing and selecting database entities.
-
-This module provides an EntityField widget that opens a LibraryDialog popup
-for the user to select an entity (block, tool, agent). Displays the selected
-entity name in a read-only text widget with a browse button.
-"""
-
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QSizePolicy, QWidget, QPushButton, QHBoxLayout

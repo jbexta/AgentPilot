@@ -1,11 +1,3 @@
-"""
-Boolean field widget for configurable checkboxes.
-
-This module provides a Boolean field widget that extends QCheckBox to work with
-the configuration system. It automatically connects to the parent's update_config
-method and provides value management for boolean settings.
-"""  # unchecked
-
 from PySide6.QtWidgets import QCheckBox
 
 

@@ -1,5 +1,3 @@
-"""Computer Use settings widget."""
-
 from gui.widgets.config_fields import ConfigFields
 
 

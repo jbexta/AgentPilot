@@ -1,13 +1,3 @@
-"""
-Input target selection field widget for workflow connections.
-
-This module provides an InputTargetComboBox field widget that enables users to
-select input targets for workflow connections. It determines valid target types
-based on the target member's configuration (agent, user, or workflow) and provides
-appropriate input options. The widget integrates with the workflow system to
-provide contextual target options based on member types and their capabilities.
-"""  # unchecked
-
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 

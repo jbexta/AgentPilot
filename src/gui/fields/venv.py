@@ -1,14 +1,3 @@
-"""
-Virtual environment selection field widget for configurable Python venv management.
-
-This module provides a VenvComboBox field widget that extends BaseCombo to create
-a dropdown for selecting and managing Python virtual environments. It includes
-functionality for creating new virtual environments, deleting existing ones,
-and displays environment paths for easy identification. The widget integrates
-with the virtual environment management system and provides visual feedback
-during environment operations.
-"""  # unchecked
-
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 
 from gui import system

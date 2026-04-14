@@ -1,10 +1,3 @@
-"""Query System Member Module.
-
-Executes SQL queries against the application database within workflows.
-Supports execute, get_scalar, and get_results methods with configurable
-return types for result sets.
-"""
-
 from plugins.workflows.members import Member
 from utils import sql
 from utils.helpers import set_module_type

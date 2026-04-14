@@ -1,13 +1,3 @@
-"""
-Controller for Behavior modules.
-
-Each Behavior module contains a class that derives from Behavior.
-
-The class can optionally implement the following methods:
-
-- 
-"""
-
 from core.managers.modules import ModulesController
 
 

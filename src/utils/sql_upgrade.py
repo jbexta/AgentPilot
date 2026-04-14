@@ -125,19 +125,47 @@ class SQLUpgrade:
         #     """, (module_folder_name.upper()[:-1], module_folder_id))
         # sql.execute("DELETE FROM folders WHERE type = 'modules'")
 
-        tool_approval_exists = sql.get_scalar(
-            "SELECT COUNT(*) FROM roles WHERE LOWER(name) = 'tool_approval'"
-        ) > 0
-        if not tool_approval_exists:
-            ta_config = json.dumps({
-                "display.bubble_bg_color": "#2d2a1e",
-                "display.bubble_text_color": "#d4a844",
-                "display.bubble_image_size": "0",
-            })
-            sql.execute(
-                "INSERT INTO roles (name, config) VALUES ('tool_approval', ?)",
-                (ta_config,),
+        # Roles table is deprecated in 0.6.0 — bubble styling now lives on bubble
+        # module classes. The tool_approval bubble defines its own colours via
+        # ToolApprovalBubble.bubble_bg_color / bubble_text_color in
+        # src/plugins/claude_code/bubbles/tool_approval.py.
+        #
+        # tool_approval_exists = sql.get_scalar(
+        #     "SELECT COUNT(*) FROM roles WHERE LOWER(name) = 'tool_approval'"
+        # ) > 0
+        # if not tool_approval_exists:
+        #     ta_config = json.dumps({
+        #         "display.bubble_bg_color": "#2d2a1e",
+        #         "display.bubble_text_color": "#d4a844",
+        #         "display.bubble_image_size": "0",
+        #     })
+        #     sql.execute(
+        #         "INSERT INTO roles (name, config) VALUES ('tool_approval', ?)",
+        #         (ta_config,),
+        #     )
+
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS "skills" (
+                "id"        INTEGER,
+                "name"      TEXT NOT NULL,
+                "kind"      TEXT NOT NULL DEFAULT 'USER',
+                "config"    TEXT NOT NULL DEFAULT '{}',
+                "folder_id" INTEGER DEFAULT NULL,
+                "ordr"      INTEGER DEFAULT 0,
+                "pinned"    INTEGER DEFAULT 0,
+                "metadata"  TEXT DEFAULT '{}',
+                "uuid"      TEXT DEFAULT (
+                    lower(hex(randomblob(4))) || '-' ||
+                    lower(hex(randomblob(2))) || '-' ||
+                    '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    lower(hex(randomblob(6)))
+                ) UNIQUE,
+                "baked"     INTEGER NOT NULL DEFAULT 0,
+                "parent_id" INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
             )
+        """)
 
         # app config
         sql.execute("""

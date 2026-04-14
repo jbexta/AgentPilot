@@ -1,10 +1,3 @@
-"""Application project type module.
-
-Provides a project type for the application's own source code.
-When running as a frozen executable, if the SOURCE directory does
-not exist it is created by cloning the repository.
-"""
-
 import os
 import subprocess
 

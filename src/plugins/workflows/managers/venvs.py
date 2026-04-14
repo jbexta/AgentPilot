@@ -1,23 +1,3 @@
-"""Virtual Environment Manager Module.
-
-This module provides the VenvManager class for managing Python virtual environments
-within the Agent Pilot system. Virtual environments enable isolated Python installations
-for different modules, tools, and plugins, ensuring dependency separation and
-environment consistency.
-
-Key Features:
-- Automatic virtual environment discovery and management
-- Cross-platform virtual environment operations
-- Dynamic loading and monitoring of venv directories
-- Integration with module and plugin systems
-- Support for custom Python installations and packages
-- Filesystem-based virtual environment tracking
-
-The VenvManager enables Agent Pilot to maintain isolated execution environments
-for different components, preventing dependency conflicts and enabling safe
-execution of user code and third-party modules.
-"""  # unchecked
-
 import os
 import platform
 import subprocess

@@ -1,5 +1,3 @@
-"""CEL (Common Expression Language) syntax highlighter."""
-
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat
 

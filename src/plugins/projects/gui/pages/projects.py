@@ -1,24 +1,3 @@
-"""
-Projects Page Module.
-
-This module provides the projects management page for the Agent Pilot GUI interface.
-Projects enable users to organize and group related agents, workflows, and resources
-into cohesive workspaces for different tasks or domains. The page facilitates
-project-based organization and management of Agent Pilot resources.
-
-Key Features:
-- Project creation, editing, and deletion
-- Workspace organization for related components
-- Project-specific configuration and settings
-- Folder-based organization for project categorization
-- Search and filtering capabilities
-- Integrated configuration widget for detailed project setup
-- Resource management within project contexts
-
-The page extends ConfigDBTree to provide database-backed project management with
-a dual-panel interface showing the project list and detailed configuration options.
-"""
-
 from PySide6.QtWidgets import QMessageBox
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.util import get_project_type_class, get_selected_pages, set_selected_pages

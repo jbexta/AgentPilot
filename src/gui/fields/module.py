@@ -1,13 +1,3 @@
-"""
-Module selection field widget for configurable module choices.
-
-This module provides a ModuleComboBox field widget that extends BaseCombo to create
-a dropdown for selecting and managing modules within specific module types. It supports
-dynamic module loading from the module system, the ability to create new modules
-through a dialog interface, and integration with the configuration system. The widget
-automatically populates with available modules of the specified type.
-"""  # unchecked
-
 from PySide6.QtWidgets import QInputDialog
 
 from gui import system

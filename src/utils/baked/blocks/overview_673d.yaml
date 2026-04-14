@@ -48,9 +48,9 @@ config:
         - **{{ name | capitalize }}**: {% if controller.description and controller.description != "None" %} {{ controller.description }} {% else %} _No description available._ {% endif %}
         {% endfor %}
 
-        ### {{ gui_architecture }}
+        ## {{ gui_architecture }}
 
-        ### {{ plugins }}
+        ## {{ plugins }}
         { workflows }
 
         ## Database and Persistence
@@ -80,6 +80,8 @@ config:
         - `src/gui/`: User interface components
         - `src/plugins/`: Modular plugin implementations
         - `src/utils/`: Shared utilities and helpers
+      _format_block_keys:
+      - data
       _TYPE: text
       name: Text block
   inputs: []

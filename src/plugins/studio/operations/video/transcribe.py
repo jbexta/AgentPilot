@@ -1,5 +1,3 @@
-"""Transcribe video audio track to SRT subtitles."""
-
 from plugins.studio.operations.audio.transcribe import (
     Transcribe as AudioTranscribe,
 )

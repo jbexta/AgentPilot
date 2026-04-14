@@ -1,10 +1,3 @@
-"""Channels Page.
-
-ConfigDBTree-based management page for communication channels.
-Each channel connects to an external messaging platform (e.g. WhatsApp
-via Evolution API) and routes incoming messages to configured agents.
-"""
-
 import asyncio
 import logging
 

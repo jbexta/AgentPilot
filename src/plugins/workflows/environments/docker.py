@@ -1,10 +1,3 @@
-"""Docker Environment Module.
-
-Provides a Docker-based code execution environment using the Docker SDK.
-Manages a long-running container per environment instance and executes
-code inside it via ``docker exec``.
-"""
-
 import logging
 
 import docker

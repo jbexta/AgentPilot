@@ -1,5 +1,3 @@
-"""Replace a section of audio with AI-generated content."""
-
 import asyncio
 import json
 import os
@@ -532,4 +530,3 @@ class Inpaint(BaseOperation):
                             8192
                         ):
                             f.write(chunk)
-

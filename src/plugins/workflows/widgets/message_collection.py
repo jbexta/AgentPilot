@@ -1,26 +1,3 @@
-
-"""Message Collection Widget Module.
-
-This module provides the MessageCollection widget, the core chat interface component
-that displays conversation messages, manages message flow, and handles real-time
-interactions with AI agents and workflows. It supports branching conversations,
-message editing, and rich media display.
-
-Key Features:
-- Real-time message display with streaming support
-- Conversation branching and message tree navigation
-- Rich message bubbles with multiple content types
-- Message editing and re-execution capabilities
-- Avatar and visual message presentation
-- Integration with the workflow execution system
-- Asynchronous message processing and updates
-- Context menu operations for message management
-
-The MessageCollection widget serves as the primary interface for user interactions
-with AI agents, providing a comprehensive chat experience with advanced features
-for conversation management and workflow execution.
-"""  # unchecked
-
 from functools import partial
 import json
 import os
@@ -32,7 +9,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QRect, QEvent, QPropertyAnimation, QEasingCurve, QDateTime, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap, QIcon, Qt, QGuiApplication
 
-from plugins.workflows.bubbles import MessageBubble
+from plugins.workflows.bubbles import MessageBubble, get_bubble_attr
 from gui.util import CustomMenu, colorize_pixmap, IconButton, find_main, clear_layout, \
     ToggleIconButton, CHBoxLayout, CVBoxLayout, find_workflow_widget, safe_single_shot, TextEnhancerButton
 
@@ -212,7 +189,8 @@ class MessageCollection(QWidget):
                 self.parent.workflow_settings.header_widget.widgets[1].load()
 
     def insert_bubble(self, message=None):
-        show_bubble = system.manager.roles.get(message.role, {}).get('show_bubble', True)
+        # show_bubble = system.manager.roles.get(message.role, {}).get('show_bubble', True)
+        show_bubble = get_bubble_attr(message.role, 'show_bubble', True)
         if not show_bubble:
             return
 
@@ -464,6 +442,9 @@ class MessageContainer(QWidget):
         bubble_h_layout.addWidget(self.bubble)
         bubble_v_layout.addLayout(bubble_h_layout)
 
+        if hasattr(self.bubble, 'install_below_bubble'):
+            self.bubble.install_below_bubble(bubble_v_layout)
+
         self.branch_msg_id = message.id
 
         if getattr(self.bubble, 'has_branches', False):
@@ -480,9 +461,13 @@ class MessageContainer(QWidget):
 
                 bg_bubble = QWidget()
                 bg_bubble.setProperty("class", "bubble-bg")
-                user_config = system.manager.roles.get('user', {})
-                user_bubble_bg_color = user_config.get('bubble_bg_color', '#ff11121b')
-                user_bubble_bg_color = apply_alpha_to_hex(user_bubble_bg_color, percent_codes.pop(0)/100)
+                # user_config = system.manager.roles.get('user', {})
+                # user_bubble_bg_color = user_config.get('bubble_bg_color', '#ff11121b')
+                text_color = system.manager.config.get(
+                    'display.text_color', '#ffcacdd5')
+                user_opacity = get_bubble_attr('user', 'bubble_bg_opacity', 1.0)
+                user_bubble_bg_color = apply_alpha_to_hex(
+                    text_color, user_opacity * percent_codes.pop(0) / 100)
 
                 bg_bubble.setStyleSheet(f"background-color: {user_bubble_bg_color}; border-top-left-radius: 2px; "
                                         "border-bottom-left-radius: 2px; border-top-right-radius: 6px; "
@@ -494,8 +479,34 @@ class MessageContainer(QWidget):
 
         bubble_h_layout.addStretch(1)
 
-        button_v_layout = CVBoxLayout()
+        button_v_layout = CHBoxLayout()
         button_v_layout.setContentsMargins(0, 0, 0, 2)
+
+        # get all class definitions in bubble_class decorated with @message_bubble
+        bubble_buttons = {}
+        for name, attr in type(self.bubble).__dict__.items():
+            if isinstance(attr, type) and hasattr(attr, '_ap_message_button'):
+                bubble_buttons[name] = attr
+                # setattr(self, name, attr(self))
+        bubble_extensions = {
+            name: cls for name, cls in bubble_class.__dict__.items()
+            if hasattr(cls, '_ap_message_extension') and isinstance(cls, type)
+        }
+
+        for button_name, bubble_button_cls in bubble_buttons.items():
+            bubble_button = bubble_button_cls(self)
+            button_name = bubble_button._ap_message_button
+            setattr(self, button_name, bubble_button)
+            is_autorun = self.bubble.autorun_button == button_name
+            if is_autorun:
+                btn_countdown = self.CountdownButton(self, target_button=bubble_button)
+                setattr(self, 'btn_countdown', btn_countdown)
+                countdown_h_layout = CHBoxLayout()
+                countdown_h_layout.addWidget(btn_countdown)
+                countdown_h_layout.addWidget(bubble_button)
+                button_v_layout.addLayout(countdown_h_layout)
+            else:
+                button_v_layout.addWidget(bubble_button)
 
         self.collapse_button = ToggleIconButton(
             parent=self,
@@ -523,7 +534,7 @@ class MessageContainer(QWidget):
             self.markdown_button.setFixedSize(32, 24)
             self.markdown_button.setChecked(not getattr(self.bubble, 'enable_markdown', False))
             button_v_layout.addWidget(self.markdown_button)
-        
+
         if message.role in ('video', 'image', 'audio'):
             self.open_button = IconButton(
                 parent=self,
@@ -533,7 +544,7 @@ class MessageContainer(QWidget):
             )
             self.open_button.setFixedSize(32, 24)
             button_v_layout.addWidget(self.open_button)
-            
+
             self.open_containing_folder_button = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-folder.png',
@@ -542,34 +553,6 @@ class MessageContainer(QWidget):
             )
             self.open_containing_folder_button.setFixedSize(32, 24)
             button_v_layout.addWidget(self.open_containing_folder_button)
-
-        button_v_layout.addStretch(1)
-
-        # get all class definitions in bubble_class decorated with @message_bubble
-        bubble_buttons = {}
-        for name, attr in type(self.bubble).__dict__.items():
-            if isinstance(attr, type) and hasattr(attr, '_ap_message_button'):
-                bubble_buttons[name] = attr
-                # setattr(self, name, attr(self))
-        bubble_extensions = {
-            name: cls for name, cls in bubble_class.__dict__.items()
-            if hasattr(cls, '_ap_message_extension') and isinstance(cls, type)
-        }
-
-        for button_name, bubble_button_cls in bubble_buttons.items():
-            bubble_button = bubble_button_cls(self)
-            button_name = bubble_button._ap_message_button
-            setattr(self, button_name, bubble_button)
-            is_autorun = self.bubble.autorun_button == button_name
-            if is_autorun:
-                btn_countdown = self.CountdownButton(self, target_button=bubble_button)
-                setattr(self, 'btn_countdown', btn_countdown)
-                countdown_h_layout = CHBoxLayout()
-                countdown_h_layout.addWidget(btn_countdown)
-                countdown_h_layout.addWidget(bubble_button)
-                button_v_layout.addLayout(countdown_h_layout)
-            else:
-                button_v_layout.addWidget(bubble_button)
 
         for extension_name, bubble_extension_cls in bubble_extensions.items():
             bubble_extension = bubble_extension_cls(self)

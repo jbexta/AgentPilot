@@ -1,12 +1,3 @@
-"""
-Controller for Highlighter modules.
-
-Each highlighter module contains a class that derives from QSyntaxHighlighter.
-
-The class can optionally implement the following attributes:
-- associated_extensions
-"""
-
 from core.managers.modules import ModulesController
 
 

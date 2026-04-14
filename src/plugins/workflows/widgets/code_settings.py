@@ -1,22 +1,3 @@
-
-"""Code Block Settings Widget Module.
-
-This module provides the CodeBlockSettings widget, a specialized configuration
-interface for code block components in Agent Pilot workflows. It manages the
-configuration of code execution blocks with schema-driven field generation.
-
-Key Features:
-- Schema-driven configuration fields for code blocks
-- Integration with the configuration fields system
-- Specialized settings for code execution parameters
-- Plugin-based block type selection
-- Workflow block configuration management
-
-The CodeBlockSettings widget provides a dedicated interface for configuring
-code execution blocks within Agent Pilot workflows, ensuring proper parameter
-setup and execution configuration.
-"""  # unchecked
-
 from gui.widgets.config_fields import ConfigFields
 
 

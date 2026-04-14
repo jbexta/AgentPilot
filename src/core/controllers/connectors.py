@@ -1,15 +1,3 @@
-"""
-Controller for Connector modules.
-
-Each Connector module contains a class definition.
-
-The class must implement the following methods:
-- __init__(self, **kwargs)
-- get_results(self, query, params=None, return_type='list')
-- get_scalar(self, query, params=None, return_type='list')
-- execute(self, query, params=None)
-"""
-
 from core.managers.modules import ModulesController
 
 

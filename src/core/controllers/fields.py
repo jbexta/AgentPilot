@@ -1,16 +1,3 @@
-"""
-Controller for Field modules.
-
-Each field module contains a class that derives from QWidget.
-
-The class must implement the following methods:
-- get_value()
-- set_value(value)
-- clear_value()
-
-The class can optionally implement the following methods:
-- 
-"""
 from core.managers.modules import ModulesController
 
 

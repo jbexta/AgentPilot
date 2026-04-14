@@ -1,11 +1,3 @@
-"""Slopify Page Module.
-
-Music player/generator page that combines a workflow editor (for configuring
-AI song generation) with a persistent track queue and full playback controls.
-Users design a workflow with an Audio member, generate songs continuously,
-and play through them like a music player.
-"""
-
 import asyncio
 from functools import partial
 import json

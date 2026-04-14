@@ -1,6 +1,3 @@
-"""
-Controller for Studio modules.
-"""
 from core.managers.modules import ModulesController
 
 

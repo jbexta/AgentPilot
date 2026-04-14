@@ -1,23 +1,3 @@
-"""Tool Manager Module.
-
-This module provides the ToolManager class for managing tools within the Agent Pilot system.
-Tools are executable functions that agents can invoke to perform specific tasks, ranging from
-simple code execution to complex workflow orchestration. The ToolManager handles tool
-registration, parameter schema generation, and execution coordination.
-
-Key Features:
-- Tool creation, modification, and deletion with workflow support
-- Dynamic parameter schema generation from tool configurations
-- Asynchronous tool execution with streaming responses
-- UUID-based tool identification and name mapping
-- Integration with the workflow execution system
-- Support for code blocks and complex workflow tools
-
-Tools can be assigned to agents and invoked during conversations to extend agent capabilities
-beyond text generation, enabling interactions with external systems, data processing,
-and automated task execution.
-"""  # unchecked
-
 import asyncio
 import json
 
