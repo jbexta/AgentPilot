@@ -1,0 +1,118 @@
+uuid: e1d93f11-85c0-42b4-9829-6052bb8ac9f6
+name: readme
+config:
+  _TYPE: workflow
+  name: readme
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        <h1 align="center">Agent Pilot</h1>
+
+        <p align="center">
+          <b>The Everything Interface</b>
+        </p>
+
+        <p align="center">
+          <b>Agent Pilot</b> is a generative, self-modifying desktop application powered by AI agents and workflows.<br>
+          Built with an extensible plugin system and a schema-driven UI.<br>
+          Ships with prebuilt plugins ready to use.
+        </p>
+
+        <p align="center">
+          <img src="docs/demo.png" width="600px" alt="Agent Pilot" />
+        </p>
+
+        <p align="center">
+          <a href="https://discord.gg/ge2ZzDGu9e"><img src="https://img.shields.io/discord/1169291612816420896?style=flat&label=Discord" alt="Discord"></a>
+          <a href="https://twitter.com/AgentPilotAI"><img src="https://img.shields.io/twitter/follow/AgentPilotAI" alt="Twitter"></a>
+          <a href="https://github.com/jbexta/AgentPilot/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License"></a>
+        </p>
+
+        ## ✨ Highlights
+
+        - **Projects** — Create projects driven by any AI agent, with chats organized per project. Use any item from your block library in your Agent's context for dynamic or grounded context.
+        - **Live modification** — The running application *is itself* a project and can be modified by an Agent, with changes reflected instantly and no restart needed. (Opt-in, disabled by default)
+        - **Workflow engine** — Design modular, nestable AI workflows in a visual graph editor and execute them with granular, branching control for flexible interactions and iterative refinement.
+        - **Tasks** — Scheduled & recurring workflows with a customizable template wrapper and natural language based expressions of time.
+        - **Block library** — Manage reusable workflows as blocks. Drop them into any workflow, or reference them inside templated text (like a system message) with `{{ block_name }}`. Jinja2 is built in with support for loops within the template.
+        - **File Explorer** — Integrated file explorer with integrated VCS, file previews and integrated studio.
+        - **Studios** — Collection of studios that can modify files. Includes a text editor, layer based image editor and an audio/video editor. Editor can be initialized from the file explorer.
+        - **Slopify** — AI Music streaming & generation.
+
+        > **Note:** API keys are required for model providers. Local models are not supported yet (except through a LiteLLM proxy).
+
+        ## 🚀 Quickstart
+
+        ### Download
+
+        Binaries for 0.6.0 are not available yet, see instructions to [build from source](docs/how_to_build.md)
+
+        Live app modification is currently only available if running from source.
+
+        > **Tip:** You can migrate your database to the new version by replacing the executable before launching.
+
+        ## 📚 Documentation
+        [User guide](docs/guides/how_to_use.md)<br>
+        [Module documentation](docs/guides/modules.md)<br>
+        [Core Architecture](docs/guides/how_to_build.md)<br>
+        [GUI Architecture](docs/guides/how_to_build.md)<br>
+        [Creating a plugin](docs/guides/how_to_build.md)<br>
+
+        ## 🔌 Plugins
+
+        A plugin is a collection of modules bundled together in the `src/plugins` directory. Keeping all modules for a feature or integration in one place makes development and maintenance easier. Plugins are automatically discovered and loaded at startup, and every module inside a plugin is registered and made available in the app.
+
+        ### Included plugins
+        - **[Workflows](src/plugins/workflows)** &mdash; Core AI workflow engine
+        - **[Projects](src/plugins/projects)** &mdash; Project modification using AI Agents
+        - **[Tasks](src/plugins/tasks)** &mdash; Scheduled & recurring workflows
+        - **[Studio](src/plugins/studio)** &mdash; Creative studio with Gen AI capabilities
+        - **[Files](src/plugins/files)** &mdash; File explorer with an optional AI agent
+        - **[Slopify](src/plugins/slopify)** &mdash; AI Music streaming & generation
+        - **[Finance](src/plugins/finance)** &mdash; Financial data, portfolio analysis & automation
+
+        ## 🔗 Integrations
+
+        ### Database Connectors
+        - **[SQLite](src/core/connectors/sqlite.py)**
+        - **[MySQL](src/core/connectors/mysql.py)**
+        - **[PostgreSQL](src/core/connectors/postgres.py)**
+
+        ### Model Providers
+        - **[LiteLLM](src/plugins/workflows/providers/litellm.py)**
+        - **[FalAI](src/plugins/workflows/providers/fal.py)**
+        - **[Replicate](src/plugins/workflows/providers/replicate.py)**
+        - **[Wavespeed](src/plugins/workflows/providers/wavespeed.py)**
+
+        ### External Agents
+        - **[Claude Code](src/plugins/claude_code)**
+        - ~~**[Codex CLI](src/plugins/codex_cli)**~~
+        - ~~**[Gemini CLI](src/plugins/gemini_cli)**~~
+
+        ## 🤝 Contributing
+
+        Contributions are welcome. Please feel free to submit a pull request.
+
+        ## 📄 License
+
+        [AGPL-3.0](LICENSE)
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+kind: PROJECT:1

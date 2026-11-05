@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QSizePolicy, QWidget, QLineEdit, QFileDialog, QHBoxLayout
 
-from gui.util import IconButton
+from gui.gui_utils.icon_button import IconButton
 
 
 class FilePicker(QWidget):
@@ -28,8 +28,8 @@ class FilePicker(QWidget):
         self.browse_button.clicked.connect(self.browse_path)
         
         # Add widgets to layout
-        self.layout.addWidget(self.path_input)
         self.layout.addWidget(self.browse_button)
+        self.layout.addWidget(self.path_input)
         
         # Set fixed width if specified
         if width:

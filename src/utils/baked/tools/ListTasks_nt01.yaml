@@ -1,0 +1,33 @@
+uuid: nt01a000-0000-4000-a000-000000000001
+name: ListTasks
+config:
+  _TYPE: workflow
+  name: ListTasks
+  avatar_path: :/resources/icon-tool-small.png
+  description: List all scheduled tasks. Returns a JSON array of tasks with uuid, name, and config (containing rrule, time_expression, duration).
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      _TYPE: code
+      name: Code block
+      language: Python
+      data: |
+        tasks = sql.get_results("SELECT uuid, name, config FROM tasks WHERE kind = 'SCHEDULED'")
+        result = []
+        for row in tasks:
+            cfg = json.loads(row[2])
+            result.append({'uuid': row[0], 'name': row[1], 'rrule': cfg.get('rrule', ''), 'time_expression': cfg.get('time_expression', ''), 'duration': cfg.get('duration', 60)})
+        return json.dumps(result, indent=2)
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+folder_path: Tasks

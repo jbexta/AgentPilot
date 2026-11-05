@@ -1,0 +1,46 @@
+uuid: 3d4bce63-ab2a-4ff6-9fd8-c28fc5ee21e7
+name: tasks
+config:
+  _TYPE: workflow
+  name: tasks
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Tasks Plugin (`src/plugins/tasks`)
+
+        Tasks are things to do. Each task is run by its own workflow, optionally on a schedule.
+
+        ## 1. Manager (`managers/tasks.py`)
+        `TaskManager` (BaseManager, table `tasks`, `config_is_workflow=True`):
+        *   The task text is stored in the config key `task` (`description` belongs to the workflow).
+        *   **Schedule:** an iCal `rrule` in the config. A task whose rrule has more than one occurrence gets the `RECURRING` status.
+        *   **Statuses:** `TODO`, `RUNNING`, `AWAITING_APPROVAL`, `DONE`, `FAILED`, `RECURRING`. Agents can only set `TODO` / `DONE` / `FAILED`.
+        *   **Runs:** each run is a context with kind `TASK:<id>`. A non-recurring task's status follows its runs (watched through the run manager). Runs interrupted by a shutdown are marked failed on load.
+        *   **Kinds:** `SCHEDULED` by default. Project issues and todos use `PROJECT:<id>:<type>` (see the projects plugin).
+
+        ## 2. Daemon (`daemons/tasks.py`)
+        `TasksDaemon` runs **one long-lived loop per task uuid**. Each loop sleeps until the next occurrence, fires the task, and repeats. This avoids a cancel-and-reschedule race that caused double firing.
+
+        ## 3. Page (`pages/tasks.py`)
+        `Page_Tasks_Settings` (main page "Tasks") has a calendar (`CustomCalendar`), a custom-painted 24-hour day timeline (`DayTimelineWidget`), and an `AddTaskDialog` for adding a task on a chosen date.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

@@ -5,10 +5,11 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override
 
-from utils.helpers import block_signals, convert_to_safe_case, display_message, set_module_type
+from utils.helpers import block_signals, convert_to_safe_case, display_message, set_module_type, tr
 
 from gui import system
-from gui.util import find_attribute, clear_layout, CVBoxLayout, CHBoxLayout, get_field_widget, set_widget_value
+from gui.gui_utils.helpers import find_attribute, clear_layout, get_field_widget, set_widget_value
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout, FlowLayout
 from utils import sql
 
 from gui.widgets.config_widget import ConfigWidget
@@ -55,6 +56,7 @@ class ConfigFields(ConfigWidget):
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', True)
+        self.flow_rows = kwargs.get('flow_rows', False)
         self.schema = kwargs.get('schema', [])
         self.adding_field = None
 
@@ -65,8 +67,8 @@ class ConfigFields(ConfigWidget):
         schema = self.schema
         if not schema:
             self.adding_field = self.AddingField(self)
-            if not find_attribute(self, 'user_editing'):
-                self.adding_field.hide()
+            # if not find_attribute(self, 'user_editing'):
+            self.adding_field.hide()
             self.layout.addWidget(self.adding_field)
             self.layout.addStretch(1)
 
@@ -85,8 +87,21 @@ class ConfigFields(ConfigWidget):
             if not isinstance(param_dict, dict):
                 continue
             _type = param_dict.get('type', None)
+            row_key = param_dict.get('row_key', None)
+            if _type != 'stretch' or row_key is not None:
+                if row_key is not None and row_layout is None:
+                    row_layout = self.new_row_layout()
+                elif row_key is not None and row_layout is not None and row_key != last_row_key:
+                    self.layout.addLayout(row_layout)
+                    row_layout = self.new_row_layout()
+                elif row_key is None and row_layout is not None:
+                    self.layout.addLayout(row_layout)
+                    row_layout = None
+
+                last_row_key = row_key
+
             if _type == 'stretch':
-                if row_layout:
+                if isinstance(row_layout, CHBoxLayout):
                     row_layout.addStretch(1)
                 else:
                     self.layout.addStretch(1)
@@ -94,7 +109,6 @@ class ConfigFields(ConfigWidget):
 
             param_type = param_dict.get('type', 'text')
             key = convert_to_safe_case(param_dict.get('key', param_dict['text'].lower()))
-            row_key = param_dict.get('row_key', None)
             label_position = param_dict.get('label_position', 'left')
             label_width = param_dict.get('label_width', None) or self.label_width
             has_toggle = param_dict.get('has_toggle', False)
@@ -103,17 +117,6 @@ class ConfigFields(ConfigWidget):
             readonly = param_dict.get('readonly', False)
             stretch_x = param_dict.get('stretch_x', False)
             stretch_y = param_dict.get('stretch_y', False)
-
-            if row_key is not None and row_layout is None:
-                row_layout = CHBoxLayout()
-            elif row_key is not None and row_layout is not None and row_key != last_row_key:
-                self.layout.addLayout(row_layout)
-                row_layout = CHBoxLayout()
-            elif row_key is None and row_layout is not None:
-                self.layout.addLayout(row_layout)
-                row_layout = None
-
-            last_row_key = row_key
 
             current_value = self.config.get(f'{key}', None)
             if current_value is not None:
@@ -141,11 +144,21 @@ class ConfigFields(ConfigWidget):
             param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
             param_layout.setContentsMargins(2, 4, 2, 0)
             param_layout.setAlignment(self.field_alignment)
-            
+
+            toggle = None
+            if has_toggle:
+                toggle = get_field_widget({'type': bool}, parent=self)
+                toggle.setFixedWidth(toggle.sizeHint().width())
+                setattr(self, f'{key}_tgl', toggle)
+                toggle.stateChanged.connect(
+                    partial(self.toggle_widget, toggle, key))
+                if not visible:
+                    toggle.setVisible(False)
+
             if label_position is not None:
                 label_layout = CHBoxLayout()
                 label_layout.setAlignment(self.label_text_alignment)
-                param_label = QLabel(param_dict['text'])
+                param_label = QLabel(tr(param_dict['text']))
                 param_label.setAlignment(self.label_text_alignment)
                 if not visible:
                     param_label.setVisible(False)
@@ -156,11 +169,15 @@ class ConfigFields(ConfigWidget):
 
                 label_extra_width = 0
                 if tooltip:
-                    from gui.util import HelpIcon
-                    info_label = HelpIcon(parent=self, tooltip=tooltip)
+                    from gui.gui_utils.help_icon import HelpIcon
+                    info_label = HelpIcon(parent=self, tooltip=tr(tooltip))
                     info_label.setAlignment(self.label_text_alignment)
                     label_extra_width += 22
                     label_layout.addWidget(info_label)
+
+                if toggle is not None and label_position == 'top':
+                    label_extra_width += toggle.width()
+                    label_layout.addWidget(toggle)
 
                 # Wrap in a QWidget container to enforce width
                 label_container = QWidget()
@@ -186,14 +203,7 @@ class ConfigFields(ConfigWidget):
 
                 param_layout.addWidget(label_container)
 
-            if has_toggle:
-                toggle = QCheckBox()
-                toggle.setFixedWidth(20)
-                setattr(self, f'{key}_tgl', toggle)
-                toggle.stateChanged.connect(
-                    partial(self.toggle_widget, toggle, key))
-                if not visible:
-                    toggle.setVisible(False)
+            if toggle is not None and label_position != 'top':
                 param_layout.addWidget(toggle)
 
             param_layout.addWidget(widget)
@@ -208,18 +218,22 @@ class ConfigFields(ConfigWidget):
                     tooltip='Options',
                     size=20,
                 )
-                if not find_attribute(self, 'user_editing'):
-                    options_btn.hide()
+                # if not find_attribute(self, 'user_editing'):
+                options_btn.hide()
                 param_layout.addWidget(options_btn)
 
-            if isinstance(param_layout, CHBoxLayout):
+            if isinstance(param_layout, CHBoxLayout) and not stretch_x:
                 param_layout.addStretch(1)
 
             if stretch_y:
                 has_stretch_y = True
 
-            if row_layout:
-                row_layout.addLayout(param_layout)
+            if isinstance(row_layout, FlowLayout):
+                param_container = QWidget()
+                param_container.setLayout(param_layout)
+                row_layout.addWidget(param_container)
+            elif row_layout:
+                row_layout.addLayout(param_layout, 1 if stretch_x else 0)
             else:
                 self.layout.addLayout(param_layout, 1 if stretch_y else 0)
 
@@ -259,8 +273,8 @@ class ConfigFields(ConfigWidget):
         if getattr(self, 'user_editable', True):
             self.layout.addSpacing(7)
             self.adding_field = self.AddingField(self)
-            if not find_attribute(self, 'user_editing'):
-                self.adding_field.hide()
+            # if not find_attribute(self, 'user_editing'):
+            self.adding_field.hide()
             self.layout.addWidget(self.adding_field)
 
         if self.add_stretch_to_end and not has_stretch_y:
@@ -268,6 +282,9 @@ class ConfigFields(ConfigWidget):
 
         if hasattr(self, 'after_init'):
             self.after_init()
+
+    def new_row_layout(self):
+        return FlowLayout() if self.flow_rows else CHBoxLayout()
 
     @override
     def load(self):
@@ -290,10 +307,11 @@ class ConfigFields(ConfigWidget):
                 has_config_value = config_value is not None
 
 
-                toggle = getattr(self, f'{key}_tgl', None)
-                if toggle:
-                    toggle.setChecked(has_config_value)
-                    widget.setVisible(has_config_value)
+                if param_dict.get('has_toggle', False):
+                    toggle = getattr(self, f'{key}_tgl', None)
+                    if toggle:
+                        toggle.setChecked(has_config_value)
+                        widget.setVisible(has_config_value)
                 #
                 # is_encrypted = param_dict.get('encrypt', False)
                 # if is_encrypted:
@@ -380,8 +398,14 @@ class ConfigFields(ConfigWidget):
                                 if k != '_format_block_keys'}
 
         if format_block_keys:
-            existing = config.get('_format_block_keys', [])
-            config['_format_block_keys'] = existing + format_block_keys
+            # `existing` includes the copy persisted by the last save, so a
+            # plain concat re-appends the same keys on every save. Entries can
+            # be lists, so dedupe by equality rather than with a set.
+            merged = []
+            for key in config.get('_format_block_keys', []) + format_block_keys:
+                if key not in merged:
+                    merged.append(key)
+            config['_format_block_keys'] = merged
         return config
 
     @override
@@ -424,6 +448,11 @@ class ConfigFields(ConfigWidget):
     def refresh_visibility(self):
         """Refreshes the visibility of widgets based on their visibility predicates"""
         for param_dict in self.schema:
+            _type = param_dict.get('type', 'text')  # todo dedupe
+            skip_types = ('stretch',)
+            if _type in skip_types:
+                continue
+
             key = convert_to_safe_case(param_dict.get('key', param_dict['text'].lower()))
             widget = getattr(self, f'{key}_wgt', None)
             if not widget:
@@ -452,7 +481,6 @@ class ConfigFields(ConfigWidget):
     def toggle_widget(self, toggle, key, _):
         widget = getattr(self, f'{key}_wgt')
         widget.setVisible(toggle.isChecked())
-        self.update_config()
 
     def clear_fields(self):
         """Clears all fields in the config widget"""

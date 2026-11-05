@@ -1,9 +1,8 @@
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from gui.util import colorize_pixmap, get_field_widget, set_widget_value
+from gui.gui_utils.helpers import colorize_pixmap, get_field_widget, safe_single_shot, set_widget_value
 from utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json, display_message
 
 from gui.widgets.config_tree import ConfigTree
@@ -42,7 +41,7 @@ class ConfigJsonTree(ConfigTree):
             for row_dict in data:
                 self.add_new_entry(row_dict)
             self.set_height()
-        QTimer.singleShot(0, self.refresh_visibility)
+        safe_single_shot(0, self.refresh_visibility)
 
     @override
     def update_config(self):
@@ -98,7 +97,8 @@ class ConfigJsonTree(ConfigTree):
         config = []
         for i in range(self.tree.topLevelItemCount()):
             row_item = self.tree.topLevelItem(i)
-            item_config = {}
+            extras = row_item.data(0, Qt.UserRole + 1) or {}
+            item_config = dict(extras)
             for j in range(len(schema)):
                 key = convert_to_safe_case(schema[j].get('key', schema[j]['text'].lower()))
                 # col_type = schema[j].get('type', str)
@@ -149,6 +149,7 @@ class ConfigJsonTree(ConfigTree):
 
             parent_item = parent_item or self.tree
             item = QTreeWidgetItem(parent_item, [str(v) for v in col_values])
+            item.setData(0, Qt.UserRole + 1, dict(row_dict))
 
             if self.readonly:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)

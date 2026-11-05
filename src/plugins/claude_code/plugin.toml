@@ -1,0 +1,9 @@
+[plugin]
+name = "claude_code"
+version = "0.1.0"
+description = "Claude Code agent member, tool-approval bubbles, and settings."
+requires = ["workflows"]
+
+[dependencies]
+claude-agent-sdk = { version = "0.2.168", import = "claude_agent_sdk" }
+psutil = { version = "7.2.2", import = "psutil" }

@@ -1,0 +1,8 @@
+[plugin]
+name = "telephony"
+version = "0.1.0"
+description = "Phone calls for live agents: telephony providers, webhook daemon, contacts calling."
+requires = ["workflows"]
+
+[dependencies]
+pycloudflared = { version = "0.3.0", import = "pycloudflared" }

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QHBoxLayout, QLabel
 
-from gui.util import IconButton  # , BaseComboBox
+from gui.gui_utils.icon_button import IconButton  # , BaseComboBox
 from gui.fields.combo import BaseCombo
 
 

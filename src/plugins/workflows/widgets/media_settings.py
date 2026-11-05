@@ -4,7 +4,7 @@ import os
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_tabs import ConfigTabs
-from gui.widgets.multi_preview import MultiPreview
+from plugins.workflows.widgets.multi_preview import MultiPreview
 from plugins.workflows.widgets.generate_widget import GenerateWidget
 from utils.filesystem import get_application_path
 from utils.helpers import display_message, set_module_type
@@ -23,6 +23,9 @@ class MediaSettings(ConfigJoined):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
+        # Children inherit this at construction; without it the studio's
+        # member-config chain never bubbles update_config up to save.
+        self.propagate_config = True
         self.multi_preview = MultiPreview(parent=self)
         self.widgets = [
             self.BrowseSettings(parent=self),

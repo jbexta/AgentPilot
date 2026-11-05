@@ -1,0 +1,7 @@
+[plugin]
+name = "mysql"
+version = "0.1.0"
+description = "MySQL database integration."
+
+[dependencies]
+mysql-connector-python = { version = "9.4.0", import = "mysql.connector" }

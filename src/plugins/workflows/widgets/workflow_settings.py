@@ -23,19 +23,26 @@ from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_json_tree import ConfigJsonTree
 from gui.widgets.config_joined import ConfigJoined
 
-from gui.util import CustomMenu, IconButton, TreeDialog, CVBoxLayout, CHBoxLayout, \
-    BaseTreeWidget, colorize_pixmap, find_main, clear_layout, safe_single_shot, get_selected_pages, set_selected_pages, \
-    find_attribute, get_member_settings_class
-from utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
-    get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
-    set_module_type, merge_config_into_workflow_config, merge_multiple_into_workflow_config, \
-    resolve_linked_config, save_linked_config, has_circular_link
+from gui.gui_utils.helpers import colorize_pixmap, find_main, clear_layout, safe_single_shot, get_selected_pages, \
+    set_selected_pages, find_attribute, get_member_settings_class
+from gui.gui_utils.custom_menu import CustomMenu
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.tree_dialog import TreeDialog
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.base_tree_widget import BaseTreeWidget
+from utils.helpers import path_to_pixmap, display_message_box, block_signals, display_message, \
+    apply_alpha_to_hex, set_module_type, get_text
+from plugins.workflows.utils.workflows import get_avatar_paths_from_config, \
+    get_member_name_from_config, merge_config_into_workflow_config, merge_multiple_into_workflow_config, \
+    resolve_linked_config, save_linked_config, has_circular_link, \
+    clear_context_messages
 
 
 @set_module_type('Widgets')
 class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
+        self.propagate_config = True
         self.compact_mode: bool = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing: bool = False
         self.workflow_editable: bool = kwargs.get('workflow_editable', True)
@@ -90,7 +97,12 @@ class WorkflowSettings(ConfigWidget):
         self.layout.addWidget(self.header_widget)
 
         self.workflow_panel = QWidget()
-        self.workflow_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        # Vertical Expanding (not Preferred) so the workflow_panel reclaims
+        # space in the QSplitter when a sibling toggle (workflow_params,
+        # workflow_description, workflow_options) is hidden again. With
+        # Preferred, the splitter leaves the panel at its small sizeHint and
+        # the workflow canvas appears to vanish after the toggle round-trip.
+        self.workflow_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         panel_layout = CVBoxLayout(self.workflow_panel)
         panel_layout.addWidget(self.workflow_buttons)
         panel_layout.addLayout(h_layout)
@@ -203,6 +215,31 @@ class WorkflowSettings(ConfigWidget):
         return config
 
     @override
+    def agent_visualisation(self):
+        def member_line(member_id, config, depth, suffix=''):
+            member_type = config.get('_TYPE', 'agent')
+            if member_type == 'workflow':
+                name = config.get('name', 'Workflow')
+            else:
+                name = get_member_name_from_config(config)
+            lines = [f"{'    ' * depth}- {member_id} | {member_type} | {name}{suffix}"]
+            if member_type == 'workflow':
+                for nested in config.get('members', []):
+                    lines += member_line(nested['id'], nested.get('config', {}), depth + 1)
+            return lines
+
+        lines = ['Workflow:', '    Members:']
+        for member_id, member in self.members_in_view.items():
+            selected = ' (selected)' if member.isSelected() else ''
+            lines += member_line(member_id, member.member_config, 2, selected)
+        if self.inputs_in_view:
+            lines.append('    Inputs:')
+            for (source_id, target_id), line in self.inputs_in_view.items():
+                looper = ' (looper)' if line.config.get('looper') else ''
+                lines.append(f'        - {source_id} -> {target_id}{looper}')
+        return '\n'.join(lines)
+
+    @override
     def update_config(self):
         # iterate members and ensure all loc_x and loc_y are > 0
         for member in self.members_in_view.values():
@@ -224,9 +261,14 @@ class WorkflowSettings(ConfigWidget):
         sel_member_ids = [x.id for x in self.scene.selectedItems()
                           if isinstance(x, DraggableMember)]
 
-        # Reset member config widget before reloading to avoid stale references
-        self.member_config_widget.config_widget = None
-        self.member_config_widget.hide()
+        # Reset member config widget before reloading to avoid stale references.
+        # Capture the open tab/page state first, since clearing config_widget
+        # would otherwise defeat display_member's own preservation logic.
+        mcw = self.member_config_widget
+        if mcw.config_widget is not None:
+            mcw.pending_page_map = get_selected_pages(mcw.config_widget)
+        mcw.config_widget = None
+        mcw.hide()
         if self.compact_mode_editing:
             self.set_edit_mode(False)
         self.header_widget.setVisible(True)
@@ -363,7 +405,7 @@ class WorkflowSettings(ConfigWidget):
         members = list(self.members_in_view.values())
         if member_count == 1:
             member_config = members[0].member_config
-            types_to_simplify = ['text', 'code', 'prompt', 'audio', 'image', 'video']
+            types_to_simplify = ['text', 'code', 'prompt', 'audio', 'image', 'video', 'contact', 'live_agent']
             if member_config.get('_TYPE', 'agent') in types_to_simplify:
                 return True
 
@@ -1293,7 +1335,7 @@ class WorkflowSettings(ConfigWidget):
             menu.exec_(QCursor.pos())
 
         def save_as(self, save_type):
-            new_name, ok = QInputDialog.getText(self, f"New {save_type.capitalize()}", f"Enter the name for the new {save_type.lower()}:")
+            new_name, ok = get_text(self, f"New {save_type.capitalize()}", f"Enter the name for the new {save_type.lower()}:")
             if not ok:
                 return
 
@@ -1347,27 +1389,7 @@ class WorkflowSettings(ConfigWidget):
             if not workflow:
                 return
 
-            sql.execute("""
-                WITH RECURSIVE delete_contexts(id) AS (
-                    SELECT id FROM contexts WHERE id = ?
-                    UNION ALL
-                    SELECT contexts.id FROM contexts
-                    JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
-                )
-                DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
-            """, (workflow.context_id,))
-            sql.execute("""
-            DELETE FROM contexts_messages WHERE context_id = ?""",
-                        (workflow.context_id,))
-            sql.execute("""
-                WITH RECURSIVE delete_contexts(id) AS (
-                    SELECT id FROM contexts WHERE id = ?
-                    UNION ALL
-                    SELECT contexts.id FROM contexts
-                    JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
-                )
-                DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
-            """, (workflow.context_id, workflow.context_id,))
+            clear_context_messages(workflow.context_id)
 
             if hasattr(self.parent.parent, 'main'):
                 self.parent.parent.main.page_chat.load()
@@ -1890,6 +1912,13 @@ class WorkflowSettings(ConfigWidget):
                             'member_type': 'agent',
                             'label_position': None,
                             'default': '',
+                            'row_key': 0,
+                        },
+                        {
+                            'text': 'Confirm',
+                            'type': bool,
+                            'tooltip': 'When used as a tool, ask the user to approve each call before it runs.',
+                            'default': False,
                             'row_key': 0,
                         },
                     ]
@@ -2590,6 +2619,7 @@ class MemberConfigWidget(ConfigWidget):
         self.layout = CVBoxLayout(self)
         # self.object = None
         self.config_widget = None
+        self.pending_page_map = None
         self.member_header_widget = HeaderFields(self)
         self.layout.addWidget(self.member_header_widget)
     
@@ -2675,6 +2705,13 @@ class MemberConfigWidget(ConfigWidget):
         is_same = isinstance(self.config_widget, member_settings_class)
         if is_same:
             page_map = get_selected_pages(self.config_widget)
+        elif self.pending_page_map is not None:
+            # config_widget was cleared by a reload (e.g. WorkflowSettings.load);
+            # fall back to the state captured before it was cleared. A page_map
+            # for a different settings class is keyed by that class name and
+            # simply no-ops here, so no type check is needed.
+            page_map = self.pending_page_map
+        self.pending_page_map = None
 
         self.config_widget = member_settings_class(self, **kwargs)
         self.config_widget.member_id = member_id
@@ -2761,7 +2798,8 @@ class HeaderFields(ConfigJoined):
             parent=parent,
             layout_type='horizontal',
         )
-        self.setFixedHeight(50)
+        self.is_readonly = not getattr(parent, 'workflow_editable', True)
+        self.setFixedHeight(35 if self.is_readonly else 50)
         self.collapsible = getattr(parent, 'collapsible', False)
         self.widgets = [self.ConfigFields(parent=self)]
         if hasattr(parent.parent, 'workflow'):
@@ -2802,7 +2840,7 @@ class HeaderFields(ConfigJoined):
             else:
                 self.context_bar.layout.setContentsMargins(0, 0, 0, 0)
                 self.layout.insertWidget(1, self.context_bar)
-            self.setFixedHeight(50)
+            self.setFixedHeight(35 if self.is_readonly and not is_narrow else 50)
         if is_narrow:
             self.context_bar.setGeometry(
                 self.NARROW_INDENT,
@@ -2852,6 +2890,10 @@ class HeaderFields(ConfigJoined):
             workflow_settings.setMaximumHeight(self.height())
         else:
             workflow_settings.setMaximumHeight(16777215)
+        refresh_member_bar = getattr(
+            workflow_settings.parent, 'refresh_member_bar', None)
+        if refresh_member_bar:
+            refresh_member_bar()
 
     class ConfigFields(ConfigFields):
         def __init__(self, parent):
@@ -2869,7 +2911,7 @@ class HeaderFields(ConfigJoined):
                     'text': 'Avatar',
                     'key': 'avatar_path',
                     'type': 'image',
-                    'diameter': 30 if self.is_member_header else 40,
+                    'diameter': 30 if self.is_member_header else 25 if is_readonly else 40,
                     'circular': False,
                     'border': False,
                     'default': '',
@@ -2881,7 +2923,7 @@ class HeaderFields(ConfigJoined):
                     'text': 'Name',
                     'type': str,
                     'default': 'Unnamed',
-                    'text_size': 14,
+                    'text_size': 12 if is_readonly else 14,
                     'label_position': None,
                     'transparent': True,
                     'row_key': 0,
@@ -3039,9 +3081,7 @@ class HeaderFields(ConfigJoined):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            text_color = system.manager.config.get('display.text_color', '#c4c4c4')
-            self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
-                                           f"QLineEdit:hover {{ color: {text_color}; }}")
+            self.title_label.setObjectName('workflowTitleLabel')
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
 
@@ -3108,6 +3148,9 @@ class HeaderFields(ConfigJoined):
                 WHERE id = ?
             """, (text, self.workflow.context_id,))
             self.workflow.chat_title = text
+            on_title_edited = find_attribute(self, 'on_chat_title_edited')
+            if on_title_edited:
+                on_title_edited(text)
 
         def showContextInfo(self):
             context_id = self.workflow.context_id
@@ -3121,9 +3164,16 @@ class HeaderFields(ConfigJoined):
                 buttons=QMessageBox.Ok,
             )
 
+        def context_kind(self):
+            """The kind of the shown context, which the previous/next
+            buttons stay within."""
+            context_id = self.workflow.context_id
+            kind = sql.get_scalar("SELECT kind FROM contexts WHERE id = ?", (context_id,)) if context_id else None
+            return kind or getattr(self.workflow, '_kind', None) or 'CHAT'
+
         def next_context(self):
             # current_kind = self.workflow.kind
-            current_kind = 'CHAT'
+            current_kind = self.context_kind()
             context_id = self.workflow.context_id
             next_context_id = sql.get_scalar("""
                 SELECT
@@ -3145,7 +3195,7 @@ class HeaderFields(ConfigJoined):
 
         def previous_context(self):
             # current_kind = self.workflow.kind
-            current_kind = 'CHAT'
+            current_kind = self.context_kind()
             context_id = self.workflow.context_id
             prev_context_id = sql.get_scalar("""
                 SELECT
@@ -3153,10 +3203,10 @@ class HeaderFields(ConfigJoined):
                 FROM contexts
                 WHERE parent_id IS NULL
                     AND kind = ?
-                    AND id < ?
+                    AND (? IS NULL OR id < ?)
                 ORDER BY
                     id DESC
-                LIMIT 1;""", (current_kind, context_id,))
+                LIMIT 1;""", (current_kind, context_id, context_id,))
             if prev_context_id:
                 chat_widget = self.workflow.chat_widget
                 chat_widget.goto_context(prev_context_id)

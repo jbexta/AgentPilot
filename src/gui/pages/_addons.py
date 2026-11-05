@@ -31,7 +31,7 @@ from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_json_db_tree import ConfigJsonDBTree
 from gui.widgets.config_joined import ConfigJoined
 
-from gui.util import find_main
+from gui.gui_utils.helpers import find_main
 from utils import sql
 from utils.helpers import display_message, display_message_box, get_metadata
 
@@ -115,7 +115,7 @@ class Page_Addon_Settings(ConfigDBTree):
     def save_as(self):
         # browse file location
         fd = QFileDialog()
-        fd.setStyleSheet("QFileDialog { color: black; }")
+        fd.setObjectName('addonFileDialog')
         fd.setAcceptMode(QFileDialog.AcceptSave)
         fd.setDefaultSuffix('agp')
         filename, _ = fd.getSaveFileName(None, "Save As", "", "Add-on Files (*.agp)")
@@ -183,7 +183,7 @@ class Page_Addon_Settings(ConfigDBTree):
     def import_addon(self):
         fd = QFileDialog()
         fd.setOption(QFileDialog.DontUseNativeDialog, True)
-        fd.setStyleSheet("QFileDialog { color: black; }")
+        fd.setObjectName('addonFileDialog')
         filename, _ = fd.getOpenFileName(None, "Choose Add-on", "", "Add-on Files (*.agp)")
 
         if not filename:

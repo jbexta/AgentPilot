@@ -1,0 +1,64 @@
+uuid: c1c910d2-bc44-4345-be6a-71c131cb1587
+name: claude_code
+config:
+  _TYPE: workflow
+  name: claude_code
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Claude Code Plugin (`src/plugins/claude_code`)
+
+        Runs Claude Code (through the Claude Agent SDK) as a workflow member, and manages the user's Claude Code settings, sessions and context files from inside the app.
+
+        ## 1. Member (`members/conversation/claude_code.py`)
+
+        `ClaudeCode` is an `LlmMember` registered with `settings='claude_code_settings'` and `workflow_insert_mode = 'single'`.
+
+        *   **Working dir:** resolved by `utils/projects.py` (`resolve_cwd`): the owning project's `working_dir`, else the member's own cwd, else a default.
+        *   **Built-in tools:** `_build_allowed_tools` maps the `builtin_tools.*` toggles to Claude Code tool names (Bash, Read, Write, Edit, Glob, Grep on by default; WebFetch, WebSearch off). Falls back to `['Bash']` if none are enabled.
+        *   **App tools:** `_ui_mcp_server` exposes the selected app/workflow tools (`custom_tools.data`) as an in-process MCP server. Tools that need confirmation go through a PreToolUse hook that waits for the user's approval.
+        *   **Permissions & questions:** a permission callback handles tool requests; `AskUserQuestion` payloads are shown to the user as a `QuestionBubble`.
+        *   **Skills:** the app's skills are served to the session from one fixed directory.
+        *   **Hooks:** SDK hooks are built from the member's Hooks config (event, matcher, entity).
+        *   `force_subscription_settings` can pin Claude Code to subscription auth instead of an API key.
+
+        ## 2. Member settings (`widgets/claude_code_settings.py`)
+
+        `ClaudeCodeSettings` (ConfigTabs):
+        *   **Messages:** model, mode, max turns, effort, max budget, force subscription login, verbatim prompts, ignore user MCP servers, system message.
+        *   **Voice:** voice model.
+        *   **Hooks:** event / matcher / entity rows.
+        *   **Tools:** built-in tool toggles and a tree of custom app tools.
+
+        ## 3. Claude settings page (`pages/claude.py`)
+
+        `Page_Claude_Settings` (settings page, `conf_namespace='claude'`). A scope bar picks which `settings.json` is edited: user, project, or project-local.
+        Tabs: **Usage** (usage chart), **Import**, **Defaults**, **CLAUDE.md**, **Memory**, and the file-backed **General**, **Permissions**, **Hooks** and **MCP & Advanced** tabs from `widgets/cc_user_settings.py`, which read and write the real `settings.json` files.
+
+        **Import:** `import_claude_code_sessions` scans `~/.claude/projects/*/*.jsonl`, joins resumed sessions into chains, finds or creates a project for each cwd, and imports the messages as chats. It skips messages it has already imported.
+
+        ## 4. Widgets & bubbles
+        *   `ClaudeContext`: edits a directory's `CLAUDE.md` and `AGENTS.md` as one templated text. It writes them automatically only while every block in it runs instantly. Used as the **Context** tab of projects.
+        *   `ClaudeToolBubble`: shows a tool call. Edits show as a diff with line numbers. Has approve/deny buttons while waiting for approval, and clicking a file opens it in the nearest FileTree.
+        *   `ClaudeToolResultBubble`, `QuestionBubble`: a tool result, and a keyboard-driven numbered option picker with a free-text row.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

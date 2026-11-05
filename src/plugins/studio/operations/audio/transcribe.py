@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from gui import system
 from gui.widgets.config_fields import ConfigFields
 from plugins.studio.operations.base import BaseOperation
+from utils.media import get_ffmpeg_exe
 
 
 class Transcribe(BaseOperation):
@@ -129,7 +130,7 @@ class Transcribe(BaseOperation):
         def run(self):
             import srt
             from datetime import timedelta
-            from gui.studios.video_studio import get_media_duration
+            from plugins.studio.studios.video_studio import get_media_duration
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -201,7 +202,7 @@ class Transcribe(BaseOperation):
             """Extract audio chunk using ffmpeg subprocess."""
             chunk_path = self.filepath + f'.chunk_{offset}.wav'
             subprocess.run([
-                'ffmpeg', '-y', '-i', self.filepath,
+                get_ffmpeg_exe(), '-y', '-i', self.filepath,
                 '-ss', str(offset), '-t', str(duration),
                 '-vn', '-acodec', 'pcm_s16le',
                 '-ar', '16000', '-ac', '1',

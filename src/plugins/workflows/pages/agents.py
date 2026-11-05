@@ -1,5 +1,5 @@
 from utils import sql
-from gui.util import find_main
+from gui.gui_utils.helpers import find_main
 from gui.widgets.config_db_tree import ConfigDBTree
 from plugins.workflows.widgets.workflow_settings import WorkflowSettings
 
@@ -55,13 +55,34 @@ class Page_Entities(ConfigDBTree):
             tree_header_hidden=True,
             readonly=True,
             searchable=True,
-            filterable=True,
             kind='AGENT',
-            kind_list=['AGENT', 'CONTACT'],
-            folder_key={'AGENT': 'agents', 'CONTACT': 'contacts'},
+            folder_key='agents',
+            notify_unread=True,
         )
         self.splitter.setSizes([400, 1000])
         self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
+
+    # Commented out so the Agents page falls back to the automatic widget
+    # walk (like Blocks/Tools) and exercises its embedded WorkflowSettings via
+    # the shared WorkflowSettings.test_widget, giving uniform coverage across
+    # all three pages. Defining test_page suppresses the auto-walk (XOR), so
+    # this bespoke page test is disabled rather than running in addition.
+    # def test_page(self, main, ui):
+    #     import time
+    #
+    #     if self.tree.topLevelItemCount() == 0:
+    #         raise AssertionError("Agents tree has no rows after bootstrap")
+    #
+    #     if self.config_widget is None:
+    #         raise AssertionError("Agents page is missing its config_widget")
+    #
+    #     target_name = 'Builder'
+    #     ui.click_tree_item_cell(self.tree, target_name, 'name')
+    #     time.sleep(0.3)
+    #
+    #     assert self.tree.get_selected_item_id() is not None, f"Clicking '{target_name}' did not select an item"
+    #     loaded_name = (self.config_widget.get_config() or {}).get('name')
+    #     assert loaded_name == target_name, f"Config widget loaded name={loaded_name!r}, expected {target_name!r} after selecting '{target_name}'"
 
     def on_item_double_clicked(self, item, column):
         entity_id = self.tree.get_selected_item_id()

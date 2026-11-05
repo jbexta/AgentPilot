@@ -1,0 +1,58 @@
+uuid: 8129574b-3ddc-43c7-bc81-5cf4cc23bbb4
+name: Reviewer
+config:
+  _TYPE: workflow
+  name: Reviewer
+  avatar_path: null
+  description: ''
+  members:
+  - id: '4'
+    linked_id: null
+    loc_x: 132
+    loc_y: 53
+    width: 450.0
+    height: 350.0
+    config:
+      directory: '{{ cwd }}'
+      from: '{{ project_name }}_snapshot'
+      to: ''
+      avatar_path: :/resources/icon-blocks.png
+      name: Git Diff
+      _TYPE: git_diff
+      group.output_role: block
+      group.output_placeholder: diff
+      group.hide_bubbles: false
+  - id: '5'
+    linked_id: null
+    loc_x: 238
+    loc_y: 55
+    width: 450.0
+    height: 350.0
+    config:
+      avatar_path: :/resources/icon-blocks.png
+      name: Git Checkpoint
+      _TYPE: git_checkpoint
+      group.output_role: block
+      group.output_placeholder: ''
+      group.hide_bubbles: true
+  inputs:
+  - source_member_id: '4'
+    target_member_id: '5'
+    config:
+      looper: false
+      name: Agent
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params:
+  - description: ''
+    name: cwd
+    req: true
+    type: String
+  - description: ''
+    name: project_name
+    req: true
+    type: String
+kind: AGENT

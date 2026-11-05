@@ -1,4 +1,4 @@
-from gui.util import IconButton
+from gui.gui_utils.icon_button import IconButton
 
 
 class ConditionPopupButton(IconButton):
@@ -9,6 +9,7 @@ class ConditionPopupButton(IconButton):
             size=24,
         )
         self.use_namespace = kwargs.get('use_namespace', 'condition')
+        self.propagate_config = getattr(parent, 'propagate_config', False)
         from gui.popup import PopupCondition
         self.config_widget = PopupCondition(
             self, use_namespace=self.use_namespace,

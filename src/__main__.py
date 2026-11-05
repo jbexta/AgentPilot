@@ -1,12 +1,14 @@
+import logging
 import os
 import inspect
 from gui.main import launch
+from utils import console_log
 
 os.environ['LITELLM_LOG'] = 'ERROR'
 
-SHOW_TRACE = False # True #   
 APP_DIR = os.path.dirname(__file__)
-exclude_classes = []  # ['DraggableMember', 'CustomGraphicsView']
+SHOW_TRACE = False # True #   
+exclude_classes = []
 n = 0
 
 def trace_calls(frame, event, arg):
@@ -44,5 +46,7 @@ if SHOW_TRACE:
 
 
 if __name__ == '__main__':
+    console_log.start()
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s  %(message)s', datefmt='%H:%M:%S')
     launch()
     

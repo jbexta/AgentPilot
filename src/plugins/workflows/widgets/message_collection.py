@@ -10,13 +10,18 @@ from PySide6.QtCore import QSize, QTimer, QRect, QEvent, QPropertyAnimation, QEa
 from PySide6.QtGui import QDesktopServices, QPixmap, QIcon, Qt, QGuiApplication
 
 from plugins.workflows.bubbles import MessageBubble, get_bubble_attr
-from gui.util import CustomMenu, colorize_pixmap, IconButton, find_main, clear_layout, \
-    ToggleIconButton, CHBoxLayout, CVBoxLayout, find_workflow_widget, safe_single_shot, TextEnhancerButton
+from gui.gui_utils.helpers import colorize_pixmap, find_main, clear_layout, find_workflow_widget, safe_single_shot
+from gui.gui_utils.custom_menu import CustomMenu
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.toggle_icon_button import ToggleIconButton
+from gui.gui_utils.layouts import CHBoxLayout, CVBoxLayout
+from gui.gui_utils.text_enhancer_button import TextEnhancerButton
 
 from gui import system
 
-from utils.helpers import display_message_box, get_member_name_from_config, display_message, block_signals, get_avatar_paths_from_config, \
+from utils.helpers import display_message_box, display_message, block_signals, \
     path_to_pixmap, apply_alpha_to_hex, set_module_type
+from plugins.workflows.utils.workflows import get_member_name_from_config, get_avatar_paths_from_config
 from utils import sql
 from utils.filesystem import get_application_path
 
@@ -51,10 +56,13 @@ class MessageCollection(QWidget):
         self.scroll_area.setWidget(self.chat_widget)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.verticalScrollBar().rangeChanged.connect(self.maybe_scroll_to_end)
+        self.scroll_area.verticalScrollBar().actionTriggered.connect(self.release_scroll_pos)
         self.coupled_scroll = True
 
         # Add scroll area with stretch factor of 1 to make it expand
         self.layout.addWidget(self.scroll_area, 1)
+        # Bubbles fit the viewport, which narrows when the scrollbar appears.
+        self.scroll_area.viewport().installEventFilter(self)
         self.scroll_animation = QPropertyAnimation(self.scroll_area.verticalScrollBar(), b"value")
 
         self.waiting_for_bar = self.WaitingForBar(self)
@@ -64,11 +72,21 @@ class MessageCollection(QWidget):
 
     def maybe_scroll_to_end(self):
         scroll_bar = self.scroll_area.verticalScrollBar()
+        from_bottom = getattr(self.parent, 'restore_scroll_pos', None)
+        if from_bottom is not None:
+            self.scroll_animation.stop()  # a stale animation would undo the pin
+            scroll_bar.setValue(scroll_bar.maximum() - from_bottom)
+            return
         is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 50
         if is_at_bottom and not getattr(self.parent, 'restore_scroll_pos', None):
             safe_single_shot(50, lambda: self.scroll_to_end())
 
+    def release_scroll_pos(self):
+        """Stop holding the restored position once the user scrolls."""
+        self.parent.restore_scroll_pos = None
+
     def scroll_to_end(self):
+        self.release_scroll_pos()
         scroll_bar = self.scroll_area.verticalScrollBar()
 
         if self.scroll_animation.state() == QPropertyAnimation.Running:
@@ -121,7 +139,7 @@ class MessageCollection(QWidget):
             self.layout.addStretch(1)
 
         def on_play_click(self):
-            self.parent.parent.run_workflow(from_member_id=self.member_id)
+            self.parent.parent.on_send_message()
 
     @property
     def workflow(self):
@@ -134,6 +152,10 @@ class MessageCollection(QWidget):
 
     def refresh(self, block_autorun=False):  # todo block_autorun temp
         with self.workflow.message_history.thread_lock:
+            # A run keeps writing through its own Workflow object's history; if
+            # this widget was re-pointed at the context mid-run, its history is
+            # a different instance, so pull any new rows before rendering.
+            self.workflow.message_history.refresh_messages()
             # get scroll position
             scroll_bar = self.scroll_area.verticalScrollBar()
             scroll_pos = scroll_bar.value()
@@ -171,11 +193,8 @@ class MessageCollection(QWidget):
                     bubble_container.hide()  # deleteLater()
 
             # if last bubble is code then start timer
-            if len(self.chat_bubbles) > 0 and not block_autorun:
-                last_container = self.chat_bubbles[-1]
-                if hasattr(last_container, 'btn_countdown'):
-                    autorun_secs = last_container.bubble.autorun_secs
-                    last_container.btn_countdown.start_timer(secs=autorun_secs)
+            if not block_autorun:
+                self.start_autorun()
 
             # # Update layout
             self.chat_scroll_layout.update()
@@ -187,6 +206,14 @@ class MessageCollection(QWidget):
             self.waiting_for_bar.load()
             if self.parent.__class__.__name__ == 'Page_Chat':
                 self.parent.workflow_settings.header_widget.widgets[1].load()
+
+    def start_autorun(self):
+        if len(self.chat_bubbles) == 0:
+            return
+        last_container = self.chat_bubbles[-1]
+        if hasattr(last_container, 'btn_countdown'):
+            autorun_secs = last_container.bubble.autorun_secs
+            last_container.btn_countdown.start_timer(secs=autorun_secs)
 
     def insert_bubble(self, message=None):
         # show_bubble = system.manager.roles.get(message.role, {}).get('show_bubble', True)
@@ -203,6 +230,8 @@ class MessageCollection(QWidget):
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.addWidget(msg_container)
         self.last_member_bubbles[(bubble.role, bubble.member_id)] = self.chat_bubbles[-1]
+        if self.isHidden():  # the first message of an empty chat
+            self.parent.resize_for_context()
         # msg_container.check_and_toggle_buttons()
         # last_index = index - 1
 
@@ -316,6 +345,11 @@ class MessageCollection(QWidget):
 
     def eventFilter(self, watched, event):
         try:
+            if event.type() == QEvent.Resize and watched is self.scroll_area.viewport():
+                for container in self.chat_bubbles:  # scrollbar toggled: re-fit bubbles
+                    container.bubble.updateGeometry()
+                return False
+
             if event.type() == QEvent.Wheel:
                 if event.modifiers() & Qt.ControlModifier:
                     # delta = event.angleDelta().y()
@@ -366,6 +400,7 @@ class MessageContainer(QWidget):
         self.collapse_button = None
 
         self.fade_overlay = QWidget(self)
+        self.fade_overlay.setObjectName('bubbleFadeOverlay')
         self.fade_height = 75
         self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
@@ -376,6 +411,9 @@ class MessageContainer(QWidget):
 
     def load_message(self, message):
         clear_layout(self.layout)
+        for name in [n for n, v in vars(self).items() if hasattr(v, '_ap_message_button')]:
+            delattr(self, name)
+        self.branch_layout = self.button_layout = self.profile_pic_label = None
 
         workflow = self.parent.workflow
         self.member_id = message.member_id
@@ -448,7 +486,7 @@ class MessageContainer(QWidget):
         self.branch_msg_id = message.id
 
         if getattr(self.bubble, 'has_branches', False):
-            branch_layout = CHBoxLayout()
+            branch_layout = self.branch_layout = CHBoxLayout()
             branch_layout.setSpacing(1)
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
             self.child_branches = self.bubble.branch_entry[self.branch_msg_id]
@@ -479,8 +517,8 @@ class MessageContainer(QWidget):
 
         bubble_h_layout.addStretch(1)
 
-        button_v_layout = CHBoxLayout()
-        button_v_layout.setContentsMargins(0, 0, 0, 2)
+        self.button_layout = CHBoxLayout()
+        self.button_layout.setContentsMargins(0, 0, 0, 2)
 
         # get all class definitions in bubble_class decorated with @message_bubble
         bubble_buttons = {}
@@ -504,9 +542,9 @@ class MessageContainer(QWidget):
                 countdown_h_layout = CHBoxLayout()
                 countdown_h_layout.addWidget(btn_countdown)
                 countdown_h_layout.addWidget(bubble_button)
-                button_v_layout.addLayout(countdown_h_layout)
+                self.button_layout.addLayout(countdown_h_layout)
             else:
-                button_v_layout.addWidget(bubble_button)
+                self.button_layout.addWidget(bubble_button)
 
         self.collapse_button = ToggleIconButton(
             parent=self,
@@ -519,7 +557,7 @@ class MessageContainer(QWidget):
         # connect to toggle_collapse
         self.collapse_button.setFixedSize(32, 24)
         # self.collapse_button.hide()
-        button_v_layout.addWidget(self.collapse_button)
+        self.button_layout.addWidget(self.collapse_button)
 
         # if getattr(self.bubble, 'enable_markdown', False):
         if message.role in ('user', 'assistant', 'block'):
@@ -533,7 +571,7 @@ class MessageContainer(QWidget):
             )
             self.markdown_button.setFixedSize(32, 24)
             self.markdown_button.setChecked(not getattr(self.bubble, 'enable_markdown', False))
-            button_v_layout.addWidget(self.markdown_button)
+            self.button_layout.addWidget(self.markdown_button)
 
         if message.role in ('video', 'image', 'audio'):
             self.open_button = IconButton(
@@ -543,7 +581,7 @@ class MessageContainer(QWidget):
                 tooltip='Open Media',
             )
             self.open_button.setFixedSize(32, 24)
-            button_v_layout.addWidget(self.open_button)
+            self.button_layout.addWidget(self.open_button)
 
             self.open_containing_folder_button = IconButton(
                 parent=self,
@@ -552,7 +590,7 @@ class MessageContainer(QWidget):
                 tooltip='Open Containing Folder',
             )
             self.open_containing_folder_button.setFixedSize(32, 24)
-            button_v_layout.addWidget(self.open_containing_folder_button)
+            self.button_layout.addWidget(self.open_containing_folder_button)
 
         for extension_name, bubble_extension_cls in bubble_extensions.items():
             bubble_extension = bubble_extension_cls(self)
@@ -560,7 +598,7 @@ class MessageContainer(QWidget):
             bubble_v_layout.addWidget(bubble_extension)
 
         self.layout.addLayout(bubble_v_layout)
-        self.layout.addLayout(button_v_layout)
+        self.layout.addLayout(self.button_layout)
         self.layout.addStretch(1)
 
         member_hidden = self.member_config.get('group.hide_bubbles', False)
@@ -573,6 +611,37 @@ class MessageContainer(QWidget):
             self.hide()
 
         self.bubble.append_text(message.content)
+
+    @property
+    def hover_buttons(self):
+        """Buttons shown only while the mouse is over this message."""
+        named = ('markdown_button', 'open_button', 'open_containing_folder_button')
+        return [b for n, b in vars(self).items() if n in named or (
+            hasattr(b, '_ap_message_button') and getattr(b, 'hover_toggled', True))]
+
+    def button_rows(self):
+        """Buttons that are visible or show on hover, one list per stacked row."""
+        if self.button_layout is None:
+            return []
+        hover = self.hover_buttons
+        rows = []
+        for item in map(self.button_layout.itemAt, range(self.button_layout.count())):
+            sub = item.layout()
+            widgets = [sub.itemAt(j).widget() for j in range(sub.count())] if sub else [item.widget()]
+            if row := [w for w in widgets if w and (not w.isHidden() or w in hover)]:
+                rows.append(row)
+        return rows
+
+    def reserved_width(self, stacked):
+        """Width beside the bubble: avatar, branch strip and the buttons, in a
+        column if stacked else a row. Hover buttons count while hidden."""
+        widths = [sum(w.maximumWidth() for w in row) for row in self.button_rows()]
+        avatar = 6 + self.profile_pic_label.maximumWidth() if self.profile_pic_label else 0
+        branches = self.branch_layout.sizeHint().width() if self.branch_layout else 0
+        return avatar + branches + (max(widths, default=0) if stacked else sum(widths))
+
+    def buttons_height(self):
+        return sum(max(w.maximumHeight() for w in row) for row in self.button_rows())
 
     def toggle_collapse(self):
         self.bubble.collapsed = not self.bubble.collapsed
@@ -609,22 +678,20 @@ class MessageContainer(QWidget):
         )
         self.fade_overlay.setGeometry(overlay_rect)
 
-        bg_color = system.manager.config.get('display.primary_color', '#ff11121b')
-        gradient_style = f"""
-            background-color: qlineargradient(
-                spread:pad, x1:0, y1:0, x2:0, y2:0.9,
-                stop:0 rgba(0, 0, 0, 0),
-                stop:1 {bg_color}
-            );
-            border-radius: 10px;
-        """
-        self.fade_overlay.setStyleSheet(gradient_style)
 
         self.fade_overlay.raise_()
         self.fade_overlay.show()
 
+    def update_button_direction(self):
+        layout = self.button_layout
+        vertical = getattr(self.bubble, 'buttons_stacked', False)  # decided in its sizeHint
+        layout.setDirection(
+            QBoxLayout.TopToBottom if vertical else QBoxLayout.LeftToRight)
+        layout.setAlignment(Qt.AlignTop if vertical else Qt.Alignment())
+
     def resizeEvent(self, event):
         self.update_fade_effect()
+        self.update_button_direction()
         super().resizeEvent(event)
 
     def enterEvent(self, event):
@@ -645,21 +712,10 @@ class MessageContainer(QWidget):
 
         # self.check_and_toggle_collapse_button()  # !! #  todo
 
-        buttons = [
-            getattr(self, name) for name, cls in self.__dict__.items()
-            if hasattr(cls, '_ap_message_button')
-        ]
-
         try:
             is_under_mouse = self.underMouse()
-            for btn in buttons:
+            for btn in self.hover_buttons:
                 btn.setVisible(is_under_mouse)
-            if hasattr(self, 'markdown_button'):  # todo clean and refactor
-                self.markdown_button.setVisible(is_under_mouse)
-            if hasattr(self, 'open_button'):
-                self.open_button.setVisible(is_under_mouse)
-            if hasattr(self, 'open_containing_folder_button'):
-                self.open_containing_folder_button.setVisible(is_under_mouse)
             if hasattr(self, 'btn_countdown'):
                 self.btn_countdown.reset_countdown()
 
@@ -692,6 +748,7 @@ class MessageContainer(QWidget):
             last_message_id = last_message['id'] if last_message else None
             container_is_last = self.bubble.msg_id == -1 or self.bubble.msg_id == last_message_id
             self.collapse_button.setVisible(too_big)  # is_under_mouse and too_big)
+            self.bubble.updateGeometry()  # its width reserves the visible buttons
             if too_big and not self.bubble.collapsed and not container_is_last and not getattr(self.bubble, 'is_edit_mode', False):
                 self.collapse_button.click()
             else:
@@ -766,6 +823,32 @@ class MessageContainer(QWidget):
             search_text = self.bubble.toPlainText()
         formatted_text = quote(search_text)
         QDesktopServices.openUrl(QUrl(f"https://www.google.com/search?q={formatted_text}"))
+
+    def save_as_goal(self):
+        """Promote this message into a goal.
+
+        Re-roles the message to ``goal`` (so it renders as a GoalBubble) and
+        creates a matching row in the ``goals`` table linked to this chat, so
+        the goal appears on the Goals page.
+        """
+        msg_id = self.bubble.msg_id
+        if msg_id == -1:
+            return
+        content = (self.bubble.text or '').strip()
+        if not content:
+            return
+
+        workflow = self.bubble.workflow
+        context_id = workflow.context_id
+        name = content.splitlines()[0][:60] or 'Goal'
+
+        sql.execute("UPDATE contexts_messages SET role = 'goal' WHERE id = ?",
+                    (msg_id,))
+        sql.execute("INSERT INTO goals (name, config, context_id) VALUES (?, ?, ?)",
+                    (name, json.dumps({'description': content}), context_id))
+
+        if workflow.chat_widget:
+            workflow.chat_widget.load()
 
     def open_media(self):
         try:
@@ -853,6 +936,12 @@ class MessageContainer(QWidget):
                     'text': 'Search the web',
                     'target': parent.search_web,
                 },
+                # Goals disabled
+                # {
+                #     'text': 'Save as goal',
+                #     'target': parent.save_as_goal,
+                #     'visibility_predicate': lambda: parent.bubble.role == 'user',
+                # },
                 # {
                 #     'text': 'Copy code',
                 #     'target': parent.copy_code,
@@ -892,9 +981,14 @@ class MessageContainer(QWidget):
         def start_timer(self, secs=5):
             if self.countdown_stopped:
                 return
+            if secs == 0:
+                self.countdown_stopped = True
+                QTimer.singleShot(0, self.target_button.click)
+                return
             self.countdown_from = secs
             self.countdown = secs
             self.show()
+            self.parent.bubble.updateGeometry()
             self.setText(f"{self.countdown}")
 
             self.timer.timeout.connect(self.update_countdown)

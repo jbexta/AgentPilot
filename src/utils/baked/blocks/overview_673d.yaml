@@ -13,7 +13,7 @@ config:
     width: 450.0
     height: 350.0
     config:
-      data: |
+      data: |-
         # Project Overview
 
         This application is a modular desktop platform built with Python, PySide6 and qAsync. At its core, it features a dynamic architecture where modules—ranging from backend services to interactive GUI widgets—can be loaded and modified, even at runtime. This design empowers both developers and users to customize functionality and adapt the user interface to their evolving needs.
@@ -50,36 +50,26 @@ config:
 
         ## {{ gui_architecture }}
 
-        ## {{ plugins }}
-        { workflows }
-
         ## Database and Persistence
 
         - SQLite database (`data.db`) stores contexts, messages, configurations
         - Message history with branching support
         - Workflow state persistence and resumption
 
-        ## Important Implementation Details
+        ### Baking
 
-        ### Module Loading
-        - **Dynamic module loading**: `ModuleManager` handles runtime loading/unloading
-        - **Multi-type module support**: 12+ module types with automatic discovery
-        - **Configuration hashing**: Change detection for module updates
-        - **Type controllers**: `ModulesController` manages each module type
-        - **Plugin organization**: Plugins contain collections of related modules
-        - Modules can be edited while application is running (if enabled)
-        - Plugin system allows extending functionality without core changes
+        Baking saves an item from the database into a file in the source code, so it ships with the app. Right-click an item and choose Bake. With auto-bake on, a baked item is re-baked every time it's saved in the app.
 
-        ### Configuration Management
-        - Configurations are JSON-based, stored in database
-        - Hierarchical config system supports complex nested structures
-        - UI automatically generates configuration interfaces from schemas
+        **Items** (blocks, agents, skills, tasks, …) are saved as YAML files in `src/utils/baked/`. The database copy is the real one, and the YAML is only loaded back when the app is reset. So edit items in the app, not the YAML, or your change will be overwritten.
 
-        ### File Organization
-        - `src/core/`: Core system logic and managers
-        - `src/gui/`: User interface components
-        - `src/plugins/`: Modular plugin implementations
-        - `src/utils/`: Shared utilities and helpers
+        **Modules** are saved as `.py` files in the source code. Here the file is the real one, and it's loaded into the database on every startup. So edit the `.py` file directly. Modules that aren't baked only exist in the database.
+
+        Baking isn't possible in the built app.
+
+        Block Maps are different: they write a block's output to a file, such as `docs/*.md` or `CLAUDE.md`.
+
+        ## {{ plugins }}
+        ## {{ workflows }}
       _format_block_keys:
       - data
       _TYPE: text
@@ -91,4 +81,5 @@ config:
     show_nested_bubbles: false
     mini_view: true
   params: []
+kind: PROJECT:1
 folder_path: Documentation

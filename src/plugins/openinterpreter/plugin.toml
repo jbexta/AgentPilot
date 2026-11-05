@@ -1,0 +1,8 @@
+[plugin]
+name = "openinterpreter"
+version = "0.1.0"
+description = "Code execution engine stripped from Open Interpreter."
+
+[dependencies]
+jupyter-client = { version = "8.6.3",  import = "jupyter_client" }
+ipykernel      = { version = "6.29.5", import = "ipykernel" }

@@ -4,10 +4,13 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QCursor
 from typing_extensions import override
 
-from utils.helpers import block_signals, set_module_type
+from utils.helpers import block_signals, set_module_type, llm_tool, tr
 
 from gui import system
-from gui.util import find_attribute, find_main, IconButton, CVBoxLayout, CHBoxLayout, ToggleIconButton
+from gui.gui_utils.helpers import find_attribute, find_main
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.toggle_icon_button import ToggleIconButton
 from utils import sql
 
 from gui.widgets.config_collection import ConfigCollection
@@ -61,13 +64,6 @@ class ConfigPages(ConfigCollection):
         # Clear the main layout to prevent stacking
         # clear_layout(self.layout)
 
-        # remove all widgets from the content stack
-        for i in reversed(range(self.content.count())):
-            remove_widget = self.content.widget(i)
-            if remove_widget not in self.pages.values():
-                self.content.removeWidget(remove_widget)
-                remove_widget.deleteLater()
-
         # # remove settings sidebar
         # if getattr(self, 'settings_sidebar', None):
         #     self.layout.removeWidget(self.settings_sidebar)
@@ -79,6 +75,22 @@ class ConfigPages(ConfigCollection):
         #     self.content_container = None
 
         with block_signals(self.content, recurse_children=False):  # todo
+            current = self.content.currentWidget()
+            if current not in self.pages.values():
+                replacement = next((p for p in self.pages.values() if type(p).__name__ == type(current).__name__), None)
+                if replacement:
+                    self.content.insertWidget(self.content.indexOf(current), replacement)
+                    if hasattr(replacement, 'build_schema'):
+                        replacement.build_schema()
+                    self.content.setCurrentWidget(replacement)
+
+            # remove all widgets from the content stack
+            for i in reversed(range(self.content.count())):
+                remove_widget = self.content.widget(i)
+                if remove_widget not in self.pages.values():
+                    self.content.removeWidget(remove_widget)
+                    remove_widget.deleteLater()
+
             for i, (page_name, page) in enumerate(self.pages.items()):
                 widget = self.content.widget(i)
                 if widget != page:
@@ -106,6 +118,9 @@ class ConfigPages(ConfigCollection):
 
             self.layout.addWidget(self.content_container)
 
+            if self.default_page:
+                self.content.setCurrentWidget(self.pages.get(self.default_page))
+
         else:
             self.settings_sidebar.load()
 
@@ -119,12 +134,6 @@ class ConfigPages(ConfigCollection):
         if hasattr(self, 'after_init'):
             self.after_init()
     
-    def after_init(self):
-        if self.default_page:
-            default_page = self.pages.get(self.default_page)
-            page_index = self.content.indexOf(default_page)
-            self.content.setCurrentIndex(page_index)
-
     def get(self, page_name, default=None):
         """Get a page by its name."""
         return self.pages.get(page_name, default)
@@ -136,6 +145,7 @@ class ConfigPages(ConfigCollection):
             if hasattr(page, 'load'):
                 page.load()
 
+    @llm_tool(name='switch_page', description='Switch to the page with the given name')
     def goto_page(self, page_name):
         is_current = self.content.currentWidget() == self.pages[page_name]
         if is_current:
@@ -147,6 +157,7 @@ class ConfigPages(ConfigCollection):
     def on_current_changed(self, _):
         self.load()
         self.update_breadcrumbs()
+        self.update_page_map()
 
     class ConfigSidebarWidget(QWidget):
         def __init__(self, parent):
@@ -213,7 +224,7 @@ class ConfigPages(ConfigCollection):
                             parent=self,
                             icon_path=getattr(page, 'icon_path', ':/resources/icon-pages-large.png'),
                             size=size,
-                            tooltip=getattr(page, 'display_name', key),
+                            tooltip=tr(getattr(page, 'display_name', key)),
                             icon_path_checked=getattr(page, 'icon_path_checked', None),
                             target_when_checked=getattr(page, 'target_when_checked', None),
                             show_checked_background=getattr(page, 'show_checked_background', True),
@@ -225,7 +236,7 @@ class ConfigPages(ConfigCollection):
                     else:
                         # Update existing button properties
                         btn = self.page_buttons[key]
-                        btn.setToolTip(getattr(page, 'display_name', key))
+                        btn.setToolTip(tr(getattr(page, 'display_name', key)))
 
             elif self.button_type == 'text':
                 for key, page in pages.items():
@@ -239,7 +250,7 @@ class ConfigPages(ConfigCollection):
                     else:
                         # Update existing button text
                         btn = self.page_buttons[key]
-                        btn.setText(getattr(page, 'display_name', key))
+                        btn.setText(tr(getattr(page, 'display_name', key)))
 
             # Update button group
             if self.button_group is None:
@@ -398,13 +409,13 @@ class ConfigPages(ConfigCollection):
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, parent, text='', text_size=13, align_left=False):
                 super().__init__()
-                self.setText(self.tr(text))  # todo - translate
+                self.setText(tr(text))
                 self.setCheckable(True)
                 self.font = QFont()
                 self.font.setPointSize(text_size)
                 self.setFont(self.font)
                 if align_left:
-                    self.setStyleSheet("QPushButton { text-align: left; }")
+                    self.setProperty('class', 'align-left')
 
             def refresh_icon(self):
                 pass  # todo clean

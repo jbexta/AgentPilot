@@ -3,9 +3,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from typing_extensions import override
 
-from gui.util import CVBoxLayout, CHBoxLayout, IconButton
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.icon_button import IconButton
 from gui.widgets.config_widget import ConfigWidget
-from utils.helpers import block_signals, path_to_pixmap, set_module_type
+from utils.helpers import block_signals, format_llm_tools, path_to_pixmap, set_module_type
 
 
 class CollapsibleSection(QWidget):
@@ -164,6 +165,22 @@ class ConfigSideTabs(ConfigWidget):
             config.update(page_config)
 
         return config
+
+    @override
+    def get_agent_visualisation(self, refs):
+        from textwrap import indent
+        tools = format_llm_tools(self, refs)
+        parts = [tools] if tools else []
+        own = self.agent_visualisation()
+        if own:
+            parts.append(own)
+        for page_name, page in self.pages.items():
+            section = self.sections.get(page_name)
+            state = '' if section is None or section.is_expanded else ' (collapsed)'
+            header = f"- {page_name}{state}"
+            sub = page.get_agent_visualisation(refs) if hasattr(page, 'get_agent_visualisation') else ''
+            parts.append(f"{header}\n{indent(sub, '    ')}" if sub else header)
+        return '\n'.join(parts)
 
     def expand_all(self):
         """Expand all sections."""

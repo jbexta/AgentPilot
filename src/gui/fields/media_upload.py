@@ -11,12 +11,15 @@ from PySide6.QtWidgets import (
     QStackedWidget, QWidget, QLineEdit, QFileDialog, QSizePolicy,
 )
 
-from gui.util import IconButton, CHBoxLayout, CVBoxLayout, find_attribute
+from gui.gui_utils.helpers import find_attribute
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.layouts import CHBoxLayout, CVBoxLayout
 from utils import sql
 from utils.helpers import (
-    convert_model_json_to_obj, display_message, get_media_preview_class,
+    convert_model_json_to_obj, display_message,
     set_module_type,
 )
+from utils.media import get_media_preview_class, get_media_type_from_ext
 
 
 MEDIA_FILTERS = {
@@ -79,12 +82,23 @@ class MediaSourcePopup(QWidget):
         clip_layout.setSpacing(4)
 
         self.clip_combo = QComboBox(self)
-        self._populate_clips()
+        self.clip_combo.currentIndexChanged.connect(
+            self._update_trim_visibility
+        )
         clip_layout.addWidget(self.clip_combo)
+
+        self.runtime_checkbox = QCheckBox('Use at runtime', self)
+        self.runtime_checkbox.setChecked(True)
+        self.runtime_checkbox.toggled.connect(
+            self._update_trim_visibility
+        )
+        clip_layout.addWidget(self.runtime_checkbox)
 
         self.trim_checkbox = QCheckBox('Trim to timeline position', self)
         self.trim_checkbox.setChecked(True)
         clip_layout.addWidget(self.trim_checkbox)
+
+        self._populate_clips()
 
         self.stack.addWidget(self.clip_page)
 
@@ -101,6 +115,7 @@ class MediaSourcePopup(QWidget):
         allowed = COMPATIBLE_CLIP_TYPES.get(
             self.media_type, COMPATIBLE_CLIP_TYPES['any']
         )
+        member_id = find_attribute(self.parent, 'member_id')
         clips = self.studio.timeline.clips
         for clip_id, clip in clips.items():
             if clip.member_type not in allowed:
@@ -109,9 +124,21 @@ class MediaSourcePopup(QWidget):
                 'name', f'Clip {clip_id}'
             )
             track_label = f'Track {clip.track_index + 1}'
-            self.clip_combo.addItem(
-                f'{name} ({track_label})', clip_id
-            )
+            label = f'{name} ({track_label})'
+            if clip_id == member_id:
+                label += ' (self)'
+            self.clip_combo.addItem(label, clip_id)
+        self._update_trim_visibility()
+
+    def _update_trim_visibility(self):
+        """Show the trim checkbox only for runtime video/audio sources."""
+        clip_id = self.clip_combo.currentData()
+        clip = self.studio.timeline.clips.get(clip_id)
+        is_timed = clip is not None \
+            and clip.member_type in ('audio', 'video')
+        self.trim_checkbox.setVisible(
+            is_timed and self.runtime_checkbox.isChecked()
+        )
 
     def _on_source_changed(self, index):
         self.stack.setCurrentIndex(index)
@@ -124,19 +151,44 @@ class MediaSourcePopup(QWidget):
             clip_id = self.clip_combo.currentData()
             if clip_id is None:
                 return
-            ref = {
-                'source': 'clip',
-                'clip_id': clip_id,
-                'trim_to_position': self.trim_checkbox.isChecked(),
-            }
+            if not self.runtime_checkbox.isChecked():
+                self._insert_clip_file(clip_id)
+                return
+            ref = {'source': 'clip', 'clip_id': clip_id}
+            clip = self.studio.timeline.clips.get(clip_id)
+            if clip and clip.member_type in ('audio', 'video'):
+                ref['trim_to_position'] = self.trim_checkbox.isChecked()
 
         ref_str = json.dumps(ref)
         self.parent._local_path = None
         self.parent._clear_preview()
-        self.parent.url_input.setText(ref_str)
         self.hide()
-        if hasattr(self.parent.parent, 'update_config'):
-            self.parent.parent.update_config()
+        # setText emits textChanged, which is already wired to the parent's
+        # update_config — calling it again here would run against widgets
+        # the resulting rebuild has destroyed.
+        self.parent.url_input.setText(ref_str)
+
+    def _insert_clip_file(self, clip_id):
+        """Upload the selected clip's current media file now."""
+        clip = self.studio.timeline.clips.get(clip_id)
+        filepath = None
+        if clip:
+            filepath = clip.filepath or clip.member_config.get(
+                'browse.path', ''
+            )
+        if not filepath or not os.path.isfile(filepath):
+            display_message(
+                icon=QMessageBox.Warning,
+                title='No media file',
+                message='The selected clip has no media file on disk',
+            )
+            return
+
+        self.hide()
+        self.parent._local_path = filepath
+        self.parent._show_preview(filepath)
+        self.parent._start_upload(filepath)
+
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -174,6 +226,9 @@ class MediaUpload(QWidget):
 
         self.url_input = QLineEdit(self)
         self.url_input.setPlaceholderText(placeholder)
+        # Expanding (not Ignored) so the input contributes a real size hint
+        # and claims row width; it still shrinks down to its minimum size
+        # hint when the buttons and preview thumbnail need the space.
         self.url_input.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Preferred
         )
@@ -181,7 +236,7 @@ class MediaUpload(QWidget):
         self.browse_button = IconButton(
             self, icon_path=':/resources/icon-folder.png'
         )
-        self.browse_button.setMaximumWidth(60)
+        self.browse_button.setFixedSize(32, 25)
         self.browse_button.clicked.connect(self.browse_file)
 
         self._preview_widget = None
@@ -195,6 +250,8 @@ class MediaUpload(QWidget):
         self._source_button = None
         self._source_popup = None
 
+        self.setAcceptDrops(True)
+
         self.layout.addWidget(self.url_input)
         self.layout.addWidget(self.browse_button)
 
@@ -204,7 +261,7 @@ class MediaUpload(QWidget):
             self._source_button = IconButton(
                 self, icon_path=':/resources/icon-link.png'
             )
-            self._source_button.setMaximumWidth(60)
+            self._source_button.setFixedSize(32, 25)
             self._source_button.clicked.connect(self._toggle_source_popup)
             self._source_popup = MediaSourcePopup(
                 self, studio, self.media_type
@@ -214,11 +271,7 @@ class MediaUpload(QWidget):
         self.layout.addWidget(self._preview_container)
 
         if width:
-            self.setFixedWidth(width)
-            button_width = self.browse_button.maximumWidth()
-            spacing = self.layout.spacing()
-            input_width = width - button_width - spacing - 10
-            self.url_input.setFixedWidth(max(input_width, 100))
+            self.setMaximumWidth(width)
 
         self.url_input.textChanged.connect(parent.update_config)
 
@@ -304,6 +357,38 @@ class MediaUpload(QWidget):
         self._local_path = None
         self._clear_preview()
 
+    def _dropped_media_path(self, event):
+        """Return the local path of a dropped file compatible with this
+        field's media_type, or None."""
+        mime_data = event.mimeData()
+        if not mime_data.hasUrls():
+            return None
+        path = mime_data.urls()[0].toLocalFile()
+        if not path or not os.path.isfile(path):
+            return None
+        media_type = get_media_type_from_ext(os.path.splitext(path)[1].lower())
+        if media_type is None:
+            return None
+        if self.media_type != 'any' and media_type != self.media_type:
+            return None
+        return path
+
+    def dragEnterEvent(self, event):
+        if self._dropped_media_path(event) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        path = self._dropped_media_path(event)
+        if path is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self._local_path = path
+        self._show_preview(path)
+        self._start_upload(path)
+
     def browse_file(self):
         """Opens a file dialog and processes the selected file."""
         file_filter = MEDIA_FILTERS.get(
@@ -349,7 +434,7 @@ class MediaUpload(QWidget):
         if self._preview_widget is not None:
             if hasattr(self._preview_widget, 'cleanup'):
                 self._preview_widget.cleanup()
-            self._preview_widget.setParent(None)
+            self._preview_widget.hide()
             self._preview_widget.deleteLater()
             self._preview_widget = None
         self._preview_container.setVisible(False)

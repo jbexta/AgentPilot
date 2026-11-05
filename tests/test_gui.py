@@ -24,74 +24,77 @@
 # GUI TEST MOVED TO src/gui/demo.py
 # in unit test dialogs block the test
 # but in-app we cant reset app before running
-import os
-import shutil
-import sys
-import time
-import unittest
+# Test entry point moved to scripts/run_tests.py.
+# Per-module test definitions live in each ModulesController subclass's
+# `test_scaffold` method (currently only PagesController); the orchestrator
+# is gui.test_runner.TestRunnable.
 
-from PySide6.QtGui import Qt
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
-
-from gui.main import Main
-from utils import sql
-from utils.reset import reset_application
-
-
-class TestApp(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication(sys.argv)
-        cls.app.setAttribute(Qt.AA_EnableHighDpiScaling)
-        cls.app.setStyle("Fusion")  # Fixes macos white line issue
-        cls.main = Main()  # test_mode=True)
-
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up after all tests
-        cls.main.close()
-        cls.app.quit()
-
-    def setUp(self):
-        self.main.show()
-        self.main.raise_()
-        QTest.qWait(1000)  # Wait for the window to show
-
-        self.btn_settings = self.main.main_pages.settings_sidebar.page_buttons['settings']
-        self.page_settings = self.main.main_pages.pages['settings']
-
-    def test_app(self):
-        self.main.activateWindow()
-        self.main.run_test()
-        while self.main.test_running:
-            time.sleep(0.1)
-            QApplication.processEvents()  # todo dirtyyy
-
-
-if __name__ == '__main__':
-    shutil.copyfile('./data.db', './test_data.db')
-
-    db_path = os.path.join(os.path.dirname(sql.get_db_path()), 'test_data.db')
-    sql.set_db_filepath(db_path)
-
-    reset_db = True
-    if reset_db:
-        tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
-        if tos_val == '1':
-            reset_application(force=True, preserve_audio_msgs=True)
-            print("DATABASE RESET.")
-
-        tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
-        if tos_val == '0':
-            sql.execute('UPDATE settings SET value = "1" WHERE field = "accepted_tos"')
-
-    unittest.main()
-
-    # delete test_data.db
-    if os.path.exists('./test_data.db'):
-        os.remove('./test_data.db')
+# --- previous unittest-based entrypoint (kept for reference) ---
+# import os
+# import shutil
+# import sys
+# import time
+# import unittest
+# from PySide6.QtGui import Qt
+# from PySide6.QtTest import QTest
+# from PySide6.QtWidgets import QApplication
+# from gui.main import Main
+# from utils import sql
+# from utils.reset import reset_application
+#
+# class TestApp(unittest.TestCase):
+#
+#     @classmethod
+#     def setUpClass(cls):
+#         cls.app = QApplication(sys.argv)
+#         cls.app.setAttribute(Qt.AA_EnableHighDpiScaling)
+#         cls.app.setStyle("Fusion")  # Fixes macos white line issue
+#         cls.main = Main()  # test_mode=True)
+#
+#     @classmethod
+#     def tearDownClass(cls):
+#         # Clean up after all tests
+#         cls.main.close()
+#         cls.app.quit()
+#
+#     def setUp(self):
+#         self.main.show()
+#         self.main.raise_()
+#         QTest.qWait(1000)  # Wait for the window to show
+#
+#         self.btn_settings = self.main.main_pages.settings_sidebar.page_buttons['settings']
+#         self.page_settings = self.main.main_pages.pages['settings']
+#
+#     def test_app(self):
+#         self.main.activateWindow()
+#         self.main.run_test()
+#         while self.main.test_running:
+#             time.sleep(0.1)
+#             QApplication.processEvents()  # todo dirtyyy
+#
+#
+# if __name__ == '__main__':
+#     shutil.copyfile('./data.db', './test_data.db')
+#
+#     db_path = os.path.join(os.path.dirname(sql.get_db_path()), 'test_data.db')
+#     sql.set_db_filepath(db_path)
+#
+#     reset_db = True
+#     if reset_db:
+#         tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
+#         if tos_val == '1':
+#             reset_application(force=True, preserve_audio_msgs=True)
+#             print("DATABASE RESET.")
+#
+#         tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
+#         if tos_val == '0':
+#             sql.execute('UPDATE settings SET value = "1" WHERE field = "accepted_tos"')
+#
+#     unittest.main()
+#
+#     # delete test_data.db
+#     if os.path.exists('./test_data.db'):
+#         os.remove('./test_data.db')
 
 # # # TEST LIST
 # # # - Open app with no internet/
@@ -134,7 +137,6 @@ if __name__ == '__main__':
 # # # - Open settings page
 # # # -   System tab settings
 # # # -     Dev mode
-# # # -     Telemetry
 # # # -     Always on top
 # # # -     Auto run tools & code
 # # # -     Default model

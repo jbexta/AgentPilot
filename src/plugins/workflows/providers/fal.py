@@ -3,11 +3,10 @@ import json
 import asyncio
 import os
 import re
-import time
 
 from PySide6.QtWidgets import QMessageBox
+import aiohttp
 import fal_client
-import requests
 
 from gui import system
 from utils.reset import reset_table
@@ -25,7 +24,7 @@ class FalProvider(Provider):
         api_key = sql.get_scalar("""
             SELECT api_key FROM apis
             WHERE LOWER(name) = "fal ai"
-        """)
+        """) or ''
         if api_key.startswith('$'):
             api_key = os.environ.get(api_key[1:], '')
         os.environ['FAL_KEY'] = api_key
@@ -83,16 +82,23 @@ class FalProvider(Provider):
 
         # Media upload fields store {"url": ..., "local_path": ...} —
         # extract just the URL before sending to the API.
-        for k, v in arguments.items():
+        def extract_url(v):
             if not isinstance(v, str):
-                continue
+                return v
             try:
                 obj = json.loads(v)
             except (json.JSONDecodeError, TypeError):
-                continue
+                return v
             if isinstance(obj, dict) and len(obj) == 2:
                 if 'url' in obj and 'local_path' in obj:
-                    arguments[k] = obj['url']
+                    return obj['url']
+            return v
+
+        for k, v in arguments.items():
+            if isinstance(v, list):
+                arguments[k] = [extract_url(item) for item in v]
+            else:
+                arguments[k] = extract_url(v)
 
         # 4. Submit to queue (returns immediately)
         handler = await fal_client.submit_async(model_name, arguments=arguments)
@@ -109,32 +115,38 @@ class FalProvider(Provider):
 
         return request_id_generator()
 
-    # async def get_transcription_result(self, model_name, request_id):
-    #     """Poll and return transcription result as dict.
+    async def get_transcription_result(self, model_name, request_id):
+        """Poll and return the raw structured result as dict.
 
-    #     Unlike get_result() which downloads binary media, this returns
-    #     structured JSON containing text and timestamp chunks.
+        Unlike get_result() which downloads binary media, this returns
+        structured JSON output directly (transcriptions, voice ids, etc).
 
-    #     Parameters
-    #     ----------
-    #     model_name : str
-    #         Fal model endpoint (e.g., "fal-ai/whisper").
-    #     request_id : str
-    #         Saved request ID from run_model().
+        Parameters
+        ----------
+        model_name : str
+            Fal model endpoint (e.g., "fal-ai/whisper").
+        request_id : str
+            Saved request ID from run_model().
 
-    #     Returns
-    #     -------
-    #     dict
-    #         Response dict with text and chunks/segments.
-    #     """
-    #     while True:
-    #         status = await fal_client.status_async(model_name, request_id)
-    #         if isinstance(status, fal_client.Completed):
-    #             break
-    #         await asyncio.sleep(2)
-    #     return await fal_client.result_async(model_name, request_id)
+        Returns
+        -------
+        dict
+            Raw response dict.
+        """
+        while True:
+            status = await fal_client.status_async(model_name, request_id)
+            if isinstance(status, fal_client.Completed):
+                break
+            await asyncio.sleep(2)
+        return await fal_client.result_async(model_name, request_id)
 
-    def sync_models(self):
+    async def sync_models(self, model_names=None, default_kind=None):
+        """Sync Fal models into the models table.
+
+        With `model_names`, fetches only those endpoint ids instead of
+        paginating the full catalog. `default_kind` is used for targeted
+        models whose kind can't be derived from their category.
+        """
         reset_table(
             table_name='apis',
             item_configs={
@@ -152,6 +164,40 @@ class FalProvider(Provider):
             '3d': '3D',
             'text': 'TEXT',
         }
+
+        if model_names:
+            try:
+                all_models = {}
+                for endpoint_id in model_names:
+                    await asyncio.sleep(1)
+                    status, text = await self._fetch_models({
+                        "expand": "openapi-3.0",
+                        "endpoint_id": endpoint_id,
+                    })
+                    if status != 200:
+                        print(f"Skipping {endpoint_id} - {text}")
+                        continue
+                    models_data = json.loads(text).get('models', [])
+                    if not models_data:
+                        print(f"Skipping {endpoint_id} - Not found")
+                        continue
+                    entry = self._build_model_entry(models_data[0], api_id, mode_maps, default_kind=default_kind)
+                    if entry:
+                        all_models[entry[0]] = entry[1]
+
+                reset_table(
+                    table_name='models',
+                    item_configs=all_models,
+                    delete_existing=False,
+                    match_on=('name', 'api_id'),
+                )
+            except Exception as e:
+                display_message(
+                    icon=QMessageBox.Critical,
+                    title="FalAI model sync error",
+                    message=f"An error occurred while syncing FalAI models: {e}"
+                )
+            return
 
         # # get all categories from the api
         # all_categories = requests.get(
@@ -188,22 +234,19 @@ class FalProvider(Provider):
 
                 next_cursor = None
                 while True:
-                    time.sleep(7)
-                    response = requests.get(
-                        'https://api.fal.ai/v1/models',
-                        params={
-                            "expand":"openapi-3.0",
-                            "cursor": next_cursor,
-                            "status": "active",
-                            "limit": 10,
-                            "category": category,
-                        }
-                    )
-                    is_error = response.status_code != 200
+                    await asyncio.sleep(7)
+                    status, text = await self._fetch_models({
+                        "expand":"openapi-3.0",
+                        "cursor": next_cursor,
+                        "status": "active",
+                        "limit": 10,
+                        "category": category,
+                    })
+                    is_error = status != 200
                     if is_error:
-                        raise Exception(f"Error syncing models: {response.text}")
+                        raise Exception(f"Error syncing models: {text}")
 
-                    response = response.json()
+                    response = json.loads(text)
                     for model in response.get('models', []):
                         model_name = model['endpoint_id']
                         metadata = model.get('metadata', {})
@@ -226,24 +269,21 @@ class FalProvider(Provider):
                         if 'components' not in model['openapi']:
                             # print(f"Skipping {model_name} - No openapi components")
                             # continue
-                            time.sleep(7)
+                            await asyncio.sleep(7)
                             # model_name_last_segment = model_name.split('/')[-1]
                             orig_model_name = model_name
                             model_name = model_name.rsplit('/', 1)[0]
-                            fallback_resp = requests.get(  # todo dedupe
-                                'https://api.fal.ai/v1/models',
-                                params={
-                                    "expand":"openapi-3.0",
-                                    "cursor": next_cursor,
-                                    "status": "active",
-                                    "endpoint_id": model_name,
-                                }
-                            )
-                            if fallback_resp.status_code != 200:
+                            fallback_status, fallback_text = await self._fetch_models({  # todo dedupe
+                                "expand":"openapi-3.0",
+                                "cursor": next_cursor,
+                                "status": "active",
+                                "endpoint_id": model_name,
+                            })
+                            if fallback_status != 200:
                                 print(f"Skipping {orig_model_name} - No openapi components")
                                 continue
 
-                            fallback_data = fallback_resp.json()
+                            fallback_data = json.loads(fallback_text)
                             if len(fallback_data['models']) == 0:
                                 print(f"Skipping {orig_model_name} - No openapi components")
                                 continue
@@ -305,6 +345,7 @@ class FalProvider(Provider):
                     table_name='models',
                     item_configs=all_models,
                     delete_existing=False,
+                    match_on=('name', 'api_id'),
                 )
             pass
 
@@ -315,6 +356,62 @@ class FalProvider(Provider):
                 message=f"An error occurred while syncing FalAI models: {e}"
             )
             return
+
+    @staticmethod
+    async def _fetch_models(params):
+        """GET the Fal models endpoint, returning (status, body_text)."""
+        params = {k: v for k, v in params.items() if v is not None}
+        async with aiohttp.ClientSession() as session:
+            async with session.get('https://api.fal.ai/v1/models', params=params) as resp:
+                return resp.status, await resp.text()
+
+    def _build_model_entry(self, model, api_id, mode_maps, default_kind=None):
+        """Convert a Fal API model dict into a models-table entry.
+
+        Returns (key_tuple, config) for reset_table, or None to skip.
+        """
+        model_name = model['endpoint_id']
+        metadata = model.get('metadata', {})
+        category = metadata.get('category', '') or ''
+        cat_end = category.split('-')[-1].lower() if '-' in category else None
+        mode = mode_maps.get(cat_end) or default_kind
+        if not mode:
+            print(f"Skipping {model_name} - No valid mode")
+            return None
+
+        openapi_schema = model.get('openapi', {}).get('components', {}).get('schemas', {})
+        if not openapi_schema:
+            print(f"Skipping {model_name} - No openapi schema")
+            return None
+
+        input_schema, output_schema = [], []
+        for schema_name, schema_data in openapi_schema.items():
+            if schema_name.endswith('Input'):
+                properties = schema_data.get('properties', {})
+                property_order = schema_data.get('x-fal-order-properties', [])
+                input_schema = self.convert_all_openapi_properties(properties, property_order)
+            elif schema_name.endswith('Output'):
+                output_schema = schema_data
+
+        if not input_schema:
+            print(f"Skipping {model_name} - No input/output schemas")
+            return None
+
+        metadata['input_schema'] = input_schema
+        metadata['output_schema'] = output_schema
+
+        display_name = model_name
+        if display_name.startswith('fal-ai/'):
+            display_name = display_name[len('fal-ai/'):]
+
+        key = (
+            ('name', display_name),
+            ('kind', mode),
+            ('api_id', api_id),
+            ('metadata', json.dumps(metadata)),
+            ('provider_plugin', 'fal'),
+        )
+        return key, {'_model_name': model_name}
 
     def resolve_schema(self, schema):
         # Helper function to resolve complex JSON schemas into a single type definition

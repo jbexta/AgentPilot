@@ -2,43 +2,15 @@
 
 ## General Conventions
 
--   **Language**: Python 3.x
--   **Indentation**: 4 spaces (no tabs)
--   **Line Length**: 79 characters (PEP8 default)
--   **Encoding**: UTF-8
--   **Principles**:
-    -   **DRY**: Don’t Repeat Yourself — extract shared logic.
-    -   **KISS**: Keep It Simple, Stupid — prefer clarity over cleverness.
-    -   **YAGNI**: You Aren’t Gonna Need It — implement only what is required.
-    -   **SOC**: Separation of Concerns — keep responsibilities distinct.
-    -   **SRP**: Single Responsibility Principle — each class, module, or function should do one thing.
-    -   **OCP**: Open/Closed Principle — open to extension, closed to modification.
-    -   **LSP**: Liskov Substitution Principle — subclasses should be substitutable for their base.
-    -   **Convention over Configuration**: Prefer defaults and shared patterns to reduce boilerplate.
-    -   **Boy Scout Rule**: Leave the code cleaner than you found it.
-
-## Naming Conventions
-
--   **Classes**: `PascalCase`
--   **Functions & Methods**: `snake_case`
--   **Attributes & Variables**: `snake_case`
-
-## Imports
-
--   Group and order imports as follows:
-    1.  Standard library imports
-    2.  Third-party imports
-    3.  Local application imports
--   Use absolute imports over relative imports.
+-   **Line Length**: 79 characters
+-   **Imports**: absolute, grouped as standard library, third-party, local.
+-   **Principles**: DRY, KISS, YAGNI, Separation of Concerns, SRP, Open/Closed, Liskov Substitution, Convention over Configuration, Boy Scout Rule.
 
 ## Comments & Documentation
 
 -   Prefer **self-documenting code** over comments.
--   Use **docstrings** for all public modules, classes, functions,
-    and methods.
--   NumPy docstring format.
--   Document **why**, not just **what**, especially when design
-    principles (e.g., OCP, SRP) influenced decisions.
+-   If comments are necessary, keep them short and consise.
+-   Don't write comments explaining why a change or bug fix was made. Explain it in the conversation, not the source.
 
 ## Error Handling
 
@@ -55,6 +27,7 @@ This section defines conventions for PySide6 with `qasync` for asyncio event loo
 -   Prefer `@qasyncSlot()` decorators with **async/await** instead of `@Slot()` when defining slots that may perform asynchronous operations.
 -   Use lambda expressions for signal connections if the call is trivial.
 -   Never block the main thread — always offload long-running or I/O-bound tasks via `async`/`await`.
+-   Never use QApplication.processEvents()
 
 **Styling**
 
@@ -67,3 +40,55 @@ This section defines conventions for PySide6 with `qasync` for asyncio event loo
 -   If creating a layout for a widget, use `self.layout = QVBoxLayout(self)` instead of `self.setLayout(layout)`.
 -   Prefer creating layouts without content margins or spacing using `CVBoxLayout` or `CHBoxLayout`.
 -   Favor **composition over inheritance** — only subclass Qt widgets when extending or specializing behavior.
+
+## Guide for LLM's
+
+Behavioral guidelines for LLM's and coding agents.
+
+**Important:**
+-   Never read .env or any file containing secrets/credentials.
+-   Never use git to revert local edits; undo manually with Edit/Write.
+-   If you need to edit `sql_upgrade.py`, only edit the current-version method, **never** edit previous versions.
+-   Never let scripts write to the real `data.db`.
+
+The following guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+### 1. Think Before Implementing
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- Reuse existing hooks (e.g. an `aboutToQuit`/`closeEvent` chain) instead of repeating their work.
+- Only add a guard if you can see the concrete scenario that triggers it.
+- Inline one-off logic where it's used. This includes a one-line expression used in two places; don't turn it into a helper.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+- Never delete commented-out code when editing files.
+
+When your changes create I am typing a full sentence out here orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.

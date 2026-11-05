@@ -1,73 +1,88 @@
 import ast
-import asyncio
 import hashlib
+import os
 import re
+import sys
 
 from sqlite3 import IntegrityError
 from typing import Dict, Any, List
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QEventLoop, QObject, QSize, Qt, QResource, Signal
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 
 from utils.filesystem import unsimplify_path
 from contextlib import contextmanager
-from PySide6.QtWidgets import QWidget, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QInputDialog, QWidget, QMessageBox
 import requests
 
-from gui import system
-
 import json
-from utils import resources_rc, sql
+from utils import sql
 
-AUDIO_EXTS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.wma'}
-IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff'}
-VIDEO_EXTS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.wmv', '.flv'}
-ALL_MEDIA_EXTS = VIDEO_EXTS | IMAGE_EXTS | AUDIO_EXTS
+RESOURCES_RCC = os.path.join(
+    os.path.join(sys._MEIPASS, 'utils') if getattr(sys, 'frozen', False) else os.path.dirname(__file__),
+    'resources.rcc',
+)
+QResource.registerResource(RESOURCES_RCC)
 
-
-def get_media_type_from_ext(ext):
-    if ext in VIDEO_EXTS:
-        return 'video'
-    elif ext in IMAGE_EXTS:
-        return 'image'
-    elif ext in AUDIO_EXTS:
-        return 'audio'
-    return None
+LANG_DIR = os.path.join(os.path.dirname(RESOURCES_RCC), 'lang')
+RTL_LANGUAGES = ('العربية', 'اردو')
+TRANSLATIONS = {}
 
 
-def get_media_preview_class(media_type=None, ext=None):
-    from gui.media_previews.image import ImagePreview
-    from gui.media_previews.video import VideoPreview
-    from gui.media_previews.audio import AudioPreview
-
-    if not media_type:
-        media_type = get_media_type_from_ext(ext)
-    preview_dict = {
-        'video': VideoPreview,
-        'image': ImagePreview,
-        'audio': AudioPreview,
-    }
-    return preview_dict.get(media_type, None)
+def get_languages():
+    return ('English', *sorted(f[:-5] for f in os.listdir(LANG_DIR) if f.endswith('.json')))
 
 
-def get_media_icon_path(media_type=None, ext=None):
-    if not media_type:
-        media_type = get_media_type_from_ext(ext)
-    icon_dict = {
-        'video': ':/resources/icon-video.png',
-        'image': ':/resources/icon-image.png',
-        'audio': ':/resources/icon-audio.png',
-    }
-    return icon_dict.get(media_type, ':/resources/icon-file.png')
+def load_language(language):
+    path = os.path.join(LANG_DIR, f'{language}.json')
+    TRANSLATIONS.clear()
+    QApplication.setLayoutDirection(
+        Qt.RightToLeft if language in RTL_LANGUAGES else Qt.LeftToRight
+    )
+    if os.path.exists(path):
+        with open(path, encoding='utf-8') as f:
+            TRANSLATIONS.update(json.load(f))
+
+
+def tr(text):
+    return TRANSLATIONS.get(text, text)
+
+
+def llm_tool(func=None, name=None, description=None, params=None, confirm=None):
+    """Mark a widget/page method as a tool callable by the LLM.
+    Usable bare (@llm_tool) or with args (@llm_tool(name='switch_page')).
+    `params` maps exposed parameter names to descriptions; when omitted,
+    every signature parameter is exposed.
+    `confirm` makes the user accept or reject each call with the tool
+    bubble's message buttons before it runs."""
+    def decorator(fn):
+        fn._ap_llm_tool = {
+            'name': name or fn.__name__,
+            'description': description or (fn.__doc__ or '').strip(),
+            'params': params,
+            'confirm': confirm,
+        }
+        return fn
+    if func is not None:
+        return decorator(func)
+    return decorator
+
+
+class ManagerSignals(QObject):
+    changed = Signal()
 
 
 class BaseManager(dict):
     """
     The `BaseManager` class provides a base for managing data, including loading, saving, adding, and deleting items from a database table.
+    Managers with a `table_name` expose generic CRUD `@llm_tool`s unless `llm_crud` is False.
     """
+    llm_crud = True
+
     def __init__(self, system, **kwargs):
         super().__init__()
         self.system = system
+        self.signals = ManagerSignals()
 
         # Initialize connector # todo dedupe
         # connector_param = kwargs.get('db_connector', None)
@@ -170,18 +185,23 @@ class BaseManager(dict):
                     values += (uuid,)
                     # query = f"UPDATE `{self.table_name}` SET {set_query} WHERE `uuid` = ?"
                     self.db_connector.execute(f"UPDATE `{self.table_name}` SET {set_query} WHERE `uuid` = ?", values)
-                    return
+                    self.signals.changed.emit()
+                    return item_exists
 
-            self.db_connector.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})", values)
+            item_id = self.db_connector.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})", values)
 
         except IntegrityError:
             display_message(
                 message='Item already exists',
                 icon=QMessageBox.Warning,
             )
+            return None
         finally:
             if not skip_load:
                 self.load()
+
+        self.signals.changed.emit()
+        return item_id
 
     def delete(self, key, where_field='id'):
         if self.table_name == 'contexts':  # todo create contexts manager
@@ -201,6 +221,13 @@ class BaseManager(dict):
                 self.db_connector.execute(f"DELETE FROM contexts WHERE id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
 
         try:
+            has_parent_id_col = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE name = 'parent_id'") > 0
+            if has_parent_id_col and where_field == 'id':
+                self.db_connector.execute(f"""
+                    UPDATE `{self.table_name}`
+                    SET parent_id = (SELECT parent_id FROM `{self.table_name}` WHERE id = ?)
+                    WHERE parent_id = ?
+                """, (key, key))
             self.db_connector.execute(f"DELETE FROM `{self.table_name}` WHERE `{where_field}` = ?", (key,))
             self.load()
 
@@ -209,9 +236,122 @@ class BaseManager(dict):
                 message=f'Item could not be deleted:\n' + str(e),
                 icon=QMessageBox.Warning,
             )
+            return
+
+        self.signals.changed.emit()
 
     def save(self):
         pass
+
+    def scope_filter(self):
+        """SQL condition and params limiting rows to this manager's `kind`,
+        for managers sharing a table (e.g. agents and contacts)."""
+        kind = self.default_fields.get('kind')
+        if kind is None:
+            return '', ()
+        return ' AND `kind` = ?', (kind,)
+
+    def get_row(self, id):
+        scope_sql, scope_params = self.scope_filter()
+        row = self.db_connector.get_results(
+            f"SELECT `id`, `name`, `config`, `folder_id` FROM `{self.table_name}` WHERE `id` = ?{scope_sql}",
+            (id, *scope_params),
+        )
+        if not row:
+            raise ValueError(f'No item with id {id}')
+        item = dict(zip(('id', 'name', 'config', 'folder_id'), row[0]))
+        item['config'] = json.loads(item['config'])
+        return item
+
+    @staticmethod
+    def parse_config_arg(config):
+        parsed = json.loads(config) if config else {}
+        if not isinstance(parsed, dict):
+            raise ValueError('config must be a JSON object')
+        return parsed
+
+    @llm_tool(
+        name='list',
+        description='List items as JSON, without their config',
+        params={
+            'search': 'Only items whose name contains this text',
+            'folder_id': 'Only items in this folder',
+        },
+    )
+    def list_items(self, search: str = '', folder_id: int = None):
+        scope_sql, params = self.scope_filter()
+        where = f'`name` LIKE ?{scope_sql}'
+        params = (f'%{search}%', *params)
+        if folder_id is not None:
+            where += ' AND `folder_id` = ?'
+            params += (folder_id,)
+        rows = self.db_connector.get_results(
+            f"SELECT `id`, `name`, `folder_id` FROM `{self.table_name}` WHERE {where} ORDER BY `name`",
+            params,
+        )
+        return json.dumps([dict(zip(('id', 'name', 'folder_id'), row)) for row in rows])
+
+    @llm_tool(
+        name='get',
+        description='Get an item with its config as JSON',
+        params={'id': 'Id of the item'},
+    )
+    def get_item(self, id: int):
+        return json.dumps(self.get_row(id))
+
+    @llm_tool(
+        name='add',
+        description='Add an item, returns its id',
+        params={
+            'name': 'Name of the new item',
+            'config': 'JSON object of config values, merged onto the defaults',
+            'folder_id': 'Folder to add the item to',
+        },
+    )
+    def add_item(self, name: str, config: str = '{}', folder_id: int = None):
+        merged = {**self.default_fields.get('config', {}), **self.parse_config_arg(config)}
+        item_id = self.add(name, config=merged, folder_id=folder_id)
+        if item_id is None:
+            raise ValueError(f'Could not add {name!r}, it may already exist')
+        return json.dumps({'id': item_id})
+
+    @llm_tool(
+        name='update',
+        description='Update an item\'s name and/or config, returns the '
+                    'saved item with its config as JSON',
+        params={
+            'id': 'Id of the item',
+            'name': 'New name',
+            'config': 'JSON object of config values to merge into the '
+                      'existing config, a null value removes the key',
+        },
+    )
+    def update_item(self, id: int, name: str = None, config: str = None):
+        item = self.get_row(id)
+        merged = {**item['config'], **self.parse_config_arg(config)}
+        new_config = {key: value for key, value in merged.items() if value is not None}
+        self.db_connector.execute(
+            f"UPDATE `{self.table_name}` SET `name` = ?, `config` = ? WHERE `id` = ?",
+            (name or item['name'], json.dumps(new_config), id),
+        )
+        from gui.gui_utils.helpers import auto_bake_table_item
+        auto_bake_table_item(self.table_name, id)
+        self.load()
+        self.signals.changed.emit()
+        return json.dumps(self.get_row(id))
+
+    @llm_tool(
+        name='delete',
+        description='Delete an item, its children are moved to its parent',
+        params={'id': 'Id of the item'},
+        confirm=True,
+    )
+    def delete_item(self, id: int):
+        self.get_row(id)
+        has_locked_col = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE name = 'locked'") > 0
+        if has_locked_col and self.db_connector.get_scalar(f"SELECT locked FROM `{self.table_name}` WHERE id = ?", (id,)) == 1:
+            raise ValueError('Item is locked')
+        self.delete(id)
 
     def get_cell(self, key, column):
         """
@@ -339,6 +479,77 @@ def set_module_type(module_type, plugin=None, settings=None):
     return decorator
 
 
+def snake_class_name(name):
+    """`ConfigDBTree` -> `config_db_tree`, `Project_File_Tree` -> `project_file_tree`."""
+    return re.sub(r'(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', '_', name).lower()
+
+
+def readable_class_name(obj):
+    return snake_class_name(type(obj).__name__).replace('_', ' ').capitalize()
+
+
+def get_llm_tools(cls):
+    """The `@llm_tool` methods available on cls. Names are prefixed with the
+    defining class, unless that class is marked `_ap_llm_tool_root`."""
+    tools = []
+    attrs = [
+        (attr, c) for c in reversed(cls.__mro__) for attr in vars(c)
+        if next(o for o in cls.__mro__ if attr in vars(o)) is c
+    ]
+    for attr, owner in attrs:
+        fn = getattr(cls, attr, None)
+        meta = getattr(fn, '_ap_llm_tool', None)
+        if not meta:
+            continue
+        is_root = vars(owner).get('_ap_llm_tool_root', False)
+        tools.append({
+            **meta,
+            'name': meta['name'] if is_root else f"{snake_class_name(owner.__name__)}_{meta['name']}",
+            'attr': attr,
+            'fn': fn,
+            'owner': owner,
+            'is_root': is_root,
+        })
+    return tools
+
+
+def llm_tool_params(tool):
+    """The exposed signature parameters of a tool from `get_llm_tools`."""
+    import inspect
+    exposed = tool['params']
+    return [
+        param for param in list(inspect.signature(tool['fn']).parameters.values())[1:]
+        if exposed is None or param.name in exposed
+    ]
+
+
+def format_llm_tools(obj, refs, tools=None):
+    """The `Tools [wN]:` block listing the `@llm_tool` methods of obj's class,
+    or the given tools. Appends obj to refs when any tool needs a widget
+    reference."""
+    if tools is None:
+        tools = get_llm_tools(type(obj))
+    if not tools:
+        return ''
+    header = 'Tools:'
+    if not all(tool['is_root'] for tool in tools):
+        refs.append(obj)
+        header = f'Tools [w{len(refs)}]:'
+    lines = [header]
+    for tool in tools:
+        args = []
+        for param in llm_tool_params(tool):
+            arg = param.name
+            if param.annotation is not param.empty:
+                arg += f': {getattr(param.annotation, "__name__", param.annotation)}'
+            if param.default is not param.empty:
+                arg += f' = {param.default!r}'
+            args.append(arg)
+        description = f" - {tool['description']}" if tool['description'] else ''
+        lines.append(f"    - {tool['name']}({', '.join(args)}){description}")
+    return '\n'.join(lines)
+
+
 def message_button(name):
     def decorator(cls):
         cls._ap_message_button = name
@@ -382,40 +593,6 @@ def convert_to_safe_case(text) -> str:
     return re.sub(r'[^a-zA-Z0-9_.]', '_', text)
 
 
-def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
-    member_type = config.get('_TYPE', 'agent')
-    if member_type == 'workflow':
-        if 'avatar_path' in config:
-            return config['avatar_path']
-
-        paths = []
-        members = config.get('members', [])
-        for member_data in members:
-            member_config = member_data.get('config', {})
-            member_type = member_config.get('_TYPE', 'agent')
-            if member_type == 'user':
-                continue
-            paths.append(get_avatar_paths_from_config(member_config))
-        return paths if paths else ':/resources/icon-user.png'
-        # return paths # if not merge_multiple else '//##//##//'.join(flatten_list(paths))
-
-    member_class = system.manager.modules.get_module_class('Members', module_name=member_type)
-    if not member_class:
-        display_message(
-            message=f"Member module '{member_type}' not found.",
-            icon=QMessageBox.Warning,
-        )
-        return ':/resources/icon-agent-solid.png'  # todo error icon
-
-    avatar_key = getattr(member_class, 'avatar_key', None)
-    default_avatar = getattr(member_class, 'default_avatar', ':/resources/icon-agent-solid.png')
-    if avatar_key:
-        avatar_path = config.get(avatar_key, default_avatar)
-        return avatar_path
-    else:
-        return default_avatar
-
-
 def flatten_list(lst) -> List:  # todo dirty
     flat_list = []
     for item in lst:
@@ -426,332 +603,6 @@ def flatten_list(lst) -> List:  # todo dirty
         else:
             flat_list.append(item)
     return flat_list
-
-
-def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str:
-    member_type = config.get('_TYPE', 'agent')
-    if member_type == 'workflow':
-        names = []
-        members = config.get('members', [])
-        for member_data in members:
-            member_config = member_data.get('config', {})
-            member_type = member_config.get('_TYPE', 'agent')
-            if member_type == 'user':
-                continue
-            names.append(get_member_name_from_config(member_config))
-        return ', '.join(flatten_list(names))
-        # return paths  # if not merge_multiple else '//##//##//'.join(flatten_list(paths))
-
-    member_class = system.manager.modules.get_module_class('Members', module_name=member_type)
-    if not member_class:
-        display_message(
-            message=f"Member module '{member_type}' not found.",
-            icon=QMessageBox.Warning,
-        )
-        return 'Invalid member'
-
-    name_key = getattr(member_class, 'name_key', None)
-    default_name = getattr(member_class, 'default_name', 'Assistant')
-    if name_key:
-        name = config.get(name_key, default_name)
-        return name
-    else:
-        return default_name
-
-
-def resolve_linked_config(linked_id, visited=None):
-    """Fetch config from DB for a linked_id like 'entities.{uuid}'.
-
-    Recursively resolves nested linked_ids in the config.
-    Uses visited set to detect circular references.
-
-    Parameters
-    ----------
-    linked_id : str
-        Format: 'table.uuid'
-    visited : set, optional
-        Set of already-visited linked_ids for cycle detection.
-
-    Returns
-    -------
-    dict or None
-        Resolved config, or None if entity not found.
-    """
-    if not linked_id:
-        return None
-
-    if visited is None:
-        visited = set()
-
-    if linked_id in visited:
-        return None
-
-    visited.add(linked_id)
-
-    parts = linked_id.split('.', 1)
-    if len(parts) != 2:
-        return None
-
-    table, entity_uuid = parts
-
-    config_json = sql.get_scalar(
-        f"SELECT config FROM `{table}` WHERE uuid = ?",
-        (entity_uuid,)
-    )
-    if config_json is None:
-        return None
-
-    config = json.loads(config_json) if isinstance(config_json, str) else config_json
-
-    # Recursively resolve nested linked_ids in members
-    members = config.get('members', [])
-    for member in members:
-        nested_linked_id = member.get('linked_id')
-        if nested_linked_id:
-            nested_config = resolve_linked_config(nested_linked_id, visited=set(visited))
-            if nested_config is not None:
-                member['config'] = nested_config
-
-    return config
-
-
-def save_linked_config(linked_id, config):
-    """Write config back to the source entity.
-
-    Parameters
-    ----------
-    linked_id : str
-        Format: 'table.uuid'
-    config : dict
-        Config to save.
-    """
-    if not linked_id:
-        return
-
-    parts = linked_id.split('.', 1)
-    if len(parts) != 2:
-        return
-
-    table, entity_uuid = parts
-    config_to_save = {k: v for k, v in config.items() if k != 'linked_id'}
-    sql.execute(
-        f"UPDATE `{table}` SET config = ? WHERE uuid = ?",
-        (json.dumps(config_to_save), entity_uuid)
-    )
-
-    # Recursively save nested linked members
-    for member in config_to_save.get('members', []):
-        nested_linked_id = member.get('linked_id')
-        if nested_linked_id:
-            nested_config = member.get('config', {})
-            save_linked_config(nested_linked_id, nested_config)
-
-
-def has_circular_link(linked_id, existing_chain=None):
-    """Check if linking to linked_id would create a cycle.
-
-    Parameters
-    ----------
-    linked_id : str
-        The linked_id to check.
-    existing_chain : set, optional
-        Set of linked_ids already in the chain.
-
-    Returns
-    -------
-    bool
-        True if a cycle would be created.
-    """
-    if not linked_id:
-        return False
-
-    if existing_chain is None:
-        existing_chain = set()
-
-    if linked_id in existing_chain:
-        return True
-
-    existing_chain.add(linked_id)
-
-    parts = linked_id.split('.', 1)
-    if len(parts) != 2:
-        return False
-
-    table, entity_uuid = parts
-    config_json = sql.get_scalar(
-        f"SELECT config FROM `{table}` WHERE uuid = ?",
-        (entity_uuid,)
-    )
-    if config_json is None:
-        return False
-
-    config = json.loads(config_json) if isinstance(config_json, str) else config_json
-
-    members = config.get('members', [])
-    for member in members:
-        nested_linked_id = member.get('linked_id')
-        if nested_linked_id:
-            if has_circular_link(nested_linked_id, existing_chain=set(existing_chain)):
-                return True
-
-    return False
-
-
-def get_entity_workflow_config(entity_val):
-    """Build a workflow config from an entity field value.
-
-    Parameters
-    ----------
-    entity_val : str
-        Stored value in ``name:table:uuid`` format.
-
-    Returns
-    -------
-    dict
-        A workflow config, or empty dict if the value is invalid.
-    """
-    if not entity_val:
-        return {}
-    parts = entity_val.rsplit(':', 2)
-    if len(parts) != 3:
-        return {}
-    _, table, uuid = parts
-    from utils import sql
-    raw = sql.get_scalar(
-        f"SELECT config FROM `{table}` WHERE uuid = ?", (uuid,),
-    )
-    if not raw:
-        return {}
-    config = json.loads(raw) if isinstance(raw, str) else raw
-    return merge_config_into_workflow_config(
-        config, entity_id=uuid, entity_table=table,
-    )
-
-
-def merge_config_into_workflow_config(config, entity_id=None, entity_table=None) -> Dict[str, Any]:
-    """Wrap a non-workflow config into a workflow structure.
-
-    Parameters
-    ----------
-    entity_id : str or None
-        The *uuid* of the source entity (not the integer id).
-    entity_table : str or None
-        Table name, e.g. 'entities', 'blocks', 'tools'.
-    """
-    linked_id = f'{entity_table}.{entity_id}' if entity_id is not None else None
-
-    member_type = config.get('_TYPE', 'agent')
-    if member_type == 'workflow':
-        if linked_id:
-            config['linked_id'] = linked_id
-        return config
-    else:
-        name = config.pop('name', 'Workflow')
-
-    if member_type == 'agent':  # !wfdiff! #
-        members = [
-            {'id': '1', 'linked_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user", "name": "You"}},
-            {'id': '2', 'linked_id': linked_id, 'loc_x': 100, 'loc_y': 80, 'config': config | {"name": "Agent"}}
-        ]
-    else:
-        pretty_name = member_type.replace('_', ' ').title()
-        members = [{'id': '1', 'linked_id': linked_id, 'loc_x': 100, 'loc_y': 80, 'config': config | {"name": pretty_name}}]
-
-    config_json = {
-        '_TYPE': 'workflow',
-        'name': name,
-        'description': config.get('description', ''),
-        'avatar_path': config.get('avatar_path', None),
-        'members': members,
-        'inputs': [],
-    }
-    return config_json
-
-
-def merge_multiple_into_workflow_config(members, inputs) -> Dict[str, Any]:
-    """Merge multiple configs into a single workflow config."""
-    if not members:
-        return {}
-    if len(members) == 1 and '_TYPE' in members[0] and members[0]['_TYPE'] == 'workflow':
-        return members[0]
-
-    merged_config = {
-        '_TYPE': 'workflow',
-        'members': [
-            {'id': str(i + 1), 'linked_id': None, 'loc_x': 100 + qpoint.x(), 'loc_y': 80 + qpoint.y(), 'config': config}
-            for i, (qpoint, config) in enumerate(members)
-        ],
-        'inputs': [
-            {
-                'source_member_id': str(source_member_index + 1), 
-                'target_member_id': str(target_member_index + 1), 
-                'config': input_config
-            }
-            for source_member_index, target_member_index, input_config in inputs
-        ]
-    }
-
-    return merged_config
-
-
-async def receive_workflow(
-    config: Dict[str, Any] = None,
-    kind: str = 'BLOCK',
-    params: Dict[str, Any] = None,
-    tool_uuid: str = None,
-    chat_title: str = '',
-    main=None,
-    workflow = None,
-):
-    if workflow is None:
-        from plugins.workflows.members.workflow import Workflow
-        wf_config = merge_config_into_workflow_config(config)
-        workflow = Workflow(main=main, config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
-
-    try:
-        async for key, chunk in workflow.run():
-            yield key, chunk
-    except StopIteration:  # !nestmember! #
-        raise Exception("Pausing nested workflows isn't implemented yet")
-
-
-async def compute_workflow_async(  # todo rename, clean
-    config: Dict[str, Any] = None,
-    kind: str = 'BLOCK',
-    params: Dict[str, Any] = None,
-    tool_uuid: str = None,
-    chat_title: str = '',
-    main=None,
-    workflow = None,
-):
-    response = ''
-    async for key, chunk in receive_workflow(config=config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main, workflow=workflow):
-        response += chunk
-    return response
-
-
-def compute_workflow(  # todo rename
-    config: Dict[str, Any],
-    kind: str = 'BLOCK',
-    params: Dict[str, Any] = None,
-    tool_uuid: str = None,
-    chat_title: str = '',
-    main=None,
-    workflow = None,
-):
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    if loop is None:
-        from gui.main import loop as main_loop
-        if main_loop is not None and main_loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(
-                compute_workflow_async(config=config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main, workflow=workflow),
-                main_loop,
-            )
-            return future.result()
-    return asyncio.run(compute_workflow_async(config=config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main, workflow=workflow))
 
 
 def params_to_schema(params):
@@ -771,6 +622,7 @@ def params_to_schema(params):
     ignore_names = ['< enter a parameter name >']
     schema = [
         {
+            **param,
             'key': param.get('name', ''),
             'text': param.get('name', '').capitalize().replace('_', ' '),
             'type': type_convs.get(param.get('type'), str),
@@ -940,63 +792,13 @@ def try_parse_json(text):
         return False, {}
 
 
-async def download_url_to_file(url, base_dir=None, filename_without_ext=None):
-    """Download a URL to a local file and return the path.
-
-    Parameters
-    ----------
-    url : str
-        Remote URL to download.
-
-    Returns
-    -------
-    str or None
-        Local file path, or ``None`` on failure.
-    """
-    import os
-    from utils.filesystem import get_application_path
-
-    import aiofiles
-    import aiohttp
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                content = await response.read()
-    except Exception as e:
-        print(f"Download error: {e}")
-        return None
-
-    remote_filename = os.path.basename(url.split('?')[0])
-    remote_filename_without_ext, remote_fileext = os.path.splitext(remote_filename)
-
-    if not filename_without_ext:
-        filename_without_ext = remote_filename_without_ext or 'download'
-    else:
-        # Guard against callers accidentally passing a filename with extension.
-        filename_without_ext = os.path.splitext(filename_without_ext)[0]
-    if not base_dir:
-        ext = remote_fileext.lower()
-        if ext in VIDEO_EXTS:
-            subdir = 'videos'
-        elif ext in AUDIO_EXTS:
-            subdir = 'music'
-        else:
-            subdir = 'images'
-        base_dir = os.path.join(get_application_path(), subdir)
-    os.makedirs(base_dir, exist_ok=True)
-
-    local_path = os.path.join(
-        base_dir, f"{filename_without_ext}{remote_fileext}")
-    async with aiofiles.open(local_path, 'wb') as f:
-        await f.write(content)
-    return local_path
+# download_url_to_file moved to plugins.workflows.utils.download
+# to keep the aiofiles/aiohttp deps inside the workflows plugin.
 
 
 @contextmanager
-def block_signals(*widgets, recurse_children=True):
-    """Context manager to block signals for a widget and all its child pages."""
+def block_signals(*widgets, recurse_children=True, exclude=()):
+    """Context manager to block signals for a widget and all its child pages, except `exclude`."""
     all_widgets = []
     original_states = []
     try:
@@ -1006,7 +808,7 @@ def block_signals(*widgets, recurse_children=True):
             if recurse_children:
                 # Use Qt's built-in findChildren which is more efficient than our custom function
                 children = widget.findChildren(QWidget)
-                all_widgets.extend(children)
+                all_widgets.extend(c for c in children if c not in exclude)
 
         # Store original states and block signals
         for widget in all_widgets:
@@ -1021,7 +823,7 @@ def block_signals(*widgets, recurse_children=True):
 
 
 def display_message(message, title=None, icon='Information', duration=5000):
-    from gui.util import find_main
+    from gui.gui_utils.helpers import find_main
     main = find_main()
     if main:
         main.notification_manager.show_notification(
@@ -1056,13 +858,55 @@ def display_message_box(icon, text, title, buttons=(QMessageBox.Ok), custom_butt
         for button_text, role in custom_buttons:
             msg.addButton(button_text, role)
     # msg.addButton('Archive', QMessageBox.ActionRole)
-    return msg.exec()
+    return exec_non_modal(msg)
+
+
+def exec_non_modal(dialog):
+    """Like `dialog.exec()`, but non-modal, because some window managers
+    hide the title bar buttons of modal dialogs."""
+    dialog.setWindowModality(Qt.NonModal)
+    loop = QEventLoop()
+    dialog.finished.connect(loop.quit)
+    dialog.show()
+    mark_primary_buttons(dialog)
+    loop.exec()
+    return dialog.result()
+
+
+def mark_primary_buttons(dialog):
+    """Flags the accept buttons of a shown dialog's button boxes, for the
+    stylesheet's `[primary="true"]` rules."""
+    from gui.gui_utils.helpers import set_style_property
+    for box in dialog.findChildren(QDialogButtonBox):
+        for btn in box.buttons():
+            role = box.buttonRole(btn)
+            set_style_property(btn, 'primary', role in (
+                QDialogButtonBox.AcceptRole, QDialogButtonBox.YesRole,
+            ))
+
+
+def get_text(parent, title, label, text=''):
+    """Drop-in replacement for `QInputDialog.getText`, see `exec_non_modal`."""
+    dialog = QInputDialog(parent)
+    dialog.setWindowTitle(title)
+    dialog.setLabelText(label)
+    dialog.setTextValue(text)
+    ok = exec_non_modal(dialog) == QDialog.Accepted
+    return dialog.textValue(), ok
 
 
 def apply_alpha_to_hex(hex_color, alpha):
     color = QColor(hex_color)
     color.setAlphaF(alpha)
     return color.name(QColor.HexArgb)
+
+
+def blend_hex_colors(hex1, hex2, ratio=0.5):
+    c1, c2 = QColor(hex1), QColor(hex2)
+    r = int(c1.red() * (1 - ratio) + c2.red() * ratio)
+    g = int(c1.green() * (1 - ratio) + c2.green() * ratio)
+    b = int(c1.blue() * (1 - ratio) + c2.blue() * ratio)
+    return QColor(r, g, b).name(QColor.HexRgb)
 
 
 def split_lang_and_code(text):
@@ -1114,7 +958,7 @@ def path_to_pixmap(paths, circular=False, diameter=30, opacity=1, def_avatar=Non
         return stacked_pixmap
 
     else:
-        from gui.util import colorize_pixmap
+        from gui.gui_utils.helpers import colorize_pixmap
 
         try:
             path = unsimplify_path(paths)

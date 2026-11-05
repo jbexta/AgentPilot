@@ -5,7 +5,8 @@ from PySide6.QtGui import QAction, QFont
 from PySide6.QtCore import Qt
 
 from gui import system
-from gui.util import IconButton
+from gui.gui_utils.icon_button import IconButton
+from gui.fields.preset_menu import PresetMenu
 from plugins.workflows.widgets.workflow_settings import WorkflowSettings
 
 
@@ -20,7 +21,11 @@ class MemberTypeMenu(IconButton):  # todo dedupe
         self.current_value = None
         
         self.menu = QMenu(self)
-        
+
+        # Hidden helper providing the 'Presets' submenu logic
+        self.preset_menu = PresetMenu(parent=parent)
+        self.preset_menu.hide()
+
         self.clicked.connect(self.show_menu)
 
     def select_item(self, value):
@@ -106,9 +111,30 @@ class MemberTypeMenu(IconButton):  # todo dedupe
         if hasattr(self, 'save_config'):
             self.save_config()
 
+    def is_workflow_header(self):
+        is_in_mini_view = self.parent.parent.parent.__class__.__name__ != 'MemberProxy'
+        return is_in_mini_view and not self.is_member_header
+
+    def set_empty_workflow(self):
+        """Replace the whole workflow with an unlinked one holding only
+        the user member."""
+        workflow_settings = self.parent.parent.parent
+        name = workflow_settings.get_config().get('name', 'Workflow')
+        workflow_settings.load_config({
+            '_TYPE': 'workflow',
+            'name': name,
+            'members': [
+                {'id': '1', 'linked_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {'_TYPE': 'user', 'name': 'You'}},
+            ],
+            'inputs': [],
+        })
+        self.current_value = 'workflow'
+        workflow_settings.load()
+        workflow_settings.update_config()
+
     def open_library(self):
         """Open the LibraryDialog to choose a saved item."""
-        from gui.util import LibraryDialog
+        from gui.gui_utils.library_dialog import LibraryDialog
         member_modules = system.manager.modules.get_modules_in_folder(
             module_type='Members',
             fetch_keys=('name', 'kind_folder',)
@@ -122,6 +148,7 @@ class MemberTypeMenu(IconButton):  # todo dedupe
             parent=self,
             callback=self.on_library_selected,
             kind=kind,
+            allow_references=True,
         )
         dialog.open()
 
@@ -153,7 +180,7 @@ class MemberTypeMenu(IconButton):  # todo dedupe
             else:
                 # Workflow header — replace the entire workflow
                 workflow_settings = self.parent.parent.parent
-                from utils.helpers import merge_config_into_workflow_config
+                from plugins.workflows.utils.workflows import merge_config_into_workflow_config
                 new_config = merge_config_into_workflow_config(item_config)
 
                 if not link:
@@ -161,10 +188,10 @@ class MemberTypeMenu(IconButton):  # todo dedupe
                         m.pop('linked_id', None)
 
                 if link:
-                    from utils.helpers import (
+                    from plugins.workflows.utils.workflows import (
                         has_circular_link, resolve_linked_config,
                     )
-                    from gui.util import display_message
+                    from utils.helpers import display_message
                     source_table = item.data(
                         0, Qt.UserRole
                     ).get('table')
@@ -198,8 +225,8 @@ class MemberTypeMenu(IconButton):  # todo dedupe
             draggable_member.member_config = item_config
 
         if link and draggable_member is not None:
-            from utils.helpers import has_circular_link, resolve_linked_config
-            from gui.util import display_message
+            from plugins.workflows.utils.workflows import has_circular_link, resolve_linked_config
+            from utils.helpers import display_message
 
             members = item_config.get('members', [])
             linked_id = None
@@ -241,6 +268,10 @@ class MemberTypeMenu(IconButton):  # todo dedupe
         self.menu.clear()
 
         self.menu.addAction('Choose from library', self.open_library)
+        if self.is_workflow_header():
+            self.menu.addAction('Empty workflow', self.set_empty_workflow)
+        presets_menu = self.menu.addMenu('Presets')
+        self.preset_menu.build_menu(presets_menu)
         self.menu.addSeparator()
 
         # populate the menu

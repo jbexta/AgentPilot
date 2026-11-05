@@ -1,0 +1,8 @@
+[plugin]
+name = "slopify"
+version = "0.1.0"
+description = "Lyrics-driven media player page."
+requires = ["workflows"]
+
+[dependencies]
+lyricsgenius = { version = "3.7.6", import = "lyricsgenius" }

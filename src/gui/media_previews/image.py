@@ -8,7 +8,7 @@ from PySide6.QtCore import QPoint, QSize
 from PySide6.QtGui import Qt, QImage, QPixmap
 from PySide6.QtWidgets import QWidget, QLabel, QSizePolicy
 
-from gui.util import CVBoxLayout
+from gui.gui_utils.layouts import CVBoxLayout
 
 _POPUP_MAX = 500
 

@@ -2,7 +2,8 @@ from PySide6.QtWidgets import QLabel, QHBoxLayout, QWidget
 from PySide6.QtGui import Qt
 
 from gui import system
-from gui.util import IconButton, find_attribute
+from gui.gui_utils.helpers import find_attribute, set_style_property
+from gui.gui_utils.icon_button import IconButton
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_fields import ConfigFields
@@ -58,6 +59,7 @@ class Page_Environments_Settings(ConfigDBTree):
     class EnvironmentConfig(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent, layout_type='vertical')
+            self.propagate_config = True
             self.widgets = [
                 self.EnvironmentFields(parent=self),
                 self.DockerSettings(parent=self),
@@ -183,9 +185,7 @@ class Page_Environments_Settings(ConfigDBTree):
                     layout.setContentsMargins(0, 4, 0, 4)
 
                     self.status_label = QLabel('Stopped')
-                    self.status_label.setStyleSheet(
-                        'color: #888; font-weight: bold;'
-                    )
+                    self.status_label.setProperty('class', 'run-status')
                     layout.addWidget(self.status_label)
                     layout.addStretch(1)
 
@@ -257,19 +257,14 @@ class Page_Environments_Settings(ConfigDBTree):
                         running = env.is_running()
                         if running:
                             self.status_label.setText('Running')
-                            self.status_label.setStyleSheet(
-                                'color: #4a4; font-weight: bold;'
-                            )
                         else:
                             self.status_label.setText('Stopped')
-                            self.status_label.setStyleSheet(
-                                'color: #888; font-weight: bold;'
-                            )
                     else:
+                        running = False
                         self.status_label.setText('Stopped')
-                        self.status_label.setStyleSheet(
-                            'color: #888; font-weight: bold;'
-                        )
+                    set_style_property(
+                        self.status_label, 'running', running
+                    )
 
                 def load_config(self, json_config=None):
                     super().load_config(json_config)

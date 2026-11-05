@@ -1,12 +1,12 @@
-from PySide6.QtCore import QSortFilterProxyModel
+from PySide6.QtCore import QEvent, QSortFilterProxyModel
 from PySide6.QtGui import QStandardItem, QColor, Qt
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFrame, QInputDialog,
+    QApplication, QComboBox, QFrame,
     QLabel, QLineEdit, QListView, QVBoxLayout,
 )
 from utils import sql
 
-from utils.helpers import block_signals, set_module_type
+from utils.helpers import block_signals, get_text, set_module_type
 
 
 class _HeaderAwareFilterProxy(QSortFilterProxyModel):
@@ -28,13 +28,7 @@ class _FilterPopup(QFrame):
         self.combo = combo
         self.setFrameShape(QFrame.NoFrame)
 
-        from gui.style import PRIMARY_COLOR, TEXT_COLOR
-        from utils.helpers import apply_alpha_to_hex
-        border_color = apply_alpha_to_hex(TEXT_COLOR, 0.3)
-        self.setStyleSheet(
-            f"_FilterPopup {{ background-color: {PRIMARY_COLOR};"
-            f" border: 1px solid {border_color}; }}"
-        )
+        self.setObjectName('comboFilterPopup')
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -86,6 +80,20 @@ class _FilterPopup(QFrame):
 
         self.filter_edit.textChanged.connect(self._on_filter_changed)
         self.list_view.clicked.connect(self._on_item_clicked)
+        self.filter_edit.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.filter_edit and event.type() == QEvent.KeyPress:
+            key = event.key()
+            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_PageUp, Qt.Key_PageDown):
+                self.list_view.keyPressEvent(event)
+                return True
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                idx = self.list_view.currentIndex()
+                if idx.isValid():
+                    self._on_item_clicked(idx)
+                return True
+        return super().eventFilter(obj, event)
 
     def _on_filter_changed(self, text):
         self.proxy.setFilterFixedString(text)
@@ -118,7 +126,8 @@ class _FilterPopup(QFrame):
 
         pos = widget.mapToGlobal(widget.rect().bottomLeft())
         available_h = screen_rect.bottom() - pos.y()
-        self.resize(max(widget.width(), 200), min(max_h, available_h))
+        content_w = self.list_view.sizeHintForColumn(0) + 24
+        self.resize(max(widget.width(), 200, content_w), min(max_h, available_h))
         self.move(pos)
         self.show()
         self.filter_edit.setFocus()
@@ -146,9 +155,9 @@ class BaseCombo(QComboBox):
         self.allow_new = kwargs.get('allow_new', False)
         self.items_have_keys = kwargs.get('items_have_keys', True)
         self.value_type = kwargs.get('value_type', None)
-        width = kwargs.get('width', 150)
+        self._preferred_width = kwargs.get('width', 150)
 
-        self.setFixedWidth(width)
+        self.setMaximumWidth(self._preferred_width)
 
         if self.table_name and not self.query and self.fetch_keys:
             self.query = f"""
@@ -157,7 +166,7 @@ class BaseCombo(QComboBox):
                 -- ORDER BY pinned DESC, ordr, name
             """
 
-        self.setFixedHeight(18)
+        self.setFixedHeight(20)
         self.setMaximumWidth(200)
         self.load()
         self.currentIndexChanged.connect(self.on_index_changed)
@@ -259,7 +268,7 @@ class BaseCombo(QComboBox):
 
     def on_index_changed(self, index):
         if self.itemData(index) == '<NEW>':
-            new_name, ok = QInputDialog.getText(self, "New Item", "Enter the name for the new item:")
+            new_name, ok = get_text(self, "New Item", "Enter the name for the new item:")
             if ok and new_name:
                 sql.execute(f"INSERT INTO `{self.table_name}` (name) VALUES (?)", (new_name,))  # .lower(),))
 

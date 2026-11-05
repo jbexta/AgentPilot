@@ -68,17 +68,56 @@ class SQLUpgrade:
         
         # for `settings` table, modify the `pinned_pages` field (json list), set all to lower case
         pinned_pages = sql.get_scalar("SELECT value FROM settings WHERE field = 'pinned_pages'", load_json=True)
-        pinned_pages = [page.lower() for page in pinned_pages] + ['modules']
+        pinned_pages = [page.lower() for page in pinned_pages] + ['modules', 'goals']
         sql.execute("UPDATE settings SET value = ? WHERE field = 'pinned_pages'", (json.dumps(pinned_pages),))
 
         ensure_column_in_tables(
             tables=[
                 'modules',
+                'tools',
+                'blocks',
+                'entities',
+                'environments',
             ],
             column_name='baked',
             column_type='INTEGER',
             default_value="0",
             not_null=True,
+        )
+        ensure_column_in_tables(
+            tables=[
+                'modules',
+            ],
+            column_name='locked',
+            column_type='INTEGER',
+            default_value="0",
+            not_null=True,
+        )
+        ensure_column_in_tables(
+            tables=[
+                'models',
+            ],
+            column_name='metadata',
+            column_type='TEXT',
+            default_value="{}",
+            not_null=True,
+        )
+        ensure_column_in_tables(
+            tables=[
+                'models',
+            ],
+            column_name='provider_plugin',
+            column_type='TEXT',
+            default_value="litellm",
+            not_null=True,
+        )
+        ensure_column_in_tables(
+            tables=[
+                'blocks',
+            ],
+            column_name='parent_id',
+            column_type='INTEGER',
+            default_value="NULL",
         )
         ensure_column_in_tables(
             tables=[
@@ -148,7 +187,7 @@ class SQLUpgrade:
             CREATE TABLE IF NOT EXISTS "skills" (
                 "id"        INTEGER,
                 "name"      TEXT NOT NULL,
-                "kind"      TEXT NOT NULL DEFAULT 'USER',
+                "kind"      TEXT NOT NULL DEFAULT '',
                 "config"    TEXT NOT NULL DEFAULT '{}',
                 "folder_id" INTEGER DEFAULT NULL,
                 "ordr"      INTEGER DEFAULT 0,
@@ -166,6 +205,135 @@ class SQLUpgrade:
                 PRIMARY KEY("id" AUTOINCREMENT)
             )
         """)
+
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS "goals" (
+                "id"         INTEGER,
+                "name"       TEXT NOT NULL,
+                "config"     TEXT NOT NULL DEFAULT '{}',
+                "context_id" INTEGER DEFAULT NULL,
+                "folder_id"  INTEGER DEFAULT NULL,
+                "ordr"       INTEGER DEFAULT 0,
+                "pinned"     INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        """)
+
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS "tasks" (
+                "id"        INTEGER,
+                "uuid"      TEXT DEFAULT (
+                    lower(hex(randomblob(4))) || '-' ||
+                    lower(hex(randomblob(2))) || '-' ||
+                    '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    lower(hex(randomblob(6)))
+                ) UNIQUE,
+                "name"      TEXT NOT NULL DEFAULT '',
+                "kind"      TEXT NOT NULL DEFAULT '',
+                "config"    TEXT NOT NULL DEFAULT '{}',
+                "metadata"  TEXT NOT NULL DEFAULT '{}',
+                "parent_id" INTEGER DEFAULT NULL,
+                "folder_id" INTEGER DEFAULT NULL,
+                "pinned"    INTEGER DEFAULT 0,
+                "baked"     INTEGER DEFAULT 0,
+                "ordr"      INTEGER DEFAULT 0,
+                "status"    TEXT NOT NULL DEFAULT 'TODO',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        """)
+
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS "plans" (
+                "id"        INTEGER,
+                "name"      TEXT NOT NULL,
+                "kind"      TEXT NOT NULL DEFAULT '',
+                "config"    TEXT NOT NULL DEFAULT '{}',
+                "folder_id" INTEGER DEFAULT NULL,
+                "ordr"      INTEGER DEFAULT 0,
+                "pinned"    INTEGER DEFAULT 0,
+                "metadata"  TEXT DEFAULT '{}',
+                "uuid"      TEXT DEFAULT (
+                    lower(hex(randomblob(4))) || '-' ||
+                    lower(hex(randomblob(2))) || '-' ||
+                    '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    lower(hex(randomblob(6)))
+                ) UNIQUE,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        """)
+
+        for field, value in (
+            ('enhancement_blocks', '{}'),
+            ('window_size', '{}'),
+            ('page_path', '{}'),
+            ('page_editor', 'null'),
+        ):
+            sql.execute("""
+                INSERT INTO settings (field, value)
+                SELECT ?, ?
+                WHERE NOT EXISTS (SELECT 1 FROM settings WHERE field = ?)""",
+                (field, value, field))
+
+        # `blocks`: change the `kind` default from 'USER' to '' so non-project
+        # blocks match the skills convention (project blocks use 'PROJECT:<id>').
+        # SQLite can't ALTER a column default, so the table is recreated.
+        blocks_sql = sql.get_scalar(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='blocks'"
+        ) or ''
+        if "DEFAULT 'USER'" in blocks_sql:
+            sql.execute("""
+                CREATE TABLE "blocks_new" (
+                    "id"        INTEGER,
+                    "name"      TEXT NOT NULL,
+                    "kind"      TEXT NOT NULL DEFAULT '',
+                    "config"    TEXT NOT NULL DEFAULT '{}',
+                    "folder_id" INTEGER DEFAULT NULL,
+                    "ordr"      INTEGER DEFAULT 0,
+                    "pinned"    INTEGER DEFAULT 0,
+                    "metadata"  TEXT DEFAULT '{}',
+                    "uuid"      TEXT DEFAULT (
+                        lower(hex(randomblob(4))) || '-' ||
+                        lower(hex(randomblob(2))) || '-' ||
+                        '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                        substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                        lower(hex(randomblob(6)))
+                    ) UNIQUE,
+                    "baked"     INTEGER NOT NULL DEFAULT 0,
+                    "parent_id" INTEGER DEFAULT NULL,
+                    PRIMARY KEY("id" AUTOINCREMENT)
+                )
+            """)
+            sql.execute("""
+                INSERT INTO blocks_new (id, name, kind, config, folder_id, ordr, pinned, metadata, uuid, baked, parent_id)
+                SELECT id, name,
+                    CASE WHEN kind = 'USER' THEN '' ELSE kind END,
+                    config, folder_id, ordr, pinned, metadata, uuid, baked, parent_id
+                FROM blocks
+            """)
+            sql.execute("DROP TABLE blocks")
+            sql.execute("ALTER TABLE blocks_new RENAME TO blocks")
+
+        sql.execute("DELETE FROM folders WHERE type = 'blocks' AND locked = 1")
+
+        sql.execute("""
+            CREATE INDEX IF NOT EXISTS idx_contexts_messages_context_id
+            ON contexts_messages (context_id)""")
+        sql.execute("""
+            CREATE INDEX IF NOT EXISTS idx_contexts_parent_id
+            ON contexts (parent_id)""")
+        sql.execute("""
+            CREATE INDEX IF NOT EXISTS idx_models_kind
+            ON models (kind)""")
+        sql.execute("""
+            CREATE INDEX IF NOT EXISTS idx_models_model_name
+            ON models (
+                COALESCE(json_extract(config, '$._model_name'),
+                         json_extract(config, '$.model_name')),
+                kind,
+                provider_plugin
+            )""")
 
         # app config
         sql.execute("""

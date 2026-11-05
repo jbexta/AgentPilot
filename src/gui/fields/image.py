@@ -27,7 +27,7 @@ class _ImageSettingsPopup(QWidget):
         self.setFixedWidth(420)
 
         from plugins.workflows.widgets.image_settings import ImageSettings
-        from gui.util import CVBoxLayout
+        from gui.gui_utils.layouts import CVBoxLayout
         layout = CVBoxLayout(self)
         self.image_settings = ImageSettings(parent=self)
         layout.addWidget(self.image_settings)

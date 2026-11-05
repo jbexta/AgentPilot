@@ -2,7 +2,7 @@ import json
 
 from typing_extensions import override
 
-from utils import sql, telemetry
+from utils import sql
 from utils.helpers import BaseManager
 
 
@@ -15,8 +15,6 @@ class ConfigManager(BaseManager):
         sys_config = sql.get_scalar("SELECT `value` FROM `settings` WHERE `field` = 'app_config'")
         self.clear()
         self.update(json.loads(sys_config))
-        # telemetry_on = self.get("system.telemetry", True)
-        # telemetry.enabled = telemetry_on
 
     @override
     def save(self):

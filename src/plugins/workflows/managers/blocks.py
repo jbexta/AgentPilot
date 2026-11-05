@@ -3,7 +3,8 @@ import re
 from jinja2 import DebugUndefined, Environment, BaseLoader
 from PySide6.QtWidgets import QMessageBox
 from utils.helpers import BaseManager
-from utils.helpers import display_message, receive_workflow
+from utils.helpers import display_message
+from plugins.workflows.utils.workflows import receive_workflow
 
 
 class BlockManager(BaseManager):
@@ -44,7 +45,7 @@ class BlockManager(BaseManager):
     def compute_block(self, name, params=None):
         return asyncio.run(self.compute_block_async(name, params))
 
-    async def format_string(self, content, ref_workflow=None, additional_blocks=None):
+    async def format_string(self, content, ref_workflow=None, additional_blocks=None, raise_errors=False):
         # Member outputs and Workflow params
         member_outputs = {}
         workflow_params = {}
@@ -60,7 +61,7 @@ class BlockManager(BaseManager):
             member_outputs = {member_placeholders[k].lower(): v for k, v in member_last_outputs.items() if v is not None}
             workflow_params = ref_workflow.params.copy()
 
-        all_params = {**member_outputs, **workflow_params}
+        all_params = {**self.system.variables, **member_outputs, **workflow_params}
         if additional_blocks:
             all_params.update(additional_blocks)
 
@@ -105,15 +106,17 @@ class BlockManager(BaseManager):
             def __init__(self, manager, block_name):
                 self.manager = manager
                 self.block_name = block_name
-                self._cache = None
+                self._cache = {}
 
             async def _compute(self, **kwargs):
-                if self._cache is None:
-                    self._cache = await self.manager.compute_block_async(
+                # One result per distinct set of arguments
+                key = repr(sorted(kwargs.items()))
+                if key not in self._cache:
+                    self._cache[key] = await self.manager.compute_block_async(
                         self.block_name,
                         params=kwargs if kwargs else None
                     )
-                return self._cache
+                return self._cache[key]
 
             def __call__(self, **kwargs):
                 header_prefix = kwargs.pop('header_prefix', None)
@@ -191,9 +194,14 @@ class BlockManager(BaseManager):
 
             content = re.sub(pos_pattern, _replace_positional, content)
 
-            # Handle headers: ## {{ block }} -> {{ block(header_prefix='##') }}
-            header_pattern = r'(#{1,6})\s*\{\{\s*' + re.escape(block_name) + r'(?:\(\))?\s*\}\}'
-            content = re.sub(header_pattern, r"{{ " + block_name + r"(header_prefix='\1') }}", content)
+            # Handle headers: ## {{ block(a=1) }} -> {{ block(a=1, header_prefix='##') }}
+            header_pattern = r'(#{1,6})\s*\{\{\s*' + re.escape(block_name) + r'(?:\(([^)]*)\))?\s*\}\}'
+            def _replace_header(m, bn=block_name):
+                args = (m.group(2) or '').strip()
+                args = args + ', ' if args else ''
+                return '{{ ' + bn + '(' + args + "header_prefix='" + m.group(1) + "') }}"
+
+            content = re.sub(header_pattern, _replace_header, content)
 
             # Match {{ blockname }} but not {{ blockname() }} or {{ blockname(...) }}
             pattern = r'\{\{\s*' + re.escape(block_name) + r'\s*\}\}'
@@ -208,6 +216,8 @@ class BlockManager(BaseManager):
             return rendered_content
 
         except Exception as e:
+            if raise_errors:
+                raise
             display_message(
                 message=str(e),
                 icon=QMessageBox.Warning,

@@ -1,42 +1,42 @@
 
 import asyncio
-from decimal import Decimal
+import importlib
+import inspect
 import json
+import logging
 import os
 import sys
-import uuid
+import time
 
 import PySide6
 import qasync
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QTimer, QThreadPool, QPropertyAnimation, QEasingCurve, QObject
-from PySide6.QtGui import QIcon, QTextDocument, Qt
+from PySide6.QtCore import QThreadPool
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut, Qt
 from typing_extensions import override
 
-# from core.connectors.h5 import append_h5_dataset, create_h5_dataset, tea_kinds
-from src.core.connectors.h5 import DATA_DIR, PriceFile, create_h5_file, get_h5_dataset_last_item_cell, get_h5_path, normalize_timestamp, sanitize_filename, sanitize_string
-from src.core.connectors.mysql import MysqlConnector
-from src.core.connectors.sqlite import SqliteConnector
-from src.utils import sql
-from src.utils.sql import get_db_path
+
 from utils.sql_upgrade import upgrade_script
-from utils import telemetry  # , sql
-from utils.helpers import display_message_box, flatten_list, get_avatar_paths_from_config, display_message
-from gui.style import ACCENT_COLOR_1, get_stylesheet
+from utils.helpers import display_message_box, display_message, get_text, llm_tool, load_language
+from utils import process
+from utils import console_log
+from plugins.workflows.utils.workflows import get_avatar_paths_from_config
+from gui.style import get_stylesheet, get_palette, is_native_style
 from gui.widgets.config_pages import ConfigPages
-from gui.util import CustomMenu, IconButton, clear_layout, CVBoxLayout, safe_single_shot, set_selected_pages, FramelessResizeMixin
-# from plugins.calligrapher.src.main import test_calligrapher
+from gui.gui_utils.helpers import clear_layout, retranslate, safe_single_shot, set_selected_pages
+from gui.gui_utils.custom_menu import CustomMenu
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.layouts import CVBoxLayout
+from gui.gui_utils.frameless_resize_mixin import FramelessResizeMixin
+from gui.gui_utils.notifications import NotificationManager
 
 from gui import system
+
+logger = logging.getLogger(__name__)
 
 os.environ["QT_OPENGL"] = "software"
 
 loop = None
-
-BOTTOM_CORNER_X = 400
-BOTTOM_CORNER_Y = 450
-
-PIN_MODE = True
 
 
 class SystemManager:
@@ -66,9 +66,9 @@ class SystemManager:
         self.reload_managers()
 
         for name, mgr in self.__dict__.items():
-            if name.startswith('_'):
+            if name.startswith('_') or name == 'modules':
                 continue
-            print(f'Loading manager: {name}')
+            logger.info('Loading manager: %s', name)
             mgr.load()
 
     def load_manager(self, manager_name):
@@ -76,73 +76,10 @@ class SystemManager:
         if mgr:
             mgr.load()
 
-
-# class TutorialHighlightWidget(QWidget):
-#     clicked_target = Signal()
-#
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#         self.parent = parent
-#         self.setAttribute(Qt.WA_TranslucentBackground)
-#         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-#
-#         self.setStyleSheet("border-top-left-radius: 30px;")
-#         self.target_pos = QPoint(90, 60)
-#         self.target_radius = 50
-#         self.message = ""
-#
-#         self.installEventFilter(self)
-#
-#     def eventFilter(self, obj, event):
-#         if event.type() == QEvent.MouseButtonPress:
-#             if (event.pos() - self.target_pos).manhattanLength() <= self.target_radius:
-#                 self.clicked_target.emit()
-#                 return True
-#         return super().eventFilter(obj, event)
-#
-#     def mousePressEvent(self, event):
-#         # call parent mousePressEvent
-#         self.parent.mousePressEvent(event)
-#
-#     def mouseMoveEvent(self, event):
-#         # event.ignore()
-#         super().mouseMoveEvent(event)
-#
-#     def paintEvent(self, event):
-#         painter = QPainter(self)
-#         painter.setRenderHint(QPainter.Antialiasing)
-#
-#         # Create a path for the entire widget
-#         full_path = QPainterPath()
-#         full_path.addRect(self.rect())
-#
-#         # Create a path for the circular cutout
-#         circle_path = QPainterPath()
-#         circle_path.addEllipse(self.target_pos, self.target_radius, self.target_radius)
-#
-#         # Subtract the circle path from the full path
-#         dimmed_path = full_path.subtracted(circle_path)
-#
-#         # Draw dimmed overlay
-#         painter.setBrush(QColor(0, 0, 0, 128))
-#         painter.setPen(Qt.NoPen)
-#         painter.drawPath(dimmed_path)
-#
-#         # Draw circle border
-#         painter.setBrush(Qt.NoBrush)
-#         painter.setPen(QPen(Qt.white, 2))
-#         painter.drawEllipse(self.target_pos, self.target_radius, self.target_radius)
-#
-#         # Draw message
-#         if self.message:
-#             painter.setPen(Qt.white)
-#             painter.drawText(self.rect(), Qt.AlignBottom | Qt.AlignHCenter, self.message)
-#
-#     def set_target(self, pos, radius, message=""):
-#         self.target_pos = pos
-#         self.target_radius = radius
-#         self.message = message
-#         self.update()
+    def restart(self):
+        """Quit the app and relaunch it in a fresh process."""
+        from utils.process import restart_app
+        restart_app()
 
 
 class TOSDialog(QDialog):
@@ -227,6 +164,8 @@ class TitleButtonBar(CustomMenu):
 
 
 class MainPages(ConfigPages):
+    _ap_llm_tool_root = True
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
@@ -241,8 +180,80 @@ class MainPages(ConfigPages):
         self.parent = parent
         self.main = parent
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        from plugins.projects.utils.sync import snapshot_mtimes
+        self.loaded_mtimes = snapshot_mtimes()
 
         self.build_schema()
+
+    @llm_tool(
+        description='View the app UI as text, with the tools of each widget',
+        params={},
+    )
+    def view_ui(self, refs):
+        return self.get_agent_visualisation(refs)
+
+    @llm_tool(description='Quit the app and relaunch it in a fresh process')
+    def restart_app(self):
+        process.restart_app()
+
+    @llm_tool(
+        description="Read the end of the app's console log (prints, logs and tracebacks)",
+        params={'lines': 'Number of lines from the end to return'},
+    )
+    def read_console(self, lines: int = 200):
+        return console_log.tail(lines)
+
+    def get_registered_modules(self):
+        return {
+            inspect.getmodule(obj)
+            for controller in system.manager.modules.type_controllers.values()
+            for _, obj in controller.get_modules(fetch_keys=('name', 'class'))
+        }
+
+    # @llm_tool(description='Reload all modules and rebuild the GUI in place')
+    def reload_modules(self):
+        from gui.gui_utils.helpers import get_selected_pages
+        from plugins.projects.utils.sync import (
+            changed_files, is_project_module, reload_stale, snapshot_mtimes,
+        )
+        # from plugins.projects.utils.sync import get_modified_module_files, sync_file_to_db
+        # modified_files = get_modified_module_files()
+        # if not modified_files:
+        #     return
+        # for file_path in modified_files:
+        #     sync_file_to_db(file_path)
+        from utils import sql
+        mtimes = snapshot_mtimes()
+        deleted = self.loaded_mtimes.keys() - mtimes.keys()
+        for controller in system.manager.modules.type_controllers.values():
+            for name, entry in list(controller.items()):
+                module = inspect.getmodule(entry[4])
+                path = getattr(module, '__file__', None)
+                if path and os.path.abspath(path) in deleted:
+                    del controller[name]
+                    sys.modules.pop(module.__name__)
+                    sql.execute("DELETE FROM modules WHERE id = ?", (entry[0],))
+        registered_modules = self.get_registered_modules()
+        changed = changed_files(self.loaded_mtimes, mtimes)
+        reload_stale(filter(is_project_module, registered_modules), changed)
+        self.loaded_mtimes = mtimes
+        importlib.invalidate_caches()
+        system.manager.modules.load()
+        selections = get_selected_pages(self)
+        self.build_schema()
+        if 'settings' in self.pages:
+            self.pages['settings'].build_schema()
+        set_selected_pages(self, selections)
+        page = self.content.currentWidget()
+        if page and hasattr(page, 'load'):
+            page.load()
+
+        popup = self.main.module_popup
+        if popup and popup.isVisible():
+            self.main.module_popup = None
+            self.main.open_page_editor()
+            self.main.module_popup.setGeometry(popup.geometry())
+            popup.close()
 
     @override
     def build_schema(self):
@@ -261,9 +272,9 @@ class MainPages(ConfigPages):
             if getattr(page_class, 'page_type', 'any') == 'main'
             or (getattr(page_class, 'page_type', 'any') == 'any' and module_name in pinned_pages)
         ]
-        preferred_order = ['chat', 'contexts', 'agents', 'blocks', 'tools', 'modules']
+        preferred_order = ['chat', 'contexts', 'agents', 'blocks', 'tools', 'projects', 'files', 'tasks']
         locked_below = ['settings']
-        locked_above = ['chat', 'contexts', 'agents', 'blocks', 'tools', 'modules']
+        locked_above = ['chat', 'contexts', 'agents', 'blocks', 'tools', 'projects', 'files', 'tasks']
         order_column = 1
         if preferred_order:
             order_idx = {name: i for i, name in enumerate(preferred_order)}
@@ -294,6 +305,8 @@ class MainPages(ConfigPages):
                 new_pages[module_name] = page
 
             except Exception as e:
+                from gui.gui_utils.helpers import record_page_load_error
+                record_page_load_error(module_name)
                 display_message(f"Error loading page '{module_name}': {e}", 'Error', QMessageBox.Warning)
 
         for page_name in locked_below:
@@ -308,7 +321,7 @@ class MainPages(ConfigPages):
 
     def add_page(self):
         dlg_title, dlg_prompt = ('New page name', 'Enter a new name for the new page')
-        text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+        text, ok = get_text(self, dlg_title, dlg_prompt)
         if not ok:
             return
     
@@ -323,584 +336,10 @@ class MainPages(ConfigPages):
             self.edit_page(text)
 
 
-class NotificationWidget(QWidget):
-    closed = Signal(QObject)
-
-    def __init__(self, parent=None, color=None):
-        super().__init__(parent)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.main = parent.main
-        # Handle color defaults and conversions
-        if not color:
-            color = '#ff6464'
-        elif color == 'blue':
-            color = '#438BB9'
-        elif color == 'red':
-            color = '#ff6464'
-        elif not color.startswith('#'):
-            color = '#ff6464'
-
-        # Create the main layout
-        self.outer_layout = QVBoxLayout(self)
-        self.outer_layout.setContentsMargins(0, 0, 0, 0)
-        self.outer_layout.setSpacing(0)
-
-        # Create the content container
-        self.content = QWidget(self)
-        self.content.setStyleSheet(f"""
-            background-color: {color};
-            border-radius: 10px;
-            color: white;
-        """)
-
-        # Inner layout for the content
-        self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(12, 10, 12, 10)
-        self.content_layout.setSpacing(0)
-
-        # Create text label with proper wrapping
-        self.label = QLabel()
-        self.label.setWordWrap(True)
-        self.label.setStyleSheet("color: white; font-size: 11pt;")
-        self.label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        self.content_layout.addWidget(self.label)
-
-        # Add content to outer layout
-        self.outer_layout.addWidget(self.content)
-
-        # Set size policies
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        self.setMaximumWidth(300)
-
-        # Initialize with zero height
-        self.content.setMinimumHeight(0)
-        self.content.setMaximumHeight(0)
-
-        # Setup timer for auto-hide
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.hide_animation)
-
-        # Setup animation
-        self.animation = QPropertyAnimation(self.content, b"maximumHeight")
-        self.animation.setEasingCurve(QEasingCurve.InOutCubic)
-        self.animation.finished.connect(self.on_animation_finished)
-
-    def show_message(self, message, duration=5000):
-        # Set the message
-        self.label.setText(message)
-
-        # Calculate proper size based on text
-        self.label.adjustSize()
-        text_width = min(self.label.sizeHint().width(), 280)  # Account for padding
-
-        # Create a temporary document to calculate proper text height
-        doc = QTextDocument()
-        doc.setDefaultFont(self.label.font())
-        doc.setHtml(message)
-        doc.setTextWidth(text_width)
-
-        # Calculate target height with margins
-        target_height = doc.size().height() + 20  # Add some padding
-
-        # Reset animation and height
-        self.animation.stop()
-        self.content.setMaximumHeight(0)
-
-        # Start show animation
-        self.animation.setStartValue(0)
-        self.animation.setEndValue(target_height)
-        self.animation.setDuration(250)
-        self.animation.start()
-
-        if not self.main.isMinimized():
-            # Start timer for auto-hide
-            self.timer.start(duration)
-
-    def hide_animation(self):
-        # Start hide animation
-        current_height = self.content.height()
-        self.animation.stop()
-        self.animation.setStartValue(current_height)
-        self.animation.setEndValue(0)
-        self.animation.setDuration(250)
-        self.animation.start()
-
-    def on_animation_finished(self):
-        if self.content.maximumHeight() == 0:
-            self.hide()
-            self.closed.emit(self)
-
-    def enterEvent(self, event):
-        self.timer.stop()
-        event.accept()
-
-    def leaveEvent(self, event):
-        self.timer.start(3000)
-        event.accept()
-
-
-class NotificationManager(QWidget):
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        self.main = parent
-        self.setFixedWidth(300)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-
-        # Main layout for stacking notifications
-        self.layout = CVBoxLayout(self)
-        self.layout.setSpacing(6)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setAlignment(Qt.AlignTop)
-
-        self.notifications = []
-
-    def show_notification(self, message, title, icon='Information', color=None, duration=5000):
-        is_minimized = self.main.isMinimized()
-        if is_minimized:
-            icon = getattr(QSystemTrayIcon, icon, QSystemTrayIcon.Information)
-            self.main.tray.showMessage(
-                title,
-                message,
-                icon,
-                duration  # duration in ms
-            )
-            # self.tray.showMessage(message, color)
-            return
-        
-        # Create new notification
-        notification = NotificationWidget(self, color=color)
-        notification.closed.connect(self.remove_notification)
-
-        # Add to layout
-        self.layout.addWidget(notification)
-        self.notifications.append(notification)
-
-        # Display the notification
-        notification.show_message(message, duration)
-        # self.setVisible(True)
-        self.update_position()
-
-        print(message)
-
-    def remove_notification(self, notification):
-        if notification in self.notifications:
-            self.notifications.remove(notification)
-            self.layout.removeWidget(notification)
-            notification.deleteLater()
-
-        # if not self.notifications:
-        #     self.hide()
-        # else:
-        # if self.notifications:
-        self.update_position()
-
-    def update_position(self):
-        # Position in top right corner of main window with padding
-        # visible = self.notifications is not None and not self.main.isMinimized()
-        # self.setVisible(visible)
-        # if not visible:
-        #     return
-        self.move(self.main.x() + self.main.width() - self.width() - 90,
-                 self.main.y() + 50)
-        self.adjustSize()
-
-
-# def convert_forex():
-#     # Directory: `/home/jb/Downloads/fx_full_1min_6q0at16` contains .txt files with forex data
-#     # Each file contains comma separated 1 minute data for a single forex pair
-#     # The columns are: date, time, open, high, low, close, volume
-#     # Convert the data to .h5 file
-#     # Each file should not be loaded into memory, but rather processed line by line
-#     for file in os.listdir('/home/jb/Downloads/fx_full_1min_6q0at16'):
-#         if not file.endswith('.txt'):
-#             continue
-
-#         filename = file.split('.')[0]
-#         market_id = filename.split('_')[0]
-#         if len(market_id) != 6:
-#             raise NotImplementedError(f"Market ID {market_id} is not 6 characters long")
-#         tf_path = get_h5_path('FX', market_id)
-#         if not os.path.exists(tf_path):
-#             os.makedirs(os.path.dirname(tf_path), exist_ok=True)
-#             create_h5_file(
-#                 path=tf_path, 
-#                 metadata={'api': 'FX', 'market': market_id},
-#                 with_dataset='ohlc/60',
-#             )
-
-#         price_file = PriceFile(tf_path)
-#         price_file.base_interval = 60
-#         with price_file:
-
-#             current_size = price_file.file['ohlc/60'].shape[0]
-
-#             ohlc_batch = []
-#             BATCH_SIZE = 60000
-            
-#             def write_batch():
-#                 nonlocal current_size, ohlc_batch
-#                 if ohlc_batch:
-#                     price_file.append_batch(ohlc_batch)
-#                     current_size = price_file.file['ohlc/60'].shape[0]
-#                     print(f'FX: Wrote batch: {len(ohlc_batch)} ohlc, total size: {current_size}')
-#                     ohlc_batch = []
-
-#         # with h5py.File(tf_path, 'a') as f:
-#             with open(os.path.join('/home/jb/Downloads/fx_full_1min_6q0at16', file), 'r') as f:
-#                 for line in f:
-#                     data = line.split(',')
-
-#                     date = data[0]  # in the format YYYYMMDD
-#                     year = int(date[:4])
-#                     month = int(date[4:6])
-#                     day = int(date[6:])
-#                     time = data[1] # in the format HH:MM:SS, we only need HH:MM
-#                     hour = int(time[:2])
-#                     minute = int(time[3:5])
-#                     unix = int(datetime(year, month, day, hour, minute).timestamp())
-#                     opn = float(data[2])
-#                     high = float(data[3])
-#                     low = float(data[4])
-#                     close = float(data[5])
-#                     volume = float(data[6])
-
-#                     ohlc_batch.append([unix, opn, high, low, close, volume, 0])
-                    
-#                     if len(ohlc_batch) >= BATCH_SIZE:
-#                         write_batch()
-
-#                 write_batch()
-#                 # f['ohlc/60'].append([unix, opn, high, low, close, volume])
-
-# def upsert_fx_assets():
-#     fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
-#     connection = SqliteConnector(db_path=fin_db)
-#     fx_api = FinanceAPI(connection, 1)
-#     existing_assets = fx_api.get_existing_assets()
-#     existing_markets = fx_api.get_existing_markets()
-
-#     new_markets = {}
-#     new_assets = set()
-#     for file in os.listdir('/home/jb/Downloads/fx_full_1min_6q0at16'):
-#         if not file.endswith('.txt'):
-#             continue
-
-#         filename = file.split('.')[0]
-#         market_id = filename.split('_')[0]
-
-#         base_asset = market_id[:3]
-#         quote_asset = market_id[3:]
-
-#         if base_asset not in existing_assets:
-#             new_assets.add(base_asset)
-#         if quote_asset not in existing_assets:
-#             new_assets.add(quote_asset)
-
-#         if market_id not in existing_markets:
-#             new_markets[market_id] = (base_asset, quote_asset)
-    
-#     if new_assets:
-#         values_clause = ', '.join(['(?, ?, ?, ?, ?)'] * len(new_assets))
-#         query = f"INSERT INTO assets (api_id, name, symbol, api_asset_id, kind) VALUES {values_clause}"
-#         params = []
-#         for asset in new_assets:
-#             params.extend([1, asset, asset, asset, 'FOREX'])
-#         connection.execute(query, params)
-#         # display_message(f"Binance: Added {len(new_assets)} assets")
-#         print(f'FX: Added {len(new_assets)} assets')
-    
-#     new_asset_ids = connection.get_results(f"""
-#         SELECT api_asset_id, id
-#         FROM assets
-#         WHERE api_id = ?
-#     """, (1,), return_type='dict')
-
-#     # new_markets = {symbol.symbol: (symbol.base_asset, symbol.quote_asset)
-#     #             for symbol in data.symbols
-#     #             if symbol.symbol not in existing_markets}
-
-#     if new_markets:
-#         # display_message(f"Binance: Adding {len(new_markets)} markets")
-#         print(f'FX: Adding {len(new_markets)} markets')
-#         items = list(new_markets.items())
-#         batch_size = 499
-#         for i in range(0, len(items), batch_size):
-#             batch = items[i:i+batch_size]
-#             values_clause = ', '.join(['(?, ?, ?, ?, ?, ?)'] * len(batch))
-#             query = f"INSERT INTO api_markets (api_id, market_id, base_asset, quote_asset, base_symb, quote_symb) VALUES {values_clause}"
-#             params = []
-#             for market, (base, quote) in batch:
-#                 base_asset_id = new_asset_ids.get(base, None)
-#                 quote_asset_id = new_asset_ids.get(quote, None)
-#                 params.extend([1, market, base_asset_id, quote_asset_id, base, quote])
-#             connection.execute(query, params)
-
-#     pass
-
-# def convert_coingecko_files():
-#     coingecko_dir = '/media/jb/DATA/PRICE/COINGECKO/14400'
-#     for file in os.listdir(coingecko_dir):
-#         # rename to remove `_usd_line.h5`
-#         if not file.endswith('_line_14400.h5'):
-#             continue
-#         new_file = file.replace('_line_14400.h5', '.h5')
-#         os.rename(os.path.join(coingecko_dir, file), os.path.join(coingecko_dir, new_file))
-
-def get_total_at_unix(unix):
-    asset_balances: dict[int, Decimal] = get_asset_balances_at_unix(unix)
-    asset_prices: dict[int, Decimal] = get_asset_prices_at_unix(unix, asset_balances.keys())
-    asset_totals: dict[int, Decimal] = {asset: asset_balances[asset] * asset_prices[asset] for asset in asset_balances.keys()}
-    return sum(asset_totals.values())
-    
-
-def get_asset_balances_at_unix(unix):
-    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
-    connection = SqliteConnector(db_path=fin_db)
-    result = connection.get_results(f"""
-        SELECT 
-            a.id,
-            a.api_id,
-            a.symbol,
-            a.name,
-            a.kind as asset_type,
-            COALESCE(
-                COALESCE(mf.depwith_amount, 0) + 
-                COALESCE(t.trade_amount, 0), 0
-            ) AS total_amount
-            -- a.last_price,
-            -- COALESCE(
-            --    COALESCE(mf.depwith_amount, 0) + 
-            --    COALESCE(t.trade_amount, 0), 0
-            -- ) * a.last_price AS total_value
-        FROM assets a
-        LEFT JOIN (
-            SELECT 
-                asset_id,
-                SUM(
-                    CASE 
-                        WHEN depwith = 0 THEN asset_amt 
-                        WHEN depwith = 1 THEN -asset_amt 
-                        ELSE 0 
-                    END
-                ) AS depwith_amount
-            FROM depwiths 
-            WHERE unix < ?
-            GROUP BY asset_id
-        ) mf ON a.id = mf.asset_id
-        LEFT JOIN (
-            SELECT 
-                asset_id,
-                SUM(amount) AS trade_amount
-            FROM (
-                SELECT asset_sold AS asset_id, -amt_sold AS amount
-                FROM trades 
-                WHERE ignored = 0 AND unix < ?
-                UNION ALL
-                SELECT asset_received AS asset_id, amt_received AS amount
-                FROM trades 
-                WHERE ignored = 0 AND unix < ?
-                UNION ALL
-                SELECT fee_asset AS asset_id, -fee_amt AS amount
-                FROM trades 
-                WHERE ignored = 0 AND fee_amt > 0 AND unix < ?
-            ) trade_movements
-            GROUP BY asset_id
-        ) t ON a.id = t.asset_id
-        WHERE total_amount != 0
-    """, (unix,unix,unix,unix,))
-    return {row[0]: Decimal(row[5]) for row in result}
-
-
-def get_asset_prices_at_unix(unix, assets):
-    prices = {}
-    convert_to = 2
-    for asset in assets:
-        prices[asset] = convert_asset_price(asset, convert_to, unix)
-    return prices
-
-
-def find_linked_assets(asset_id):
-    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
-    connection = SqliteConnector(db_path=fin_db)
-    return connection.get_results(f"""
-        WITH RECURSIVE linked_assets AS (
-            SELECT id, group_to FROM assets 
-            WHERE id = ?
-
-            UNION
-
-            SELECT a.id, a.group_to
-            FROM assets a
-            INNER JOIN linked_assets la ON (a.id = la.group_to OR a.group_to = la.id)
-        )
-        SELECT DISTINCT id FROM linked_assets;
-        """, (asset_id,), return_type='list')
-
-
-def convert_asset_price(convert_asset_id, target_asset_id, unix):
-    if convert_asset_id == target_asset_id:
-        return 1.0
-
-    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
-    connection = SqliteConnector(db_path=fin_db)
-
-    convert_links = find_linked_assets(convert_asset_id)
-    target_links = find_linked_assets(target_asset_id)
-
-    # Prepare placeholders for the IN clauses
-    conv_placeholders = ', '.join(['?'] * len(convert_links))
-    target_placeholders = ', '.join(['?'] * len(target_links))
-
-    # Construct the query
-    query = f"""
-        SELECT a.name, am.market_id, am.base_asset, am.quote_asset 
-        FROM api_markets am
-        LEFT JOIN apis a ON am.api_id = a.id
-        WHERE 
-            (base_asset IN ({conv_placeholders}) AND quote_asset IN ({target_placeholders}))
-            OR 
-            (quote_asset IN ({conv_placeholders}) AND base_asset IN ({target_placeholders}))
-    """
-
-    params = convert_links + target_links + convert_links + target_links
-    
-    markets = connection.get_results(query, params)
-
-    if len(markets) != 1:
-        raise NotImplementedError(f"Multiple markets found for {convert_asset_id} to {target_asset_id}")
-
-    market_file = get_market_price_file(markets[0][0], markets[0][1])
-    pf = PriceFile(market_file)
-    price = pf.binary_search_unix_price(unix)
-
-    return price
-
-
-def get_market_price_file(api, market):
-    return f'/media/jb/DATA/PRICE/{api}/{api}_{market}.h5'
-
-
-def upsert_coingecko_assets():
-    fin_db = os.path.join(os.path.dirname(get_db_path()), 'finance.db')
-    connection = SqliteConnector(db_path=fin_db)
-    # cg_api = CoingeckoAPI(connection)
-
-    existing_assets = connection.get_results("""
-        SELECT 
-            id, 
-            api_asset_id
-        FROM assets 
-        WHERE api_id = ?
-    """, (31,), return_type='dict')
-    # existing_markets = cg_api.get_existing_markets()
-    connection.execute("DELETE FROM api_markets WHERE api_id = 31")
-
-    # new_assets = set()
-    new_markets = {}
-
-    for file in os.listdir('/media/jb/DATA/PRICE/COINGECKO'):
-        # remove 'COINGECKO_' from the beginning ONLY
-        market_id = file[len('COINGECKO_'):-3]
-        base_asset = market_id[:-4]  # remove '_usd'
-        quote_asset = 'USD'
-
-        new_markets[market_id] = (base_asset, quote_asset)
-    
-    all_assets = connection.get_results("""
-        SELECT 
-            api_asset_id,
-            id
-        FROM assets 
-        WHERE api_id = ?
-    """, (31,), return_type='dict')
-    
-    if new_markets:
-        # display_message(f"Binance: Adding {len(new_markets)} markets")
-        print(f'FX: Adding {len(new_markets)} markets')
-        items = list(new_markets.items())
-        batch_size = 499
-        for i in range(0, len(items), batch_size):
-            batch = items[i:i+batch_size]
-            values_clause = ', '.join(['(?, ?, ?, ?, ?, ?)'] * len(batch))
-            query = f"INSERT INTO api_markets (api_id, market_id, base_asset, quote_asset, base_symb, quote_symb) VALUES {values_clause}"
-            params = []
-            for market, (base, quote) in batch:
-                base_asset_id = all_assets[base]
-                quote_asset_id = 53
-                params.extend([31, market, base_asset_id, quote_asset_id, base, quote])
-            connection.execute(query, params)
-
-
-def insert_slopify_artists(artist_names):
-    """Insert a list of artist names into slopify_artists.
-
-    Parameters
-    ----------
-    artist_names : list[str]
-        Artist names to insert.
-    """
-    existing_artists = sql.get_results("SELECT LOWER(name) FROM slopify_artists", return_type='list')
-    existing_artists_count = len([name for name in artist_names if name.lower() in existing_artists])
-    
-    new_artists = [name for name in artist_names if name.lower() not in existing_artists]
-    for name in new_artists:
-        if not name:
-            continue
-        config = {
-            'Info': {'name': name},
-            'Generation': {},
-        }
-        sql.execute(
-            "INSERT INTO slopify_artists (name, config)"
-            " VALUES (?, ?)",
-            (name, json.dumps(config)),
-        )
-    print(f'Inserted {len(new_artists)} artists')
-    if existing_artists_count > 0:
-        print(f'{existing_artists_count} artists already exist')
-
-
-
 class Main(FramelessResizeMixin, QMainWindow):
 
     def __init__(self):
         super().__init__()
-
-
-        # # # check_cg_filepaths()
-        # # # sys.exit(0)
-
-        # # # # # # use yt-dlp to download the following videos:
-        # # # # # # https://www.youtube.com/watch?v=BEvt5dzxVW0
-        # # # # # yt_manager = YouTubeManager()
-        # # # # # yt_manager.download_video('https://www.youtube.com/watch?v=BEvt5dzxVW0', '/home/jb/Desktop/BEvt5dzxVW0.mp4')
-        
-        # # # # # convert_forex()
-        # # # # # upsert_fx_assets()
-
-        # # # totpot = get_total_at_unix(1635449600)
-        # # # print(totpot)
-
-        # # # # convert_coingecko_files()
-        # # upsert_coingecko_assets()
-        # # sys.exit(0)
-        # # # # migrate_tables()
-        # # # # # # sys.exit(0)
-
-        # # # # # scan_file_ids()
-        # # # # # sys.exit(0)
-
-        # # return
-
-        # from scrape_polo_depwiths import get_depwith
-        # results = get_depwith()
-        # for r in results:
-        #     print(list(r.values()))
-        # return
 
         self.init_frameless_resize(margin=10)
 
@@ -920,6 +359,12 @@ class Main(FramelessResizeMixin, QMainWindow):
         self.setAcceptDrops(True)
 
         self.title_bar = TitleButtonBar(parent=self)
+        self.history_menu_btn = QPushButton('⋮', self)
+        self.history_menu_btn.setFixedSize(24, 24)
+        self.history_menu_btn.setFlat(True)
+        self.history_menu_btn.setToolTip('Menu')
+        self.history_menu_btn.clicked.connect(self.show_history_menu)
+        self.module_popup = None
         system.manager = SystemManager()
         system.manager._main_gui = self
 
@@ -927,7 +372,36 @@ class Main(FramelessResizeMixin, QMainWindow):
         self.notification_manager = NotificationManager(self)
         self.notification_manager.show()
 
+        auto_trigger = None
+        if os.environ.get('AP_RUN_TESTS'):
+            from utils.reset import reset_application
+            self._switch_to_dummy_db(filename='test_data.db')
+            # bootstrap=False: managers aren't loaded yet, and reset just
+            # dropped tables that bootstrap_entities would INSERT into.
+            # init_app below re-creates the tables and runs bootstrap_app.
+            reset_application(force=True, preserve_audio_msgs=True, reset_models_=False, reset_tos=False, bootstrap=False)
+            auto_trigger = self.run_tests
+        elif os.environ.get('AP_RUN_DEMO'):
+            from utils.reset import reset_application
+            self._switch_to_dummy_db(filename='demo_data.db')
+            reset_application(force=True, preserve_audio_msgs=True, reset_models_=False, reset_tos=False, bootstrap=False)
+            auto_trigger = self.run_demo
+
         self.init_app()
+
+        # from core.actions import base as undo_history
+        # undo_history.load()
+
+        # self.undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
+        # self.undo_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        # self.undo_shortcut.activated.connect(lambda: self.on_undo_shortcut(redo=False))
+        # self.redo_shortcut = QShortcut(QKeySequence('Ctrl+Shift+Z'), self)
+        # self.redo_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        # self.redo_shortcut.activated.connect(lambda: self.on_undo_shortcut(redo=True))
+
+        if auto_trigger is not None:
+            # init_app() must run and confirm TOS accepted before running test or demo
+            safe_single_shot(1500, auto_trigger)
 
         # Create tray icon (required for notifications)
         self.tray = QSystemTrayIcon()
@@ -936,39 +410,103 @@ class Main(FramelessResizeMixin, QMainWindow):
 
         safe_single_shot(2000, system.manager.daemons.start_all_daemons)
 
+
+    def closeEvent(self, event):
+        # from core.actions import base as undo_history
+        # undo_history.flush()
+        popup = self.module_popup
+        geometry = popup.geometry().getRect() if popup and popup.isVisible() else None
+        from utils import sql
+        sql.execute("UPDATE settings SET value = json(?) WHERE field = 'page_editor'", (json.dumps(geometry),))
+        super().closeEvent(event)
+        # The tray icon is a visible top-level window, so Qt doesn't consider
+        # this the last window and won't quit on its own — without this the
+        # process keeps running invisibly after the window is closed.
+        QApplication.quit()
+
+    async def stop_daemons(self, grace=0.5, timeout=5.0):
+        """Stop all daemons and wait for them to release any open files.
+
+        Daemons that hold file handles need to unwind before the process
+        exits, otherwise the file is left unclosed and can be corrupted.
+        Daemons still running after `grace` seconds (typically asleep between
+        polls) are cancelled, so their cleanup runs without waiting out the
+        sleep.
+        """
+        daemons = getattr(system.manager, 'daemons', None)
+        if daemons is None or not daemons.running_daemons:
+            return
+
+        daemons.stop_all_daemons()
+
+        async def wait(seconds):
+            deadline = time.time() + seconds
+            while daemons.running_daemons and time.time() < deadline:
+                await asyncio.sleep(0.01)
+
+        await wait(grace)
+        daemons.cancel_all_daemons()
+        await wait(timeout)
+
+        still_running = list(daemons.running_daemons)
+        if still_running:
+            print(f'Daemons did not stop within {timeout}s: {still_running}')
+
+    # def on_undo_shortcut(self, redo=False):
+    #     # Text editing widgets keep their own character-level undo stack, defer to it while focused
+    #     # (except our Text field widgets, whose edits are recorded in the app history instead)
+    #     focused = QApplication.focusWidget()
+    #     # if getattr(focused, '_ap_no_native_undo', False):
+    #     #     focused = None
+    #     if isinstance(focused, QLineEdit):
+    #         if (focused.isRedoAvailable() if redo else focused.isUndoAvailable()):
+    #             focused.redo() if redo else focused.undo()
+    #             return
+    #     elif isinstance(focused, (QPlainTextEdit, QTextEdit)):
+    #         doc = focused.document()
+    #         if (doc.isRedoAvailable() if redo else doc.isUndoAvailable()):
+    #             focused.redo() if redo else focused.undo()
+    #             return
+
+    #     # Widgets with their own local undo history (e.g. studios) take precedence while focused
+    #     widget = QApplication.focusWidget()
+    #     while widget is not None:
+    #         local_history = getattr(widget, 'undo_history', None)
+    #         if local_history is not None:
+    #             local_history.redo() if redo else local_history.undo()
+    #             return
+    #         widget = widget.parentWidget()
+
+    #     # from core.actions import base as undo_history
+    #     # undo_history.redo() if redo else undo_history.undo()
+
     def init_app(self):
         clear_layout(self.layout)
-
-        # migrate_old_format('/home/jb/Desktop/CRYP/PRICE/BINANCE/0/BINANCE_ETHBTC_raw.h5')
-        # migrate_old_format('/home/jb/Desktop/CRYP/PRICE/BINANCE/0/BINANCE_LTCBTC_raw.h5')
-
-        # self.check_if_app_already_running()
-        telemetry.initialize()
 
         self.check_db()
         self.patch_db()
 
-        # if not test_mode:  # workaround for dialog block todo
         self.check_tos()
 
         from utils.reset import ensure_system_folders
         ensure_system_folders()
 
-        # system.manager = SystemManager()
-        # system.manager._main_gui = self
         system.manager.load()
+        load_language(system.manager.config.get('system.language', 'English'))
 
-        if 'AP_DEV_MODE' in os.environ.keys():
+        # Bootstrap baked content whenever we're running from source (bootstrap
+        # needs the source tree to re-derive baked modules), or on a disposable
+        # dummy DB (test/demo) — regardless of how the test was launched
+        # (AP_RUN_TESTS env var via run_tests.sh, or the in-app Settings → Run
+        # Tests button which doesn't set the env var).
+        from utils import sql as _sql
+        if not getattr(sys, 'frozen', False) or _sql.get_db_path().endswith(('test_data.db', 'demo_data.db')):
             from utils.reset import bootstrap_app
-            # reset_table(table_name='modules')
             bootstrap_app()
 
         get_stylesheet()  # init stylesheet
 
-        # telemetry.set_uuid(self.get_uuid())
-        # telemetry.send('user_login')
         self.test_running = False
-        self.page_history = []
 
         always_on_top = system.manager.config.get('system.always_on_top', True)
         current_flags = self.windowFlags()
@@ -985,7 +523,7 @@ class Main(FramelessResizeMixin, QMainWindow):
 
         self.layout.addWidget(self.main_pages)
 
-        self.side_bubbles = self.SideBubbles(self)
+        # self.side_bubbles = self.SideBubbles(self)
         # is_in_ide = 'AP_DEV_MODE' in os.environ
         # dev_mode_state = True if is_in_ide else None
         # self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
@@ -1015,22 +553,12 @@ class Main(FramelessResizeMixin, QMainWindow):
         if page_path:
             set_selected_pages(self.main_pages, page_path)
         self.main_pages.load()
-
-
-        # # system.manager.modules.test_modules()
-        # QTimer.singleShot(100, system.manager.modules.test_modules)
+        retranslate(self, system.manager.config.get('system.language', 'English'))
+        safe_single_shot(0, self.restore_page_editor)
 
     @property  # todo remove
     def page_chat(self):
         return self.main_pages.get('chat')
-
-    def get_uuid(self):
-        from utils import sql
-        my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")
-        if my_uuid == '':
-            my_uuid = str(uuid.uuid4())
-            sql.execute("UPDATE settings SET value = ? WHERE `field` = 'my_uuid'", (my_uuid,))
-        return my_uuid
 
     def check_tos(self):
         from utils import sql
@@ -1066,267 +594,120 @@ class Main(FramelessResizeMixin, QMainWindow):
             sys.exit(0)
 
     def patch_db(self):
-        from utils import sql
+        pass
 
-        # in `settings`.`app_config`, rename `display.parameter_color` to `display.accent_color_1` and `display.structure_color` to `display.accent_color_2`
-        app_config = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'app_config'", load_json=True)
-        if app_config:
-            if 'display.parameter_color' in app_config:
-                app_config['display.accent_color_1'] = app_config.pop('display.parameter_color')
-                app_config['display.accent_color_2'] = app_config.pop('display.structure_color')
-                sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_config),))
-
-        # add 'finance_config' to settings table
-        if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'finance_config'"):
-            sql.execute("INSERT INTO settings (field, value) VALUES ('finance_config', '{}')")
-
-        # Roles table is deprecated — bubble styling lives on bubble module classes.
-        # # update the json field  `roles`.`config`, set 'hide_bubbles' to
-        # audio_config = json.dumps({"bubble_bg_color": "#003b3b3b", "bubble_text_color": "#ff818365"})
-        # sql.execute("UPDATE roles SET config = ? WHERE name = 'audio'", (audio_config,))
-
-        # add enhancement_blocks to settings table
-        if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'enhancement_blocks'"):
-            sql.execute("INSERT INTO settings (field, value) VALUES ('enhancement_blocks', '{}')")
-
-        # # if 'modules' is in `roles`.`config` WHERE `name` = 'user'
-        # has_module_field = sql.get_scalar("SELECT json_extract(config, '$.module') FROM roles WHERE name = 'user'")
-        # if not has_module_field:
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'audio'", ('AudioBubble',))
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'code'", ('CodeBubble',))
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'tool'", ('ToolBubble',))
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'result'", ('ResultBubble',))
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'image'", ('ImageBubble',))
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'user'", ('UserBubble',))
-        #     sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'assistant'", ('AssistantBubble',))
-
-        sql.ensure_column_in_tables(
-            tables=[
-                'modules',
-                'entities',
-                'blocks',
-                'tools',
-                'environments',
-            ],
-            column_name='baked',
-            column_type='INTEGER',
-            default_value="0",
-            not_null=True,
-        )
-        sql.ensure_column_in_tables(
-            tables=[
-                'folders',
-            ],
-            column_name='uuid',
-            column_type='TEXT',
-            default_value="""(
-                lower(hex(randomblob(4))) || '-' ||
-                lower(hex(randomblob(2))) || '-' ||
-                '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
-                substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
-                lower(hex(randomblob(6)))
-            )""",
-            not_null=True,
-        )
-        sql.ensure_column_in_tables(
-            tables=[
-                'blocks',
-            ],
-            column_name='parent_id',
-            column_type='INTEGER',
-            default_value='NULL',
-            not_null=False,
-        )
-
-        # sql.execute("UPDATE folders SET name = 'Roles' WHERE name = 'Bubbles' and `type` = 'modules' and `locked` = 1")
-        
-        # add window_size to settings table
-        if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'window_size'"):
-            sql.execute("INSERT INTO settings (field, value) VALUES ('window_size', '{}')")
-        # add page_path to settings table
-        if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'page_path'"):
-            sql.execute("INSERT INTO settings (field, value) VALUES ('page_path', '{}')")
-        
-        # rename block types: text_block -> text, code_block -> code, prompt_block -> prompt
-        self.patch_config_recursive(
-            tables=['contexts', 'entities', 'blocks', 'tools', 'tasks'],
-            renames={'text_block': 'text', 'code_block': 'code', 'prompt_block': 'prompt'},
-        )
-
-        sql.ensure_column_in_tables(
-            tables=['models'],
-            column_name='metadata',
-            column_type='TEXT',
-            default_value='{}',
-            not_null=True,
-        )
-        sql.ensure_column_in_tables(
-            tables=['models'],
-            column_name='provider_plugin',
-            column_type='TEXT',
-            default_value='litellm',
-            not_null=True,
-        )
-        # # rename `entities` to `agents`
-        # if sql.get_scalar("SELECT name FROM tables WHERE name = 'entities'"):
-        #     sql.execute("ALTER TABLE entities RENAME TO agents")
-
-            # ensure_column_in_tables(
-        #     tables=['modules'],
-        #     column_name='kind',
-        #     column_type='TEXT',
-        #     default_value='',  # todo - empty string default?
-        #     not_null=True,
-        # )
-        # # if any items in `folders` table has `locked` = 1
-        # locked_folders = sql.get_results("SELECT id, name FROM folders WHERE type = 'modules' AND locked = 1", return_type='dict')
-        # if locked_folders:
-        #     for folder_id, folder_name in locked_folders.items():
-        #         folder_modules = sql.get_results(f"SELECT id FROM modules WHERE folder_id = ?",
-        #                                          (folder_id,), return_type='list')
-        #         for module_id in folder_modules:
-        #             # set `kind` to folder_name
-        #             sql.execute("UPDATE modules SET kind = ?, folder_id = NULL WHERE id = ?",
-        #                         (folder_name.upper(), module_id))
-        #     # delete locked folders
-        #     sql.execute("DELETE FROM folders WHERE type = 'modules' and locked = 1")
-
-    def patch_config_recursive(self, tables, renames):
-        """Recursively rename `_TYPE` values in config JSON across tables.
-
-        Parameters
-        ----------
-        tables : list[str]
-            Database tables to patch.
-        renames : dict[str, str]
-            Mapping of old _TYPE values to new ones.
-        """
-        from utils import sql
-
-        def _patch(config):
-            if not isinstance(config, dict):
-                return config
-            if config.get('_TYPE') in renames:
-                config['_TYPE'] = renames[config['_TYPE']]
-            for member in config.get('members', []):
-                if isinstance(member, dict):
-                    _patch(member.get('config', {}))
-            return config
-
-        for table in tables:
-            try:
-                rows = sql.get_results(
-                    f"SELECT id, config FROM {table} "
-                    f"WHERE config IS NOT NULL"
-                )
-            except Exception:
-                continue
-            for row_id, config_str in rows:
-                try:
-                    config = json.loads(config_str)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-                patched = json.dumps(_patch(config))
-                if patched != config_str:
-                    sql.execute(
-                        f"UPDATE {table} SET config = ? WHERE id = ?",
-                        (patched, row_id),
-                    )
-
-    # def check_if_app_already_running(self):
-    #     # if not getattr(sys, 'frozen', False):
-    #     #     return  # Don't check if we are running in ide
-    #
-    #     current_pid = os.getpid()  # Get the current process ID
-    #
-    #     for proc in psutil.process_iter(['pid', 'name']):
-    #         try:
-    #             proc_info = proc.as_dict(attrs=['pid', 'name'])
-    #             if proc_info['pid'] != current_pid and 'AgentPilot' in proc_info['name']:
-    #                 raise Exception("Another instance of the application is already running.")
-    #         except (psutil.NoSuchProcess, psutil.AccessDenied):
-    #             # If the process no longer exists or there's no permission to access it, skip it
-    #             continue
-
-    def show_side_bubbles(self):
-        self.side_bubbles.show()
-        # move to top left of the main window
-        self.side_bubbles.move(self.x() - self.side_bubbles.width(), self.y())
+    # def show_side_bubbles(self):
+    #     self.side_bubbles.show()
+    #     # move to top left of the main window
+    #     self.side_bubbles.move(self.x() - self.side_bubbles.width(), self.y())
 
     # def hide_side_bubbles(self):
     #     print("hide side bubbles")
     #     self.side_bubbles.hide()
 
-    class SideBubbles(QWidget):
-        def __init__(self, main):
-            super().__init__(parent=None)
-            self.main = main
-            self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-            self.setAttribute(Qt.WA_TranslucentBackground)
-            self.setFixedWidth(50)
+    # class SideBubbles(QWidget):
+    #     def __init__(self, main):
+    #         super().__init__(parent=None)
+    #         self.main = main
+    #         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+    #         self.setAttribute(Qt.WA_TranslucentBackground)
+    #         self.setFixedWidth(50)
 
-            # allow mouseMoveEvent
-            self.setMouseTracking(True)
+    #         # allow mouseMoveEvent
+    #         self.setMouseTracking(True)
 
-            # show 3 circles 50x50 px vertically
-            self.layout = CVBoxLayout(self)
+    #         # show 3 circles 50x50 px vertically
+    #         self.layout = CVBoxLayout(self)
 
-            self.load()
+    #         self.load()
 
-        def load(self):
-            from utils import sql
-            recent_chats = sql.get_results("""
-                SELECT config
-                FROM contexts
-                WHERE kind = 'CHAT'
-                ORDER BY id DESC
-                LIMIT 3
-            """, return_type='list')
+    #     def load(self):
+    #         from utils import sql
+    #         recent_chats = sql.get_results("""
+    #             SELECT config
+    #             FROM contexts
+    #             WHERE kind = 'CHAT'
+    #             ORDER BY id DESC
+    #             LIMIT 3
+    #         """, return_type='list')
 
-            for config in recent_chats:
-                row_layout = QHBoxLayout()
-                config = json.loads(config)
-                member_paths = get_avatar_paths_from_config(config)
-                # member_pixmap = path_to_pixmap(member_paths, diameter=50)
-                label = IconButton(  #) QLabel()
-                    parent=self,
-                    icon_path=member_paths,  # default icon
-                    size=50,
-                    opacity=0.75,
-                    icon_size_percent=0.5,
-                )
+    #         for config in recent_chats:
+    #             row_layout = QHBoxLayout()
+    #             config = json.loads(config)
+    #             member_paths = get_avatar_paths_from_config(config)
+    #             # member_pixmap = path_to_pixmap(member_paths, diameter=50)
+    #             label = IconButton(  #) QLabel()
+    #                 parent=self,
+    #                 icon_path=member_paths,  # default icon
+    #                 size=50,
+    #                 opacity=0.75,
+    #                 icon_size_percent=0.5,
+    #             )
 
-                # # when label is hovered, show a 1px border
-                # # set transparent background
-                # label.setStyleSheet("background-color: transparent;")
-                # # set border radius to 25px
-                #border-radius: 25px; border: 1px solid transparent; background-color: transparent;
-                # label.setStyleSheet("""
-                #     background-color: transparent;
-                #     border-radius: 25px;
-                #     border: 1px solid transparent;
-                #     padding: 5px;
-                # """)
-                # set hovered background color to #ffffff20
-                # label.setProperty("class", "bubble")
-                # label.setPixmap(member_pixmap)
-                row_layout.addWidget(label)
-                self.layout.addLayout(row_layout)
+    #             # # when label is hovered, show a 1px border
+    #             # # set transparent background
+    #             # label.setStyleSheet("background-color: transparent;")
+    #             # # set border radius to 25px
+    #             #border-radius: 25px; border: 1px solid transparent; background-color: transparent;
+    #             # label.setStyleSheet("""
+    #             #     background-color: transparent;
+    #             #     border-radius: 25px;
+    #             #     border: 1px solid transparent;
+    #             #     padding: 5px;
+    #             # """)
+    #             # set hovered background color to #ffffff20
+    #             # label.setProperty("class", "bubble")
+    #             # label.setPixmap(member_pixmap)
+    #             row_layout.addWidget(label)
+    #             self.layout.addLayout(row_layout)
 
-        def mouseMoveEvent(self, event):
-            # If the mouse is more than 50px away from any edge of side bubbles, hide it
-            left_distance = event.globalX() - self.x()
-            right_distance = self.x() + self.width() - event.globalX()
-            top_distance = event.globalY() - self.y()
-            bottom_distance = self.y() + self.height() - event.globalY()
-            if left_distance < -50 or right_distance < -50 or \
-               top_distance < -50 or bottom_distance < -50:
-                self.hide()
+    #     def mouseMoveEvent(self, event):
+    #         # If the mouse is more than 50px away from any edge of side bubbles, hide it
+    #         left_distance = event.globalX() - self.x()
+    #         right_distance = self.x() + self.width() - event.globalX()
+    #         top_distance = event.globalY() - self.y()
+    #         bottom_distance = self.y() + self.height() - event.globalY()
+    #         if left_distance < -50 or right_distance < -50 or \
+    #            top_distance < -50 or bottom_distance < -50:
+    #             self.hide()
 
     def position_title_bar(self):
         x = self.width() - self.title_bar.sizeHint().width()
         self.title_bar.move(x, 0)
         self.title_bar.raise_()
+        self.history_menu_btn.move(
+            self.width() - self.history_menu_btn.width() - 4,
+            self.title_bar.sizeHint().height())
+        self.history_menu_btn.raise_()
+
+    def show_history_menu(self):
+        # from core.actions import base as undo_history
+        menu = QMenu(self)
+        # undo_label = undo_history.next_undo_label()
+        # redo_label = undo_history.next_redo_label()
+        # undo_action = menu.addAction(f'Undo ({undo_label})' if undo_label else 'Undo')
+        # undo_action.setEnabled(undo_label is not None)
+        # undo_action.triggered.connect(undo_history.undo)
+        # redo_action = menu.addAction(f'Redo ({redo_label})' if redo_label else 'Redo')
+        # redo_action.setEnabled(redo_label is not None)
+        # redo_action.triggered.connect(undo_history.redo)
+        # menu.addSeparator()
+        edit_action = menu.addAction('Edit')
+        edit_action.triggered.connect(self.open_page_editor)
+        menu.exec(self.history_menu_btn.mapToGlobal(self.history_menu_btn.rect().bottomLeft()))
+
+    def open_page_editor(self):
+        from gui.pages.modules import PageEditor
+        self.module_popup = self.module_popup or PageEditor(self)
+        self.module_popup.load()
+        self.module_popup.show()
+
+    def restore_page_editor(self):
+        from utils import sql
+        geometry = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'page_editor'", load_json=True)
+        if geometry:
+            self.open_page_editor()
+            self.module_popup.setGeometry(*geometry)
 
     def apply_stylesheet(self):
         old_text_color = getattr(self, '_cached_text_color', None)
@@ -1334,7 +715,9 @@ class Main(FramelessResizeMixin, QMainWindow):
         if getattr(self, '_cached_stylesheet', None) != new_stylesheet:
             self._cached_stylesheet = new_stylesheet
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            QApplication.instance().setStyleSheet(new_stylesheet)
+            app = QApplication.instance()
+            app.setPalette(get_palette() if is_native_style() else app.style().standardPalette())
+            app.setStyleSheet(new_stylesheet)
             QApplication.restoreOverrideCursor()
         from gui.style import TEXT_COLOR as new_text_color
         self._cached_text_color = new_text_color
@@ -1349,10 +732,14 @@ class Main(FramelessResizeMixin, QMainWindow):
                 if hasattr(child, 'apply_stylesheet'):
                     child.apply_stylesheet()
             # charts
-            from gui.widgets.chart_widget import ChartWidget
-            options = PySide6.QtCore.Qt.FindChildOptions.FindChildrenRecursively
-            for child in self.findChildren(ChartWidget, options=options):
-                child.apply_stylesheet()
+            try:
+                from plugins.finance.widgets.chart_widget import ChartWidget
+            except ImportError:
+                ChartWidget = None
+            if ChartWidget is not None:
+                options = PySide6.QtCore.Qt.FindChildOptions.FindChildrenRecursively
+                for child in self.findChildren(ChartWidget, options=options):
+                    child.apply_stylesheet()
 
         text_color = system.manager.config.get('display.text_color', '#c4c4c4')
         # if self.page_chat:
@@ -1407,43 +794,112 @@ class Main(FramelessResizeMixin, QMainWindow):
         super()._move_window(global_pos)
         self.notification_manager.update_position()
 
+    def _switch_to_dummy_db(self, filename='demo_data.db'):
+        f"""Copy the active DB to `filename` and point sql at the copy."""
+        import shutil
+        from utils import sql
+
+        current_db = sql.get_db_path()
+        if current_db.endswith(filename):
+            return
+
+        self._real_db_path = current_db
+        self._dummy_db_path = os.path.join(
+            os.path.dirname(current_db), filename
+        )
+        shutil.copyfile(current_db, self._dummy_db_path)
+        sql.set_db_filepath(self._dummy_db_path)
+
     def run_demo(self):
         """Switch to a disposable demo DB, reinitialize, and run the demo."""
-        import shutil
         from utils import sql
         from utils.reset import reset_application
 
-        current_db = sql.get_db_path()
-        already_in_demo = current_db.endswith('demo_data.db')
+        already_in_demo = sql.get_db_path().endswith('demo_data.db')
         if not already_in_demo:
-            self._real_db_path = current_db
-            demo_db_path = os.path.join(
-                os.path.dirname(current_db), 'demo_data.db'
-            )
-            self._demo_db_path = demo_db_path
+            self._switch_to_dummy_db(filename='demo_data.db')
+            reset_application(force=True, preserve_audio_msgs=True, reset_models_=False, reset_tos=False, bootstrap=False)
+            system.manager.daemons.stop_all_daemons()
+            self.init_app()
 
-            shutil.copyfile(current_db, demo_db_path)
-            sql.set_db_filepath(demo_db_path)
-
-        reset_application(force=True, preserve_audio_msgs=True, reset_models_=False)
-        sql.execute(
-            'UPDATE settings SET value = "1" '
-            'WHERE field = "accepted_tos"'
+        from gui.demo import DemoRunnable, DemoOverlay
+        existing_overlay = getattr(self, '_demo_overlay', None)
+        if existing_overlay is not None:
+            existing_overlay.close()
+        self._demo_overlay = DemoOverlay(
+            self, on_stop=self.stop_demo,
+            on_finished=self._restore_after_dummy_run,
         )
-
-        system.manager.daemons.stop_all_daemons()
-        self.init_app()
-        # self.show()
-
-        from gui.demo import DemoRunnable
-        self._demo_runnable = DemoRunnable(
-            self, on_finished=self._restore_after_demo
-        )
+        self._demo_overlay.show()
+        self._demo_runnable = DemoRunnable(self, overlay=self._demo_overlay)
         self.threadpool.start(self._demo_runnable)
 
-    def _restore_after_demo(self):
-        """Restore the user's real DB and reinitialize."""
+    def stop_demo(self):
+        """Signal the running demo to cancel."""
+        if hasattr(self, '_demo_runnable'):
+            self._demo_runnable.cancel()
+
+    def run_tests(self):
+        """Switch to a disposable test DB, reinitialize, and run the test suite."""
         from utils import sql
+        from utils.reset import reset_application
+
+        already_in_test = sql.get_db_path().endswith('test_data.db')
+        if not already_in_test:
+            self._switch_to_dummy_db(filename='test_data.db')
+            # bootstrap=False: in the in-app "Run Tests" path, reset just
+            # dropped tables (skills, etc.); bootstrap_app's INSERTs would
+            # fail. init_app re-creates the tables and runs bootstrap_app.
+            reset_application(force=True, preserve_audio_msgs=True, reset_models_=False, reset_tos=False, bootstrap=False)
+            system.manager.daemons.stop_all_daemons()
+            self.init_app()
+
+        self._last_test_failures = 0
+        self.test_running = True
+
+        # Optional page filter via `--pages page1 page2 ...`. When given, only
+        # those pages are tested and all other module types are skipped.
+        only_pages = None
+        if '--pages' in sys.argv:
+            idx = sys.argv.index('--pages')
+            only_pages = [a for a in sys.argv[idx + 1:] if not a.startswith('-')]
+
+        from gui.demo import DemoOverlay, cancel_run
+        from gui.tests import TestRunnable
+        self._test_overlay = DemoOverlay(
+            self, on_stop=cancel_run,
+            on_finished=self._restore_after_dummy_run,
+            title='AgentPilot Tests',
+        )
+        self._test_overlay.show()
+        self._test_runnable = TestRunnable(
+            self, overlay=self._test_overlay, only_pages=only_pages
+        )
+        self.threadpool.start(self._test_runnable)
+
+    def _restore_after_dummy_run(self):
+        """Restore the user's real DB after a test or demo run."""
+        from utils import sql
+
+        if os.environ.get('AP_RUN_TESTS'):
+            import threading
+            exit_code = 0 if getattr(self, '_last_test_failures', 0) == 0 else 1
+            # A modal left open by a failed test must not keep the app up.
+            for getter in (QApplication.activePopupWidget, QApplication.activeModalWidget):
+                while (widget := getter()) is not None:
+                    widget.close()
+                    if getter() is widget:
+                        break
+            # Last resort if shutdown hangs (stuck task or thread).
+            watchdog = threading.Timer(30, os._exit, args=(exit_code,))
+            watchdog.daemon = True
+            watchdog.start()
+            QApplication.instance().exit(exit_code)
+            return
+
+        if os.environ.get('AP_RUN_DEMO'):
+            QApplication.instance().exit(0)
+            return
 
         sql.set_db_filepath(self._real_db_path)
         self.test_running = False
@@ -1453,30 +909,14 @@ class Main(FramelessResizeMixin, QMainWindow):
         )
 
         try:
-            os.remove(self._demo_db_path)
+            os.remove(self._dummy_db_path)
         except OSError:
             pass
-
-    def stop_demo(self):
-        """Signal the running demo to cancel."""
-        if hasattr(self, '_demo_runnable'):
-            self._demo_runnable._cancelled = True
-
 
     def resizeEvent(self, event):
         self.notification_manager.update_position()
         self.position_title_bar()
         super().resizeEvent(event)
-        # self.update_resize_grip_position()
-
-    # def changeEvent(self, event):
-    #     if event.type() == QEvent.WindowStateChange:
-    #         if not self.isMinimized() and self.notification_manager.notifications:
-    #             self.notification_manager.setVisible(True)
-    #             for notification in self.notification_manager.notifications:
-    #                 notification.timer.start()
-    #             # self.notification_manager.update_position()
-    #     super().changeEvent(event)
 
     def dragEnterEvent(self, event):
         # Check if the event contains file paths to accept it
@@ -1500,9 +940,50 @@ class Main(FramelessResizeMixin, QMainWindow):
 
 def launch():
     try:
+        import faulthandler
+        faulthandler.enable()  # print a native stack trace to stderr on hard crashes
+        
+        # QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+        # _webengine_flags = (
+        #     '--use-gl=angle --use-angle=swiftshader '
+        #     '--enable-unsafe-swiftshader --ignore-gpu-blocklist '
+        #     '--enable-webgl '
+        #     '--disable-gpu-compositing'
+        # )
+        # existing_flags = os.environ.get('QTWEBENGINE_CHROMIUM_FLAGS', '')
+        # if '--enable-unsafe-swiftshader' not in existing_flags:
+        #     os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = (
+        #         f'{existing_flags} {_webengine_flags}'.strip()
+        #     )
+        # os.environ.setdefault('QSG_RHI_BACKEND', 'opengl')
+        
         app = QApplication(sys.argv)
         app.setAttribute(Qt.AA_EnableHighDpiScaling)
         app.setStyle("Fusion")
+
+        # Test runs use their own test_data.db, so they can run alongside the app.
+        if not os.environ.get('AP_RUN_TESTS') and process.find_other_instances():
+            msg = QMessageBox(
+                QMessageBox.Warning,
+                'Already running',
+                'Another instance of the app is already running.',
+                QMessageBox.Ok,
+            )
+            kill_button = msg.addButton('Kill all', QMessageBox.DestructiveRole)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+            msg.exec()
+            if msg.clickedButton() is not kill_button:
+                return
+            if not process.kill_other_instances():
+                display_message_box(
+                    icon=QMessageBox.Critical,
+                    title='Already running',
+                    text='Could not stop the other instance.',
+                )
+                return
+
+        # from core.actions import base as undo_history
+        # app.aboutToQuit.connect(undo_history.flush)
 
         global loop
         loop = qasync.QEventLoop(app)
@@ -1510,9 +991,32 @@ def launch():
 
         window = Main()
         window.show()
-        
+
         with loop:
             loop.run_forever()
+            loop.run_until_complete(window.stop_daemons())
+            if process._restarting:
+                process._spawn()
+            # Closing the loop waits on every executor thread (e.g. a
+            # `to_thread` call that never returns), so bound the shutdown.
+            import threading
+            exit_code = 1 if getattr(window, '_last_test_failures', 0) else 0
+            watchdog = threading.Timer(10, os._exit, args=(exit_code,))
+            watchdog.daemon = True
+            watchdog.start()
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            app.aboutToQuit.disconnect()
+            if pending:
+                _, stuck = loop.run_until_complete(asyncio.wait(pending, timeout=5))
+                for task in stuck:
+                    logger.warning('Task ignored shutdown: %r', task)
+                if stuck:
+                    os._exit(1)
+
+        if os.environ.get('AP_RUN_TESTS'):
+            sys.exit(1 if getattr(window, '_last_test_failures', 0) else 0)
 
     except Exception as e:
         if 'AP_DEV_MODE' in os.environ:

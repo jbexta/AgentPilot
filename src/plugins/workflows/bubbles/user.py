@@ -6,12 +6,10 @@ from utils.helpers import message_button
 
 
 class UserBubble(MessageBubble):
-    bubble_text_color = '#ffd1d1d1'
     bubble_bg_opacity = 0.15
 
     def __init__(self, parent, message):
-        text_color = gui_system.manager.config.get(
-            'display.text_color', '#ffcacdd5')
+        text_color = gui_system.manager.config.get('display.text_color', '#ffcacdd5')
         super().__init__(
             parent=parent,
             message=message,

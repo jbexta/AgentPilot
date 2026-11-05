@@ -2,7 +2,8 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
 from gui.fields.combo import BaseCombo
-from gui.util import find_workflow_widget, CVBoxLayout, find_attribute, get_member_settings_class
+from gui.gui_utils.helpers import find_workflow_widget, find_attribute, get_member_settings_class
+from gui.gui_utils.layouts import CVBoxLayout
 from gui import system
 from utils.helpers import block_signals
 

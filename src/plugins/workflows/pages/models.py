@@ -6,8 +6,8 @@ from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_tabs import ConfigTabs
-from gui.widgets.multi_preview import MultiPreview
-from gui.util import clear_layout, find_ancestor_tree_item_id, find_main
+from plugins.workflows.widgets.multi_preview import MultiPreview
+from gui.gui_utils.helpers import clear_layout, find_ancestor_tree_item_id, find_main
 from plugins.workflows.widgets.generate_widget import GenerateWidget
 from utils.helpers import block_signals
 from utils import sql
@@ -65,7 +65,7 @@ class Page_Models_Settings(ConfigDBTree):
             readonly=False,
             layout_type='vertical',
             config_widget=self.Kinds_Tab_Widget(parent=self),
-            extra_tree_buttons=[
+            extra_buttons=[
                 {
                     'text': 'Sync models',
                     'icon_path': ':/resources/icon-refresh.png',
@@ -102,6 +102,7 @@ class Page_Models_Settings(ConfigDBTree):
     class Kinds_Tab_Widget(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.propagate_config = True
             self.provider = None
             self.pages = {
                 'Chat': self.Tab_Kind(parent=self, kind='CHAT'),
@@ -216,6 +217,7 @@ class Page_Models_Settings(ConfigDBTree):
                 class Kind_Model_Config(ConfigJoined):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
+                        self.propagate_config = True
                         self.model_params = self.Kind_Model_Params(parent=self)
                         self.multi_preview = MultiPreview(parent=self)
                         self.widgets = [

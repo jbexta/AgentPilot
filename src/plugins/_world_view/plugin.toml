@@ -1,0 +1,4 @@
+[plugin]
+name = "world_view"
+version = "0.1.0"
+description = "3D globe (Google Earth-style) powered by CesiumJS."

@@ -1,0 +1,7 @@
+[plugin]
+name = "postgresql"
+version = "0.1.0"
+description = "PostgreSQL database integration."
+
+[dependencies]
+psycopg2-binary = { version = "2.9.11", import = "psycopg2" }

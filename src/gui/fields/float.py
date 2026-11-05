@@ -37,6 +37,7 @@ class Float(QDoubleSpinBox):
         minimum = kwargs.get('minimum', -1.7976931348623157e+308)
         maximum = kwargs.get('maximum', 1.7976931348623157e+308)
         step = kwargs.get('step', 0.05)
+        self.setDecimals(kwargs.get('decimals', 2))
         self.setRange(minimum, maximum)
         self.setSingleStep(step)
         self.valueChanged.connect(parent.update_config)

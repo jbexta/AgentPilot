@@ -6,7 +6,10 @@ from PySide6.QtWidgets import (QLabel, QMenu, QWidget, QSizePolicy, QSplitter, Q
                                QTableView, QAbstractItemView, QStyledItemDelegate)
 from PySide6.QtCore import QAbstractTableModel, QItemSelectionModel, QModelIndex, QSortFilterProxyModel
 
-from gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
+from gui.gui_utils.helpers import save_table_config
+from gui.gui_utils.filter_widget import FilterWidget
+from gui.gui_utils.layouts import CVBoxLayout
+from gui.gui_utils.tree_buttons import TreeButtons
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_widget import ConfigWidget
 from core.connectors.sqlite import SqliteConnector
@@ -273,7 +276,6 @@ class ConfigTable(ConfigWidget):
         self.readonly = kwargs.get('readonly', False)
         self.filterable = kwargs.get('filterable', False)
         self.searchable = kwargs.get('searchable', False)
-        self.versionable = kwargs.get('versionable', False)
         self.dynamic_load = kwargs.get('dynamic_load', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
         # table_header_hidden = kwargs.get('table_header_hidden', False)
@@ -284,7 +286,7 @@ class ConfigTable(ConfigWidget):
         self.add_item_options = kwargs.get('add_item_options', None)
         self.del_item_options = kwargs.get('del_item_options', None)
         self.full_row_select = kwargs.get('full_row_select', False)
-        self.extra_tree_buttons = kwargs.get('extra_tree_buttons', [])
+        self.extra_buttons = kwargs.get('extra_buttons', [])
 
         self.layout = CVBoxLayout(self)
 
@@ -296,11 +298,10 @@ class ConfigTable(ConfigWidget):
         
         if self.filterable:
             self.filter_widget = FilterWidget(parent=self, **kwargs)
-            self.filter_widget.hide()
             self.table_layout.addWidget(self.filter_widget)
         
         if self.show_table_buttons:
-            self.table_buttons = TreeButtons(parent=self, extra_buttons=self.extra_tree_buttons)
+            self.table_buttons = TreeButtons(parent=self, extra_buttons=self.extra_buttons)
             self.table_layout.addWidget(self.table_buttons)
         
         self.table = BaseTableWidget(parent=self, full_row_select=self.full_row_select)
@@ -420,7 +421,9 @@ class ConfigTable(ConfigWidget):
 
         else:
             self.toggle_config_widget(None)
-    
+
+        self.defer_update_page_map()
+
     def save_config(self):
         """Save the config widget's config to the database."""
         if not self.table_name or not self.config_widget:

@@ -2,14 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Launch src/__main__.py (Poetry venv, AP_DEV_MODE=1)",
+            "name": "Python: Launch src/__main__.py (Poetry venv)",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/src/__main__.py",
             "console": "integratedTerminal",
             "envFile": "${workspaceFolder}/.env",
             "python": "/home/jb/.cache/pypoetry/virtualenvs/src-OMM8KacK-py3.11/bin/python",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                // "AP_DEV_MODE": "1",
+                // "AP_RUN_DEMO": "1",
+                "PYTHONDONTWRITEBYTECODE": "1"
+            }
         }
     ]
 }

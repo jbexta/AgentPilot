@@ -1,6 +1,6 @@
 import json
 
-from PySide6.QtCore import QPoint, QTimer
+from PySide6.QtCore import QPoint, QSize, QTimer
 from PySide6.QtGui import QPainter, QStandardItemModel, QStandardItem, Qt, QColor
 from PySide6.QtWidgets import (
     QLabel, QScrollArea, QSizePolicy, QStyleOptionComboBox, QStylePainter, QStyle, QWidget,
@@ -8,7 +8,9 @@ from PySide6.QtWidgets import (
 
 from gui import system
 from gui.fields.combo import BaseCombo
-from gui.util import CVBoxLayout, IconButton, CHBoxLayout, clear_layout
+from gui.gui_utils.helpers import clear_layout, safe_single_shot
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.icon_button import IconButton
 from gui.popup import PopupModel
 from gui.widgets.config_fields import ConfigFields
 from utils import sql
@@ -24,6 +26,7 @@ class ModelComboBox(QWidget):
         self.parent = parent
         self.first_item = kwargs.pop('first_item', None)
         self.model_kind = kwargs.pop('model_kind', 'ALL')
+        self.model_names = kwargs.pop('model_names', None)  # restrict to these model names
 
         popup_params = kwargs.pop('popup_params', False)
         self.popup_params = popup_params
@@ -37,10 +40,19 @@ class ModelComboBox(QWidget):
         h_layout.addStretch(1)
         self.layout.addLayout(h_layout)
 
-        if self.model_kind == 'CHAT':
-            self.config_widget = PopupModel(self, is_popup=popup_params)
-        else:
-            self.config_widget = ConfigFields(parent=self)
+        # A plain QWidget host means the params widgets would inherit
+        # propagate_config=False and their values would never be saved.
+        self.propagate_config = True
+        # Blocked so construction signals from the params fields don't bubble
+        # up as an edit before the model itself is set (see update_config).
+        with block_signals(self, recurse_children=False):
+            if self.model_kind == 'CHAT':
+                self.config_widget = PopupModel(self, is_popup=popup_params)
+            else:
+                self.config_widget = ConfigFields(parent=self)
+                # ModelComboBox is a plain QWidget so the params widget inherits
+                # propagate_config=False, silently stopping the save chain
+                self.config_widget.propagate_config = True
             self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         if popup_params:
             self.options_btn = self.OptionsButton(
@@ -61,10 +73,9 @@ class ModelComboBox(QWidget):
             self.combo_label = QLabel('Model')
             h_layout.insertWidget(0, self.combo_label)
 
-            self.scroll_area = QScrollArea(self)
+            self.scroll_area = self.ParamsScrollArea(self)
             self.scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.scroll_area.setWidgetResizable(True)
-            # self.scroll_area.setMaximumHeight(400)
             self.scroll_area.setWidget(self.config_widget)
             self.scroll_area.setFrameShape(QScrollArea.NoFrame)
             
@@ -80,11 +91,33 @@ class ModelComboBox(QWidget):
         self.parent.update_config()
         
     def refresh_scroll_height(self):
-        """Show or hide the scroll area based on whether there are fields."""
+        """Size the scroll area to its content (or hide it when there are no fields)."""
         if not hasattr(self, 'scroll_area'):
             return
-        has_content = self.config_widget.sizeHint().height() > 0
-        self.scroll_area.setVisible(has_content)
+        # Deferred: field widgets report their real height only after the
+        # pending load/layout pass, so measuring synchronously caps the
+        # scroll area at a stale height.
+        safe_single_shot(0, self._apply_scroll_height)
+
+    def _apply_scroll_height(self):
+        content_height = self.config_widget.sizeHint().height()
+        self.scroll_area.setVisible(content_height > 0)
+        self.scroll_area.setMaximumHeight(content_height)
+        self.scroll_area.updateGeometry()
+
+    class ParamsScrollArea(QScrollArea):
+        """Prefers its content's height so layouts grow it to fit the fields,
+        but can shrink below that (and scroll) when the parent is smaller."""
+        def sizeHint(self):
+            w = self.widget()
+            if w is None:
+                return super().sizeHint()
+            frame = self.frameWidth() * 2
+            hint = w.sizeHint()
+            return QSize(hint.width() + frame, hint.height() + frame)
+
+        def minimumSizeHint(self):
+            return QSize(0, 0)
 
     def refresh_fields(self):
         model_opts = convert_model_json_to_obj(self.combo_box.get_value())
@@ -107,6 +140,13 @@ class ModelComboBox(QWidget):
         if self.model_kind == 'CHAT':
             if not self.popup_params:
                 self.config_widget.show()
+            model_metadata = sql.get_scalar("""
+                SELECT metadata
+                FROM models
+                WHERE id = ?
+            """, (model_id,), load_json=True)
+            with block_signals(self, recurse_children=False):
+                self.config_widget.set_fields_schema(model_metadata.get('input_schema', []))
             model_config = sql.get_scalar("""
                 SELECT config FROM models WHERE id = ?
             """, (model_id,), load_json=True)
@@ -156,7 +196,9 @@ class ModelComboBox(QWidget):
 
             # api_models = {}
 
-            models = sql.get_results("""
+            kind_filter = "WHERE m.kind = ?" if self.model_kind != 'ALL' else ""
+            api_key_filter = "AND a.api_key IS NOT ''" if self.model_kind == 'CHAT' else ""
+            models = sql.get_results(f"""
                 SELECT
                     m.name,
                     m.kind,
@@ -167,15 +209,16 @@ class ModelComboBox(QWidget):
                 FROM models m
                 LEFT JOIN apis a
                     ON m.api_id = a.id
-                ORDER BY m.api_id, m.name""")
-            
+                {kind_filter} {api_key_filter}
+                ORDER BY m.api_id, m.name""",
+                (self.model_kind,) if kind_filter else None)
+
             last_api_name = None
             for display_name, model_kind, api_name, provider_plugin, model_config, api_key in models:
-                if self.model_kind not in ('ALL', model_kind):
-                    continue
-
-                if self.model_kind == 'CHAT' and api_key == '':
-                    continue
+                if self.model_names is not None:
+                    model_name = convert_model_json_to_obj(model_config).get('_model_name')
+                    if model_name not in self.model_names:
+                        continue
 
                 if api_name != last_api_name:
                     header_item = QStandardItem(api_name)
@@ -200,6 +243,12 @@ class ModelComboBox(QWidget):
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        if self.signalsBlocked():
+            # Params are being rebuilt by a load, not edited by the user.
+            # Widgets built during a load aren't covered by block_signals,
+            # so their construction signals would bubble up as edits.
+            return
+
         if hasattr(self.parent, 'update_config'):
             self.parent.update_config()
 
@@ -246,14 +295,14 @@ class ModelComboBox(QWidget):
             self.combo_box.set_value(value_copy)
 
         if self.model_kind == 'CHAT':
-            if not self.popup_params:
-                self.config_widget.show()
+            self.refresh_fields()
             self.config_widget.load_config(model_params)
             self.config_widget.load()
         else:
             self.refresh_fields()
             self.config_widget.load_config(model_params)
             self.config_widget.load()
+            self.refresh_scroll_height()
 
         if self.popup_params:
             self.refresh_options_button_visibility()

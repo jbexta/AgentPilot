@@ -1,4 +1,4 @@
-from gui.util import IconButton
+from gui.gui_utils.icon_button import IconButton
 
 
 class Button(IconButton):

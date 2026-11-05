@@ -1,36 +1,39 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import copy_metadata, collect_submodules, collect_data_files, collect_dynamic_libs
-from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, BUNDLE
+import glob
+import os
 import platform
+
+from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, BUNDLE
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files
 
 datas = []
 
 json_dir = 'src/utils/baked'
 if os.path.exists(json_dir):
     datas.append((json_dir, 'utils/baked'))
+for plugin_baked_dir in glob.glob('src/plugins/*/baked'):
+    datas.append((plugin_baked_dir, os.path.relpath(plugin_baked_dir, 'src')))
 
-datas += copy_metadata('readchar')
+if os.path.exists('src/utils/models.json'):
+    datas.append(('src/utils/models.json', 'utils'))
+
+datas.append(('src/utils/resources.rcc', 'utils'))
+datas.append(('src/utils/lang', 'utils/lang'))
+
 datas += copy_metadata('jupyter_client')
 datas += copy_metadata('jupyter_core')
 datas += copy_metadata('traitlets')
 datas += copy_metadata('ipykernel')
-datas += copy_metadata('html2image')
 
 datas += collect_data_files('litellm')
 datas += collect_data_files('debugpy')
 datas += collect_data_files('ipykernel')
 datas += collect_data_files('jupyter_core')
-datas += collect_data_files('yaspin')
-datas += collect_data_files('html2image')
-
-binaries = collect_dynamic_libs('kiwisolver')
-
-block_cipher = None
 
 a = Analysis(
     ['src/__main__.py'],
     pathex=[],
-    binaries=binaries,
+    binaries=[],
     datas=datas,
     hiddenimports=[
         'jupyter_core',
@@ -38,54 +41,11 @@ a = Analysis(
         'jupyter_client.provisioning.local_provisioner',
         'traitlets',
         'ipykernel',
-        'blessed',
-        'inquirer',
-        'matplotlib.backends.backend_tkagg',
-        'matplotlib.backends.backend_agg',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
-        'readchar',
-        'kiwisolver',
-        'html2image',
-        'shortuuid',
-        'langchain_community.chat_models.litellm',
-        'langchain_community.agent_toolkits',
-        'langchain_community.agent_toolkits.json',
-        'langchain_community.agent_toolkits.json.base',
-        'langchain_community.agent_toolkits.openapi',
-        'langchain_community.agent_toolkits.openapi.base',
-        'langchain_community.agent_toolkits.powerbi',
-        'langchain_community.agent_toolkits.powerbi.base',
-        'langchain_community.agent_toolkits.powerbi.chat_base',
-        'langchain_community.agent_toolkits.spark_sql',
-        'langchain_community.agent_toolkits.spark_sql.base',
-        'langchain_community.agent_toolkits.sql',
-        'langchain_community.agent_toolkits.sql.base',
-        'langchain_community.chat_message_histories.astradb',
-        'langchain_community.chat_message_histories.cassandra',
-        'langchain_community.chat_message_histories.cosmos_db',
-        'langchain_community.chat_message_histories.dynamodb',
-        'langchain_community.chat_message_histories.elasticsearch',
-        'langchain_community.chat_message_histories.file',
-        'langchain_community.chat_message_histories.filestore',
-        'langchain_community.chat_message_histories.in_memory',
-        'langchain_community.chat_message_histories.momento',
-        'langchain_community.chat_message_histories.mongodb',
-        'langchain_community.chat_message_histories.neo4j',
-        'langchain_community.chat_message_histories.postgres',
-        'langchain_community.chat_message_histories.redis',
-        'langchain_community.chat_message_histories.rocksetdb',
-        'langchain_community.chat_message_histories.singlestoredb',
-        'langchain_community.chat_message_histories.sql',
-        'langchain_community.chat_message_histories.streamlit',
-        'langchain_community.chat_message_histories.tidb',
-        'langchain_community.chat_message_histories.upstash_redis',
-        'langchain_community.chat_message_histories.xata',
-        'langchain_community.chat_message_histories.zep'
-	],
+    ],
     hookspath=[],
     hooksconfig={},
-    cipher=block_cipher,
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
@@ -99,7 +59,7 @@ a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
               if not any(lib in src for lib in excluded_libs)]
 a.datas = [d for d in a.datas if not d[0].endswith('.env')]
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe_args = {
     'debug': False,
@@ -120,7 +80,6 @@ if platform.system() == 'Darwin':
     coll = COLLECT(
         exe,
         a.binaries,
-        a.zipfiles,
         a.datas,
         strip=False,
         upx=True,

@@ -1,0 +1,38 @@
+uuid: nt02a000-0000-4000-a000-000000000002
+name: GetTask
+config:
+  _TYPE: workflow
+  name: GetTask
+  avatar_path: :/resources/icon-tool-small.png
+  description: Get the full configuration of a scheduled task by its UUID. Returns the task config JSON.
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      _TYPE: code
+      name: Code block
+      language: Python
+      data: |
+        row = sql.get_results("SELECT name, config FROM tasks WHERE uuid = ?", (uuid,))
+        if not row:
+            return json.dumps({'error': f'Task with uuid {uuid} not found'})
+        name_val, config_str = row[0]
+        cfg = json.loads(config_str)
+        cfg['name'] = name_val
+        return json.dumps(cfg)
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params:
+  - name: uuid
+    description: The UUID of the task to retrieve
+    type: String
+    req: true
+folder_path: Tasks

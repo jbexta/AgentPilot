@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QMessageBox
 from typing_extensions import override
 
+from gui.gui_utils.helpers import record_page_load_error
 from gui.widgets.config_pages import ConfigPages
 
 from utils import sql
@@ -65,6 +66,7 @@ class Page_Settings(ConfigPages):
                 new_pages[module_name] = page
 
             except Exception as e:
+                record_page_load_error(module_name)
                 display_message(f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
         self.pages = new_pages

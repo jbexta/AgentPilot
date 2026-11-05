@@ -1,1 +1,0 @@
-# Daemons module for News Feed plugin

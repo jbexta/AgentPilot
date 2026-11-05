@@ -2,9 +2,9 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override
 
-from gui.util import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
 from gui.widgets.config_widget import ConfigWidget
-from utils.helpers import set_module_type
+from utils.helpers import format_llm_tools, set_module_type
 
 
 @set_module_type('Widgets')
@@ -54,6 +54,14 @@ class ConfigJoined(ConfigWidget):
         for widget in self.widgets:
             if hasattr(widget, 'load'):
                 widget.load()
+
+    @override
+    def get_agent_visualisation(self, refs):
+        parts = [format_llm_tools(self, refs), self.agent_visualisation()]
+        for widget in self.widgets:
+            if hasattr(widget, 'get_agent_visualisation'):
+                parts.append(widget.get_agent_visualisation(refs))
+        return '\n'.join(p for p in parts if p)
 
     @override
     def get_config(self):

@@ -4,7 +4,7 @@ import os
 import sys
 import yaml
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def get_application_path() -> str:
@@ -81,65 +81,57 @@ def get_application_path() -> str:
     # raise NotImplementedError(f"Unsupported platform: {sys.platform}")
 
 
-def get_all_baked_items(table_name: str) -> Dict[str, Dict[str, Any]]:
+def get_baked_dirs() -> List[Path]:
+    """The core baked directory followed by each plugin's baked directory.
+
+    In a frozen app the 'src' part is dropped, matching the `datas`
+    destinations in build.spec.
     """
-    Finds, reads, and parses all .json and .yaml/.yml files from a specified directory
-    within 'src/utils/baked/'.
+    if getattr(sys, 'frozen', False):
+        src_path = Path(sys._MEIPASS)
+    else:
+        src_path = Path(get_application_path()) / 'src'
+    return [
+        src_path / 'utils' / 'baked',
+        *sorted(src_path.glob('plugins/*/baked')),
+    ]
 
-    This function works correctly whether the application is running from source
-    or as a frozen executable created by PyInstaller.
 
-    Args:
-        table_name: The name of the directory inside 'src/utils/baked/' to scan for JSON and YAML files.
+def get_all_baked_items(table_name: str) -> Dict[Path, Dict[str, Any]]:
+    """
+    Finds, reads, and parses all .json and .yaml/.yml files in the
+    `<table_name>` folder of every baked directory (see get_baked_dirs).
 
     Returns:
         A dictionary where keys are file paths and values are parsed data objects (as dictionaries).
-
-    Raises:
-        FileNotFoundError: If the specified directory for the table_name does not exist.
+        Empty if no items have been baked for the table yet.
     """
-    is_frozen = getattr(sys, 'frozen', False)
-
-    if is_frozen:
-        # In a frozen app, data is in the _MEIPASS temp directory.
-        # The path is relative to what was defined in the .spec file's `datas` tuple.
-        # e.g., datas=[('src/utils/baked', 'utils/baked')]
-        base_path = Path(sys._MEIPASS)
-        # The 'src' part is dropped, so we use the destination path directly.
-        data_dir = base_path / 'utils' / 'baked' / table_name
-    else:
-        # In a development environment, use get_application_path to find project root.
-        base_path = Path(get_application_path())
-        # The path from project root includes 'src'.
-        data_dir = base_path / 'src' / 'utils' / 'baked' / table_name
-
-    if not data_dir.is_dir():
-        raise FileNotFoundError(
-            f"The data directory for table '{table_name}' was not found at expected path: {data_dir}"
-        )
-
     parsed_files = {}
-    
-    # Process JSON files
-    for file_path in data_dir.glob('*.json'):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                parsed_files[file_path] = json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"Warning: Could not parse {file_path}. Error: {e}")
-        except Exception as e:
-            print(f"Warning: An unexpected error occurred while reading {file_path}. Error: {e}")
-    
-    # Process YAML files (.yaml and .yml extensions)
-    for pattern in ['*.yaml', '*.yml']:
-        for file_path in data_dir.glob(pattern):
+    for baked_dir in get_baked_dirs():
+        data_dir = baked_dir / table_name
+        if not data_dir.is_dir():
+            continue
+
+        # Process JSON files
+        for file_path in data_dir.glob('*.json'):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
-                    parsed_files[file_path] = yaml.safe_load(f)
-            except yaml.YAMLError as e:
+                    parsed_files[file_path] = json.load(f)
+            except json.JSONDecodeError as e:
                 print(f"Warning: Could not parse {file_path}. Error: {e}")
             except Exception as e:
                 print(f"Warning: An unexpected error occurred while reading {file_path}. Error: {e}")
+
+        # Process YAML files (.yaml and .yml extensions)
+        for pattern in ['*.yaml', '*.yml']:
+            for file_path in data_dir.glob(pattern):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        parsed_files[file_path] = yaml.safe_load(f)
+                except yaml.YAMLError as e:
+                    print(f"Warning: Could not parse {file_path}. Error: {e}")
+                except Exception as e:
+                    print(f"Warning: An unexpected error occurred while reading {file_path}. Error: {e}")
 
     return parsed_files
 

@@ -1,0 +1,50 @@
+uuid: 1785d7af-c7b0-447c-8312-c71c16b3a8d1
+name: companies_house
+config:
+  _TYPE: workflow
+  name: companies_house
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Companies House Plugin (`src/plugins/companies_house`)
+
+        Keeps a local, searchable copy of the UK Companies House register.
+
+        ## 1. Manager (`managers/companies_house.py`)
+
+        `CompaniesHouseManager` refreshes the register from the monthly **Basic Company Data** bulk file, not the API, so lookups are local and unlimited.
+        *   The data (~5.7M rows) is kept in its **own SQLite file** in the data folder, so the app database stays small.
+        *   **Download:** finds the newest bulk file on the download page and streams it to a `.part` file, so an interrupted download is never mistaken for a complete one.
+        *   **Import:** builds the new database next to the live one and swaps it in when done.
+        *   **State:** the imported snapshot date and company count (`state` / `save_state`), plus the search page's last filters (`filters` / `save_filters`).
+        *   **Facets:** filter values (e.g. SIC codes: a company has up to four SIC code columns) are cached in a facets JSON file.
+        *   Running queries are tracked per kind so a newer search can interrupt an older one.
+
+        ## 2. Daemon (`daemons/companies_house.py`)
+
+        `CompaniesHouseDaemon` imports each new monthly bulk file when **Auto update** is on.
+
+        ## 3. Pages
+        *   `Page_CompanySearch` (`pages/company_search.py`): searches the local copy, using filters that accept several values (`CheckableComboBox`). The filters are saved for the next restart, results are paged, and a row opens the company.
+        *   `Page_CompaniesHouse_Settings` (`pages/companies_house.py`): Data folder, Auto update, current Snapshot, and an **Update now** button.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

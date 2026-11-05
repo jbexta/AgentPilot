@@ -18,61 +18,66 @@ class AgentSettings(ConfigTabs):
         }
 
     class Page_Chat_Messages(ConfigFields):
+        schema = [
+            {
+                'text': 'Model',
+                'type': 'model',
+                'model_kind': 'CHAT',
+                'popup_params': True,
+                'width': 200,
+                'default': '',
+                'row_key': 0,
+            },
+            {
+                'text': 'Display markdown',
+                'type': bool,
+                'default': True,
+                'row_key': 0,
+            },
+            {
+                'text': 'Max messages',
+                'type': int,
+                'minimum': 1,
+                'maximum': 99,
+                'default': 10,
+                'width': 60,
+                'has_toggle': True,
+                'row_key': 1,
+            },
+            {
+                'text': 'Max turns',
+                'type': int,
+                'minimum': 1,
+                'maximum': 99,
+                'default': 7,
+                'width': 60,
+                'has_toggle': True,
+                'row_key': 1,
+            },
+            {
+                'text': 'System message',
+                'key': 'sys_msg',
+                'type': str,
+                'num_lines': 12,
+                'default': '',
+                'stretch_x': True,
+                'stretch_y': True,
+                'wrap_text': True,
+                'highlighter': 'xml',
+                'fold_mode': 'xml',
+                'format_blocks': True,
+                'enhancement_key': 'system_message',
+                'label_position': 'top',
+            },
+        ]
+
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.conf_namespace = 'chat'
-            self.schema = [
-                {
-                    'text': 'Model',
-                    'type': 'model',
-                    'model_kind': 'CHAT',
-                    'popup_params': True,
-                    'width': 200,
-                    'default': '',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Display markdown',
-                    'type': bool,
-                    'default': True,
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Max messages',
-                    'type': int,
-                    'minimum': 1,
-                    'maximum': 99,
-                    'default': 10,
-                    'width': 60,
-                    'has_toggle': True,
-                    'row_key': 1,
-                },
-                {
-                    'text': 'Max turns',
-                    'type': int,
-                    'minimum': 1,
-                    'maximum': 99,
-                    'default': 7,
-                    'width': 60,
-                    'has_toggle': True,
-                    'row_key': 1,
-                },
-                {
-                    'text': 'System message',
-                    'key': 'sys_msg',
-                    'type': str,
-                    'num_lines': 12,
-                    'default': '',
-                    'stretch_x': True,
-                    'stretch_y': True,
-                    'wrap_text': True,
-                    'highlighter': 'xml',
-                    'fold_mode': 'xml',
-                    'format_blocks': True,
-                    'enhancement_key': 'system_message',
-                    'label_position': 'top',
-                },
-            ]
+            self.schema = [dict(f) for f in self.__class__.schema]
+
+    chat_bar_page = Page_Chat_Messages
+    chat_bar_keys = ('model',)
 
     class Page_Chat_Preload(ConfigJsonTree):
         def __init__(self, parent):

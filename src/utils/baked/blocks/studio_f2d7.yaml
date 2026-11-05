@@ -1,0 +1,53 @@
+uuid: f2d7d62c-647d-4306-8a49-16f436659b2a
+name: studio
+config:
+  _TYPE: workflow
+  name: studio
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Studio Plugin (`src/plugins/studio`)
+
+        Editors ("studios") for media files: video, image and text. Each studio's tools, effects and AI operations are separate modules, so other plugins can add their own.
+
+        ## 1. Module types (controllers)
+        *   `studios` → `studios/`: VideoStudio, ImageStudio, TextStudio (the finance plugin adds H5Studio).
+        *   `image_tools` → `tools/image/`: `CanvasTool` subclasses (Brush, Eraser, Fill, Eyedropper, Move). The canvas passes mouse events to the active tool.
+        *   `image_effects`, `audio_effects` → `effects/`: e.g. Greyscale, Pitch.
+        *   `audio_operations`, `video_operations`, `image_operations`, `text_operations`, `3d_operations` → `operations/`: AI operations that subclass `BaseOperation(studio, clips_to_modify)`, e.g. **Transcribe** (audio/video to SRT subtitles using an STT model).
+
+        ## 2. Studios
+        *   `VideoStudio` (`studios/video_studio.py`): a Kdenlive-like editor with a multi-track timeline (`TimelineView`/`TimelineScene`), a preview with movable/resizable/rotatable clips, playback driven by a master-clock worker, MoviePy decoding, a multi-clip `_AudioPlayer`, and render dialogs.
+            *   `MediaCollectionPanel`: a global library of scenes and characters stored on disk under `collections/<category>/<item>/`.
+            *   `StoryboardPanel`: the project's shot list, saved in the `.agpm` project file under `storyboard`.
+        *   `ImageStudio`: layer-based editor with blend modes, brush settings, a canvas, and layers and properties panels.
+        *   `TextStudio`: a code editor with line numbers, syntax highlighting, and search/replace.
+
+        ## 3. Undo (`actions/`)
+        Each studio has its own **in-memory** `UndoHistory`, modelled on `core.actions.base`. Actions hold live objects, so the history is never saved.
+        *   `LayerEditAction`: pixel or position change to a single layer.
+        *   `LayerStructureAction`: document-level changes (layer order, add/delete, properties). Rapid edits are merged via `merge_key`.
+
+        ## 4. Pages
+        `Page_Videos` (page_type `any`) is the VideoStudio as a page.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QSlider, QLabel, QSizePolicy,
 )
 
-from gui.util import CVBoxLayout
+from gui.gui_utils.layouts import CVBoxLayout
 
 _POPUP_MAX = 500
 
@@ -58,7 +58,7 @@ class VideoPreview(QWidget):
         self.video_widget.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.video_widget.setMinimumSize(0, 0)
-        self.video_widget.setStyleSheet("background-color: black;")
+        self.video_widget.setObjectName('videoPreviewSurface')
         self.video_widget.mousePressEvent = (
             lambda event: self._toggle_playback()
             if event.button() == Qt.LeftButton else None
@@ -151,4 +151,9 @@ class VideoPreview(QWidget):
     def cleanup(self):
         """Stop the player and release resources."""
         if self.media_player:
+            # stop() re-emits mediaStatusChanged(LoadedMedia); letting the
+            # handler call play() from inside stop() deadlocks the backend
+            self.media_player.mediaStatusChanged.disconnect(
+                self._on_media_status_changed)
             self.media_player.stop()
+            self.media_player.setSource(QUrl())

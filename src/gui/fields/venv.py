@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import QMessageBox, QInputDialog
+from PySide6.QtWidgets import QMessageBox
 
 from gui import system
 from gui.fields.combo import BaseCombo
-from gui.util import CHBoxLayout, IconButton
-from utils.helpers import display_message_box, block_signals, display_message
+from gui.gui_utils.layouts import CHBoxLayout
+from gui.gui_utils.icon_button import IconButton
+from utils.helpers import display_message_box, block_signals, display_message, get_text
 
 
 class VenvComboBox(BaseCombo):
@@ -84,7 +85,7 @@ class VenvComboBox(BaseCombo):
         key = self.itemData(self.currentIndex())
         if key == '<NEW>':
             dlg_title, dlg_prompt = ('Enter Name', 'Enter a name for the new virtual environment')
-            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+            text, ok = get_text(self, dlg_title, dlg_prompt)
             if not ok or not text:
                 self.reset_index()
                 return

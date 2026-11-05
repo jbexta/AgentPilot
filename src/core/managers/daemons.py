@@ -62,7 +62,6 @@ class DaemonManager:
         )
         self._tasks[daemon_name] = task
 
-        logger.info("Daemon %s started (task %r)", daemon_name, task)
         return True
 
     async def _run_daemon(self, daemon_name, daemon):  # : DaemonName, daemon: Daemon) -> None:
@@ -71,7 +70,7 @@ class DaemonManager:
 
         Ensures we always remove the daemon from bookkeeping when it finishes.
         """
-        logger.info("Starting daemon %s", daemon_name)
+        logger.info("Starting daemon: %s", daemon_name)
         try:
             await daemon.start()
         except asyncio.CancelledError:
@@ -109,14 +108,25 @@ class DaemonManager:
         logger.info("Stop signal sent to daemon %s", daemon_name)
         return True
 
-    def restart_daemon(self, daemon_name):  # : DaemonName) -> bool:
+    async def restart_daemon(self, daemon_name, timeout=5.0):  # : DaemonName) -> bool:
         """
-        Restart a daemon (best-effort stop then start).
+        Restart a daemon: stop it, wait for its task to finish (cancelling
+        it after `timeout` seconds), then start a fresh instance.
 
         Returns:
             True if start succeeded, False otherwise.
         """
+        task = self._tasks.get(daemon_name)
         self.stop_daemon(daemon_name)
+        if task is not None:
+            done, _ = await asyncio.wait({task}, timeout=timeout)
+            if not done:
+                logger.warning(
+                    "Daemon %s didn't stop within %ss, cancelling",
+                    daemon_name, timeout,
+                )
+                task.cancel()
+                await asyncio.wait({task})
         return self.start_daemon(daemon_name)
 
     def start_all_daemons(self):  #  -> None:
@@ -128,3 +138,8 @@ class DaemonManager:
         """Stop all currently running daemons."""
         for name in list(self._instances):
             self.stop_daemon(name)
+
+    def cancel_all_daemons(self) -> None:
+        """Cancel every running daemon task, interrupting any pending await."""
+        for task in list(self._tasks.values()):
+            task.cancel()

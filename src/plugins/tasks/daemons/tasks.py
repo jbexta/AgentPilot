@@ -1,20 +1,24 @@
 import asyncio
 import json
+import logging
 import re
 import uuid
-from typing import Optional, Dict, Set
+from typing import Dict
 from itertools import islice
 from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QMessageBox
 from dateutil.rrule import rrulestr
+from dateutil.tz import tzlocal
 
 from utils import sql
-from utils.helpers import receive_workflow, display_message
+from utils.helpers import display_message
 from utils.sql import define_table
 
 define_table('tasks')
+
+logger = logging.getLogger(__name__)
 
 
 class TasksDaemon:
@@ -22,28 +26,30 @@ class TasksDaemon:
         self.system = system
         self.task_names = {}
         self.task_configs = {}
-        self.scheduled_tasks: Dict[str, asyncio.Task] = {}
-        self._running_task_ids: Set[str] = set()
+        # One long-running loop per task uuid. The loop owns its own
+        # scheduling — each iteration sleeps until the next occurrence,
+        # fires, then repeats. This avoids the cancel-and-reschedule race
+        # that double-fired when an external load() interleaved with
+        # on_task_finished.
+        self._task_loops: Dict[str, asyncio.Task] = {}
+        self._loop_rrules: Dict[str, str] = {}
         self._running = False
-        self._task_group: Optional[asyncio.TaskGroup] = None
 
     async def start(self):
         """Start the daemon - load tasks and schedule them"""
         self._running = True
-        async with asyncio.TaskGroup() as tg:
-            self._task_group = tg
-            await self.load()
-            # Keep daemon running
-            while self._running:
-                await asyncio.sleep(1)
+        await self.load()
+        while self._running:
+            await asyncio.sleep(1)
 
     def stop(self):
-        """Stop the daemon and cancel all scheduled tasks"""
+        """Stop the daemon and cancel all running task loops"""
         self._running = False
-        for task_id, task in self.scheduled_tasks.items():
+        for task in self._task_loops.values():
             if not task.done():
                 task.cancel()
-        self.scheduled_tasks.clear()
+        self._task_loops.clear()
+        self._loop_rrules.clear()
 
     async def load(self):
         self.task_names = sql.get_results("""
@@ -51,96 +57,109 @@ class TasksDaemon:
                 uuid,
                 name
             FROM tasks
-            WHERE kind = 'SCHEDULED'""", return_type='dict')
+            WHERE kind = 'SCHEDULED' OR kind LIKE 'PROJECT:%'""", return_type='dict')
 
         self.task_configs = sql.get_results("""
             SELECT
                 uuid,
                 config
             FROM tasks
-            WHERE kind = 'SCHEDULED'""", return_type='dict')
+            WHERE kind = 'SCHEDULED' OR kind LIKE 'PROJECT:%'""", return_type='dict')
         self.task_configs = {k: json.loads(v) for k, v in self.task_configs.items()}
 
-        await self.schedule_upcoming_tasks()
+        self._reconcile_loops()
 
-    async def schedule_upcoming_tasks(self):
-        print('schedule_upcoming_tasks')
-        now = datetime.now(timezone.utc)
+    def _reconcile_loops(self):
+        """Start/stop/restart per-task loops to match current configs.
 
+        Only tasks whose rrule changed get cancelled and restarted; unchanged
+        tasks keep their running loop untouched, which prevents load() from
+        perturbing a task that's about to fire.
+        """
+        active_rrules = {}
         for task_id, config in self.task_configs.items():
-            rrule_str = config.get('rrule', None)
-            if not rrule_str or rrule_str == '':
+            rrule_str = config.get('rrule') or ''
+            if not rrule_str:
                 continue
-
-            if task_id in self._running_task_ids:
-                continue
-
-            # Strip <answer> tags if present (AI block output artifact)
             match = re.search(r'<answer>(.*?)</answer>', rrule_str, re.DOTALL)
             if match:
                 rrule_str = match.group(1).strip()
+            active_rrules[task_id] = rrule_str
 
-            try:
-                rule = rrulestr(rrule_str)
-            except Exception as e:
-                print(f"Error parsing rrule for task {task_id}: {e}")
+        # Stop loops for removed tasks or tasks whose rrule changed
+        for task_id in list(self._task_loops.keys()):
+            loop_task = self._task_loops[task_id]
+            if task_id not in active_rrules:
+                if not loop_task.done():
+                    loop_task.cancel()
+                del self._task_loops[task_id]
+                self._loop_rrules.pop(task_id, None)
                 continue
+            if self._loop_rrules.get(task_id) != active_rrules[task_id]:
+                if not loop_task.done():
+                    loop_task.cancel()
+                del self._task_loops[task_id]
+                self._loop_rrules.pop(task_id, None)
 
+        # Start loops for new or restarted tasks
+        for task_id, rrule_str in active_rrules.items():
+            if task_id in self._task_loops and not self._task_loops[task_id].done():
+                continue
+            self._task_loops[task_id] = asyncio.create_task(
+                self._task_loop(task_id, rrule_str)
+            )
+            self._loop_rrules[task_id] = rrule_str
+
+        logger.info('Active task loops: %s', list(self._task_loops))
+
+    async def _task_loop(self, task_uuid, rrule_str):
+        """Run a single task on its rrule schedule until cancelled."""
+        try:
+            rule = rrulestr(rrule_str)
+        except Exception as e:
+            logger.error("Error parsing rrule for task %s: %s", task_uuid, e)
+            return
+        if rule._dtstart.tzinfo is None:
+            rule = rule.replace(dtstart=rule._dtstart.replace(tzinfo=tzlocal()))
+
+        while self._running:
+            now = datetime.now(timezone.utc)
             next_occurrence = next(rule.xafter(now, inc=False, count=1), None)
             if not next_occurrence:
-                continue
-
-            # Cancel existing task if it exists
-            if task_id in self.scheduled_tasks:
-                if not self.scheduled_tasks[task_id].done():
-                    self.scheduled_tasks[task_id].cancel()
-
-            delay = max((next_occurrence - now).total_seconds(), 0)
-            task = asyncio.create_task(self.run_task_with_delay(task_id, delay))
-            self.scheduled_tasks[task_id] = task
-
-            print(f'All tasks scheduled: {list(self.scheduled_tasks.keys())}')
-
-    async def run_task_with_delay(self, task_uuid, delay):
-        try:
-            await asyncio.sleep(delay)
+                return
+            try:
+                # asyncio.sleep can wake up slightly before the target time
+                # (observed ~40ms early). If we don't re-check, the next
+                # xafter() call will return the SAME occurrence (because
+                # now < next_occurrence still) and fire it again.
+                while self._running:
+                    remaining = (next_occurrence
+                                 - datetime.now(timezone.utc)).total_seconds()
+                    if remaining <= 0:
+                        break
+                    await asyncio.sleep(remaining)
+            except asyncio.CancelledError:
+                return
             if not self._running:
                 return
-            self._running_task_ids.add(task_uuid)
             try:
                 result = await self.run_task_async(task_uuid)
-            finally:
-                self._running_task_ids.discard(task_uuid)
-            await self.on_task_finished(task_uuid, result)
-        except asyncio.CancelledError:
-            self._running_task_ids.discard(task_uuid)
-            return
-        except Exception as e:
-            self._running_task_ids.discard(task_uuid)
-            await self.on_task_error(str(e))
-
-    async def on_task_finished(self, task_uuid, result):
-        print(f'Task {task_uuid} completed with result: {result}')
-        await self.schedule_upcoming_tasks()
+                logger.info('Task %s completed with result: %s', task_uuid, result)
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                await self.on_task_error(str(e))
 
     async def on_task_error(self, error):
-        print(f'Task error: {error}')
+        logger.error('Task error: %s', error)
         display_message(
             message=f'Task error: {error}',
             icon=QMessageBox.Warning,
         )
 
-    async def receive_task(self, task_uuid, params=None):
-        wf_config = self.task_configs[task_uuid]
-        task_name = self.task_names.get(task_uuid, 'Untitled task')
-        async for key, chunk in receive_workflow(wf_config, kind='TASK', params=params, chat_title=task_name, main=self.system._main_gui):
-            yield key, chunk
-
-    async def run_task_async(self, task_uuid, params=None):
-        response = ''
-        async for key, chunk in self.receive_task(task_uuid, params=params):
-            response += chunk
-        return response
+    async def run_task_async(self, task_uuid):
+        task_id = sql.get_scalar("SELECT id FROM tasks WHERE uuid = ?", (task_uuid,))
+        return await self.system.tasks.run_scheduled(task_id)
 
 
     def list_tasks_per_day(self):
@@ -160,8 +179,10 @@ class TasksDaemon:
             try:
                 rule = rrulestr(rrule_str)
             except Exception as e:
-                print(f"Error parsing rrule for task {task_id}: {e}")
+                logger.error("Error parsing rrule for task %s: %s", task_id, e)
                 continue
+            if rule._dtstart.tzinfo is None:
+                rule = rule.replace(dtstart=rule._dtstart.replace(tzinfo=tzlocal()))
 
             try:
                 max_occurrences = 10000
@@ -179,7 +200,7 @@ class TasksDaemon:
                     date_occurrences[date].add(task_id)
 
             except Exception as e:
-                print(f"Error generating occurrences for task {task_id}: {e}")
+                logger.error("Error generating occurrences for task %s: %s", task_id, e)
                 continue
 
         return dict(sorted(date_occurrences.items()))

@@ -1,0 +1,46 @@
+uuid: 2d2b47eb-9243-46e3-938a-d7745f8e7965
+name: slopify
+config:
+  _TYPE: workflow
+  name: slopify
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Slopify Plugin (`src/plugins/slopify`)
+
+        An AI music generator and player. You define artists, and it keeps generating tracks for them, queues them and plays them.
+
+        ## Page (`pages/slopify.py`)
+        `Page_Slopify` (page_type `any`, `propagate_config = False` so Settings never saves a stale copy of it) has:
+        *   **Artists** side tab (`ArtistCollection` + `ArtistConfigWidget`): each artist has **Info** (name and other params) and a **Generation** workflow config.
+        *   **Playlists** sidebar and track list, the **Track queue**, and **Player controls** (QMediaPlayer).
+
+        ## Generation flow
+        1.  A timer picks an artist (`_pick_artist_id`) and adds a pending track.
+        2.  With the queue's *cover ratio* probability, it picks a real song by the artist (name, description, lyrics) from `slopify_artist_songs`, which is synced from **Genius** (`sync_artist_songs`, needs `GENIUS_API_TOKEN`).
+        3.  It runs the artist's Generation workflow (kind `SLOPIFY`) with the params `artist`, `song_name`, `song_desc`, `lyrics`.
+        4.  The workflow returns either a `filepath` (the track is done) or a `request_id`, which is then polled until the audio is ready to download.
+
+        Tables: `slopify_artists`, `slopify_artist_songs`, `slopify_tracks`, `slopify_pending`, `slopify_playlists`, `slopify_playlist_tracks`.
+        Related blocks: `song_gen`, `lyrics_gen`, `prompt_gen_sonauto`.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

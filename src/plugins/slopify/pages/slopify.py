@@ -1,5 +1,5 @@
 import asyncio
-from functools import partial
+from functools import cached_property, partial
 import json
 import math
 import os
@@ -9,12 +9,13 @@ import lyricsgenius
 import qasync
 
 from PySide6.QtWidgets import (
-    QComboBox, QInputDialog, QMessageBox, QSplitter,
-    QSizePolicy, QStyle, QWidget, QPushButton, QSlider, QLabel,
+    QComboBox, QListWidget, QListWidgetItem,
+    QMessageBox, QSplitter, QSizePolicy, QStackedWidget,
+    QStyle, QWidget, QPushButton, QSlider, QLabel,
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PySide6.QtCore import QTimer, QUrl, Qt
-from PySide6.QtGui import QColor, QIcon
+from PySide6.QtCore import QSize, QTimer, QUrl, Qt
+from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPixmap
 
 from gui.widgets.config_widget import ConfigWidget
 from gui.widgets.config_table import ConfigTable
@@ -22,15 +23,21 @@ from gui.widgets.config_tabs import ConfigTabs
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_side_tabs import ConfigSideTabs
-from gui.util import CVBoxLayout, CHBoxLayout, IconButton, CustomMenu, find_main
+from gui.gui_utils.helpers import find_main, set_style_property
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.custom_menu import CustomMenu
 from utils import sql
 from utils.filesystem import get_application_path
 from utils.helpers import (
-    block_signals, compute_workflow_async, display_message,
-    display_message_box, download_url_to_file,
-    merge_config_into_workflow_config,
+    block_signals, display_message,
+    display_message_box, get_text,
     set_module_type, path_to_pixmap, try_parse_json,
 )
+from plugins.workflows.utils.workflows import (
+    compute_workflow_async, merge_config_into_workflow_config,
+)
+from plugins.workflows.utils.download import download_url_to_file
 from plugins.workflows.widgets.chat_widget import ChattableWorkflowWidget
 
 
@@ -38,6 +45,27 @@ def _fmt(ms):
     """Format milliseconds as M:SS."""
     s = max(0, ms // 1000)
     return f'{s // 60}:{s % 60:02d}'
+
+
+def _effective_generation_config(gen_config):
+    """Return the workflow config to actually run for a generation.
+
+    Strips the Generation-tab header keys (``use_default_workflow`` /
+    ``default_workflow``). When 'Use' is checked and a block is picked,
+    returns that block's config instead of the artist's embedded
+    workflow; otherwise returns the embedded workflow config.
+    """
+    gen_config = dict(gen_config or {})
+    use = gen_config.pop('use_default_workflow', False)
+    picked = gen_config.pop('default_workflow', '')
+    if use and picked:
+        from gui import system
+        name = picked.rsplit(':', 2)[0] \
+            .replace('-', '_').replace(' ', '_')
+        block_cfg = system.manager.blocks.get(name)
+        if block_cfg:
+            return dict(block_cfg)
+    return gen_config
 
 
 def sync_artist_songs(artist_id, artist_name):
@@ -97,6 +125,7 @@ class CustomSlider(QSlider):
         self.setOrientation(Qt.Horizontal)
         self._dragging = False
         self.seek_on_release = seek_on_release
+        self.setProperty('class', 'slopify-slider')
         # call leave event to hide the slider
         self.leaveEvent(None)
 
@@ -139,58 +168,11 @@ class CustomSlider(QSlider):
 
     def enterEvent(self, event):
         super().enterEvent(event)
+        set_style_property(self, 'hovered', True)
 
-        from gui.style import TEXT_COLOR
-        from utils.helpers import apply_alpha_to_hex
-        self.setStyleSheet(f"""
-            QSlider::groove:horizontal {{
-                background: transparent;
-                height: 4px;
-                border: none;
-                border-radius: 2px;
-            }}
-            QSlider::handle:horizontal {{
-                background: {TEXT_COLOR};
-                width: 12px;
-                height: 12px;
-                margin: -4px 0;
-                border-radius: 6px;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: #1db954;
-                border-radius: 2px;
-            }}
-            QSlider::add-page:horizontal {{
-                background: {apply_alpha_to_hex(TEXT_COLOR, 0.3)};
-                border-radius: 2px;
-            }}
-        """)
-    
     def leaveEvent(self, event):
         super().leaveEvent(event)
-        
-        from gui.style import TEXT_COLOR
-        from utils.helpers import apply_alpha_to_hex
-        self.setStyleSheet(f"""
-            QSlider::groove:horizontal {{
-                background: transparent;
-                height: 4px;
-                border: none;
-                border-radius: 2px;
-            }}
-            QSlider::handle:horizontal {{
-                background: transparent;
-                border: none;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: {TEXT_COLOR};
-                border-radius: 2px;
-            }}
-            QSlider::add-page:horizontal {{
-                background: {apply_alpha_to_hex(TEXT_COLOR, 0.3)};
-                border-radius: 2px;
-            }}
-        """)
+        set_style_property(self, 'hovered', False)
 
 
 @set_module_type('Pages')
@@ -203,11 +185,11 @@ class Page_Slopify(ConfigWidget):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
+        # Nothing here lives in app_config; propagating made Settings save
+        # this page's stale copy of it over other pages' edits.
+        self.propagate_config = False
         self.main = find_main()
 
-        self.media_player = QMediaPlayer()
-        self.audio_output = QAudioOutput()
-        self.media_player.setAudioOutput(self.audio_output)
         # self.audio_output.setVolume(0.5)
 
         self.current_track_index = -1
@@ -226,16 +208,25 @@ class Page_Slopify(ConfigWidget):
         self.artist_config = self.ArtistConfigWidget(parent=self)
         self.artist_collection = self.ArtistCollection(parent=self)
         self.playlist_track_list = self.PlaylistTrackList(parent=self)
-        self.playlist_collection = self.PlaylistCollection(parent=self)
+        self.playlist_sidebar = self.PlaylistSidebar(parent=self)
         self.side_tabs = ConfigSideTabs(
             parent=self,
             pages={
                 'Artists': self.artist_collection,
-                'Playlists': self.playlist_collection,
             },
         )
         self.track_queue = self.TrackQueue(parent=self)
         self.player_controls = self.PlayerControls(parent=self)
+
+        self.content_stack = QStackedWidget()
+        self.content_stack.addWidget(self.track_queue)
+        self.content_stack.addWidget(self.playlist_track_list)
+
+        self.track_splitter = QSplitter(Qt.Horizontal)
+        self.track_splitter.setChildrenCollapsible(False)
+        self.track_splitter.addWidget(self.playlist_sidebar)
+        self.track_splitter.addWidget(self.content_stack)
+        self.track_splitter.setSizes([200, 600])
 
         self.layout = CVBoxLayout(self)
         self.page_splitter = QSplitter(Qt.Vertical)
@@ -243,40 +234,40 @@ class Page_Slopify(ConfigWidget):
             QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.page_splitter.setChildrenCollapsible(False)
         self.page_splitter.addWidget(self.side_tabs)
-        self.page_splitter.addWidget(self.track_queue)
+        self.page_splitter.addWidget(self.track_splitter)
         self.page_splitter.setSizes([300, 400])
         self.layout.addWidget(self.page_splitter, 1)
         self.layout.addWidget(self.player_controls)
 
-        self.media_player.positionChanged.connect(
+    @cached_property
+    def media_player(self):
+        media_player = QMediaPlayer()
+        media_player.setAudioOutput(QAudioOutput(media_player))
+        media_player.positionChanged.connect(
             self.player_controls.on_position_changed)
-        self.media_player.durationChanged.connect(
+        media_player.durationChanged.connect(
             self.player_controls.on_duration_changed)
-        self.media_player.durationChanged.connect(self._update_track_duration)
-        self.media_player.mediaStatusChanged.connect(
+        media_player.durationChanged.connect(self._update_track_duration)
+        media_player.mediaStatusChanged.connect(
             self._on_media_status_changed)
+        return media_player
+
+    @property
+    def audio_output(self):
+        return self.media_player.audioOutput()
 
     def build_schema(self):
         super().build_schema()
         self.side_tabs.build_schema()
         self.track_queue.build_schema()
         self.artists_section = self.side_tabs.sections.get('Artists')
-        self.playlists_section = self.side_tabs.sections.get(
-            'Playlists')
-
-        def _any_section_expanded():
-            """Check if at least one side-tab section is expanded."""
-            for sec in (self.artists_section, self.playlists_section):
-                if sec and sec.is_expanded:
-                    return True
-            return False
 
         if self.artists_section:
             original_artists_toggle = self.artists_section.toggle
 
             def patched_artists_toggle():
                 original_artists_toggle()
-                if not _any_section_expanded():
+                if not self.artists_section.is_expanded:
                     QTimer.singleShot(
                         10, lambda: self.page_splitter.setSizes(
                             [0, 1000]))
@@ -285,26 +276,13 @@ class Page_Slopify(ConfigWidget):
 
             self.artists_section.toggle = patched_artists_toggle
 
-        if self.playlists_section:
-            original_playlists_toggle = self.playlists_section.toggle
-
-            def patched_playlists_toggle():
-                original_playlists_toggle()
-                if not _any_section_expanded():
-                    QTimer.singleShot(
-                        10, lambda: self.page_splitter.setSizes(
-                            [0, 1000]))
-                else:
-                    self.page_splitter.setSizes([500, 500])
-
-            self.playlists_section.toggle = patched_playlists_toggle
-
     def load(self):
         """Ensure DB tables exist, create/load workflow, load sub-widgets."""
         sql.execute("""
             CREATE TABLE IF NOT EXISTS slopify_tracks (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 context_id  INTEGER,
+                artist_id   INTEGER,
                 filepath    TEXT DEFAULT '',
                 title       TEXT DEFAULT '',
                 duration_ms INTEGER DEFAULT 0,
@@ -313,9 +291,10 @@ class Page_Slopify(ConfigWidget):
         """)
         sql.execute("""
             CREATE TABLE IF NOT EXISTS slopify_artists (
-                id     INTEGER PRIMARY KEY AUTOINCREMENT,
-                name   TEXT DEFAULT '',
-                config TEXT DEFAULT '{}'
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                name    TEXT DEFAULT '',
+                config  TEXT DEFAULT '{}',
+                b_prior INTEGER DEFAULT 0
             )
         """)
         sql.execute("""
@@ -352,7 +331,7 @@ class Page_Slopify(ConfigWidget):
         """)
 
         self.artist_collection.load()
-        self.playlist_collection.load()
+        self.playlist_sidebar.load()
         self.track_queue.load()
         self._start_polling()
 
@@ -380,6 +359,16 @@ class Page_Slopify(ConfigWidget):
             self.artist_collection.load()
         self.track_queue.load()
         self._refresh_now_playing_metadata()
+
+    def show_all_songs(self):
+        """Show the full track queue (All Songs view)."""
+        self.content_stack.setCurrentWidget(self.track_queue)
+
+    def show_playlist(self, playlist_id):
+        """Show tracks for the selected playlist."""
+        self.playlist_track_list.playlist_id = playlist_id
+        self.playlist_track_list.load()
+        self.content_stack.setCurrentWidget(self.playlist_track_list)
 
     def _refresh_now_playing_metadata(self):
         """Refresh now-playing title/artist/avatar from DB for current track."""
@@ -566,15 +555,19 @@ class Page_Slopify(ConfigWidget):
             return
 
         full_config = self._load_artist_config(artist_id)
-        config = full_config['Generation']
+        config = _effective_generation_config(full_config['Generation'])
         params = full_config.get('Info', {})
-        if 'name' in params:
-            params['artist'] = params['name']
+        params['artist'] = params.get('name') or sql.get_scalar(
+            "SELECT name FROM slopify_artists WHERE id = ?",
+            (artist_id,)) or ''
 
         pending_id = self._add_pending_track(artist_id)
 
         try:
             title = f'{params.get("artist", "")} - Untitled'
+            params['song_name'] = ''
+            params['song_desc'] = ''
+            params['lyrics'] = ''
             cover_ratio = self.track_queue.cover_ratio_field.get_value() / 100
             if random.random() < cover_ratio:
                 song_name, song_description, song_lyrics = self._get_random_song(artist_id, params.get('artist', ''))
@@ -947,13 +940,15 @@ class Page_Slopify(ConfigWidget):
             self.songs_tab = self.SongsTab(parent=parent)
             self.chattable_workflow = self.SlopifyChattableWorkflow(
                 parent=parent)
+            self.generation_tab = self.GenerationTab(
+                parent=parent, workflow=self.chattable_workflow)
 
             super().__init__(
                 parent=parent,
                 pages={
                     'Info': self.info_tab,
                     'Songs': self.songs_tab,
-                    'Generation': self.chattable_workflow,
+                    'Generation': self.generation_tab,
                 },
             )
 
@@ -967,7 +962,7 @@ class Page_Slopify(ConfigWidget):
                 config = {'Info': {}, 'Generation': config}
             config = config or {'Info': {}, 'Generation': {}}
             self.info_tab.load_config(config.get('Info', {}))
-            self.chattable_workflow.workflow_settings.load_config(
+            self.generation_tab.load_config(
                 config.get('Generation', {}))
             # Set artist_id for songs tab
             p = self.parent
@@ -981,14 +976,14 @@ class Page_Slopify(ConfigWidget):
             """Return config nested under tab-name keys."""
             return {
                 'Info': self.info_tab.get_config(),
-                'Generation': self.chattable_workflow.get_config(),
+                'Generation': self.generation_tab.get_config(),
             }
 
         def load(self):
             """Load all tabs, not just the current one."""
             self.info_tab.load()
             self.songs_tab.load()
-            self.chattable_workflow.load()
+            self.generation_tab.load()
 
         class SongsTab(ConfigTable):
             """Artist songs synced from Genius, with lyrics config."""
@@ -1038,6 +1033,7 @@ class Page_Slopify(ConfigWidget):
                             },
                         ],
                     )
+                    self.propagate_config = True
 
             @qasync.asyncSlot()
             async def sync_songs(self):
@@ -1062,7 +1058,7 @@ class Page_Slopify(ConfigWidget):
                     return
                 self.load()
                 display_message(
-                    message=f'Synced {len(songs)} songs')
+                    message=f'Synced {count} songs')
 
         class SlopifyChattableWorkflow(ChattableWorkflowWidget):
             """Chattable workflow for Slopify artist generation.
@@ -1072,6 +1068,8 @@ class Page_Slopify(ConfigWidget):
             creates a context on send, and extracts audio results
             after each manual run to push into the track queue.
             """
+
+            stretch = 1
 
             def __init__(self, parent, **kwargs):
                 super().__init__(parent=parent, **kwargs)
@@ -1128,7 +1126,8 @@ class Page_Slopify(ConfigWidget):
 
                 artist_config = p.artist_config
                 info_params = artist_config.info_tab.get_config()
-                gen_config = self.workflow_settings.get_config()
+                gen_config = _effective_generation_config(
+                    artist_config.generation_tab.get_config())
 
                 # Lazily create a context + workflow
                 self.new_context(config=gen_config, kind='SLOPIFY')
@@ -1203,6 +1202,88 @@ class Page_Slopify(ConfigWidget):
                     result_dict['title'] = title
                     p._set_track_request_data(
                         pending_id, result_dict)
+
+        class GenerationTab(ConfigJoined):
+            """Generation config: a 'use default workflow' header above
+            the artist's embedded workflow editor.
+
+            When the header's 'Use' box is checked and a block is picked,
+            generation runs that block instead of the embedded workflow
+            (see _effective_generation_config), and the editor below is
+            disabled.
+            """
+
+            def __init__(self, parent, workflow):
+                super().__init__(parent=parent)
+                self.chattable_workflow = workflow
+                self.header = self.GenerationHeader(parent=self)
+                self.widgets = [self.header, self.chattable_workflow]
+
+            class GenerationHeader(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(
+                        parent=parent,
+                        schema=[
+                            {
+                                'text': 'Use',
+                                'key': 'use_default_workflow',
+                                'type': bool,
+                                'default': False,
+                                'row_key': 0,
+                            },
+                            {
+                                'text': 'Default generation workflow',
+                                'key': 'default_workflow',
+                                'type': 'entity',
+                                'entity_table': 'blocks',
+                                'stretch': True,
+                                'row_key': 0,
+                            },
+                        ],
+                    )
+                    # Ensure field changes always reach GenerationTab
+                    # (save + editor grey-out), regardless of ancestor
+                    # propagation defaults.
+                    self.propagate_config = True
+
+            def load_config(self, json_config=None):
+                gen_cfg = dict(json_config or {})
+                self.header.load_config(gen_cfg)
+                wf_cfg = {
+                    k: v for k, v in gen_cfg.items()
+                    if k not in ('use_default_workflow',
+                                 'default_workflow')
+                }
+                self.chattable_workflow.load_config(wf_cfg)
+
+            def get_config(self):
+                config = {}
+                config.update(self.header.get_config())
+                config.update(self.chattable_workflow.get_config())
+                return config
+
+            def load(self):
+                super().load()
+                self._sync_editor_enabled()
+
+            def update_config(self):
+                """Route header-field changes through Page_Slopify save
+                (the embedded workflow uses a custom save path that
+                bypasses default propagation)."""
+                p = self.parent
+                while p and not isinstance(p, Page_Slopify):
+                    p = getattr(p, 'parent', None)
+                if p:
+                    p.save_config()
+                self._sync_editor_enabled()
+
+            def _sync_editor_enabled(self):
+                """Grey out the embedded workflow editor when the picked
+                default workflow is in use."""
+                use = bool(self.header.get_config().get(
+                    'use_default_workflow'))
+                self.chattable_workflow.workflow_settings.setEnabled(
+                    not use)
 
         class InfoTab(ConfigJoined):
             """Artist metadata fields grouped into top section + detail tabs."""
@@ -1641,7 +1722,7 @@ class Page_Slopify(ConfigWidget):
                 layout_type='horizontal',
                 config_widget=parent.artist_config,
                 show_table_buttons=True,
-                extra_tree_buttons=[
+                extra_buttons=[
                     {
                         'text': 'Priority',
                         'icon_path': ':/resources/icon-pin-on.png',
@@ -1692,7 +1773,7 @@ class Page_Slopify(ConfigWidget):
             self.parent.artist_config.load()
 
         def add_item(self):
-            name, ok = QInputDialog.getText(
+            name, ok = get_text(
                 self, 'New Artist', 'Artist name:')
             if not ok or not name.strip():
                 return
@@ -1854,40 +1935,117 @@ class Page_Slopify(ConfigWidget):
             )
             self.load()
 
-    class PlaylistCollection(ConfigTable):
-        """List of user playlists."""
+    class PlaylistSidebar(QWidget):
+        """Spotify-style sidebar: icon + name for each playlist."""
+
+        _PALETTE = [
+            '#1db954', '#e91e63', '#9c27b0', '#3f51b5',
+            '#00bcd4', '#ff5722', '#795548', '#607d8b',
+        ]
 
         def __init__(self, parent):
-            super().__init__(
-                parent=parent,
-                schema=[
-                    {'text': 'ID', 'key': 'id', 'visible': False},
-                    {
-                        'text': 'Playlists', 'key': 'name',
-                        'stretch': True,
-                    },
-                ],
-                layout_type='horizontal',
-                config_widget=parent.playlist_track_list,
-                show_table_buttons=True,
+            super().__init__(parent)
+            self.parent = parent
+
+            self.layout = CVBoxLayout(self)
+
+            header_row = CHBoxLayout()
+            header_lbl = QLabel('Your Library')
+            header_lbl.setObjectName('slopifyLibraryHeader')
+            self.btn_add = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-new.png',
+                size=20,
+                tooltip='New Playlist',
+                target=self._add_playlist,
             )
-            self.table.horizontalHeader().setVisible(False)
+            header_row.addWidget(header_lbl)
+            header_row.addStretch(1)
+            header_row.addWidget(self.btn_add)
+
+            self.list_widget = QListWidget()
+            self.list_widget.setFrameShape(QListWidget.NoFrame)
+            self.list_widget.setIconSize(QSize(44, 44))
+            self.list_widget.setSpacing(1)
+            self.list_widget.setObjectName('slopifyPlaylists')
+            self.list_widget.setContextMenuPolicy(
+                Qt.CustomContextMenu)
+            self.list_widget.customContextMenuRequested.connect(
+                self._on_context_menu)
+            self.list_widget.currentRowChanged.connect(
+                self._on_row_changed)
+
+            self.layout.addLayout(header_row)
+            self.layout.addWidget(self.list_widget)
+
+        def _playlist_icon(self, name):
+            """Colored rounded-square icon derived from the name."""
+            color = self._PALETTE[hash(name) % len(self._PALETTE)]
+            size = 44
+            pix = QPixmap(size, size)
+            pix.fill(Qt.transparent)
+            painter = QPainter(pix)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setBrush(QBrush(QColor(color)))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(0, 0, size, size, 6, 6)
+            painter.end()
+            return QIcon(pix)
 
         def load(self):
+            """Repopulate the sidebar from DB."""
+            current_row = self.list_widget.currentRow()
+            self.list_widget.blockSignals(True)
+            self.list_widget.clear()
+
+            all_item = QListWidgetItem(
+                QIcon(':/resources/icon-audio.png'), 'All Songs')
+            all_item.setData(Qt.UserRole, None)
+            self.list_widget.addItem(all_item)
+
             rows = sql.get_results(
                 "SELECT id, name FROM slopify_playlists ORDER BY id",
             )
-            self.table.load(rows or [], schema=self.schema)
+            for pid, name in (rows or []):
+                item = QListWidgetItem(
+                    self._playlist_icon(name), name)
+                item.setData(Qt.UserRole, pid)
+                self.list_widget.addItem(item)
 
-        def on_item_selected(self):
-            playlist_id = self.get_selected_item_id()
-            if playlist_id is None:
+            self.list_widget.blockSignals(False)
+            target = max(
+                0, min(current_row, self.list_widget.count() - 1))
+            self.list_widget.setCurrentRow(target)
+
+        def _on_row_changed(self, row):
+            if row < 0:
                 return
-            self.parent.playlist_track_list.playlist_id = playlist_id
-            self.parent.playlist_track_list.load()
+            item = self.list_widget.item(row)
+            playlist_id = item.data(Qt.UserRole)
+            if playlist_id is None:
+                self.parent.show_all_songs()
+            else:
+                self.parent.show_playlist(playlist_id)
 
-        def add_item(self):
-            name, ok = QInputDialog.getText(
+        def _on_context_menu(self, pos):
+            item = self.list_widget.itemAt(pos)
+            if not item:
+                return
+            playlist_id = item.data(Qt.UserRole)
+            if playlist_id is None:
+                return  # No context menu for "All Songs"
+            menu = CustomMenu(self)
+            menu.schema = [
+                {
+                    'text': 'Delete Playlist',
+                    'target': partial(
+                        self._delete_playlist, playlist_id),
+                },
+            ]
+            menu.show_popup_menu()
+
+        def _add_playlist(self):
+            name, ok = get_text(
                 self, 'New Playlist', 'Playlist name:')
             if not ok or not name.strip():
                 return
@@ -1897,10 +2055,7 @@ class Page_Slopify(ConfigWidget):
             )
             self.load()
 
-        def delete_item(self):
-            playlist_id = self.get_selected_item_id()
-            if playlist_id is None:
-                return
+        def _delete_playlist(self, playlist_id):
             sql.execute(
                 "DELETE FROM slopify_playlist_tracks"
                 " WHERE playlist_id = ?",
@@ -1911,7 +2066,6 @@ class Page_Slopify(ConfigWidget):
                 (playlist_id,),
             )
             self.parent.playlist_track_list.playlist_id = None
-            self.parent.playlist_track_list.load()
             self.load()
 
     class PlayerControls(QWidget):
@@ -1921,9 +2075,6 @@ class Page_Slopify(ConfigWidget):
             super().__init__(parent)
             self.parent = parent
             self.setFixedHeight(80)
-
-            from gui.style import TEXT_COLOR
-            from utils.helpers import apply_alpha_to_hex
 
             self.layout = CHBoxLayout(self)
 
@@ -1956,11 +2107,10 @@ class Page_Slopify(ConfigWidget):
                 lambda ms: parent.media_player.setPosition(ms))
             # set stretch to 1
 
-            light_text_color = apply_alpha_to_hex(TEXT_COLOR, 0.65)
             self.time_elapsed = QLabel('0:00')
-            self.time_elapsed.setStyleSheet(f'color: {light_text_color}; font-size: 12px;')
+            self.time_elapsed.setProperty('class', 'slopify-dim')
             self.time_total = QLabel('0:00')
-            self.time_total.setStyleSheet(f'color: {light_text_color}; font-size: 12px;')
+            self.time_total.setProperty('class', 'slopify-dim')
 
             self.btn_volume = IconButton(
                 parent=self,
@@ -1981,7 +2131,7 @@ class Page_Slopify(ConfigWidget):
             self.now_playing_avatar = QLabel('')
             self.now_playing_avatar.setFixedSize(45, 45)
             self.now_playing_avatar.setScaledContents(True)
-            self.now_playing_artist.setStyleSheet(f'color: {light_text_color}; font-size: 12px;')
+            self.now_playing_artist.setProperty('class', 'slopify-dim')
             self.now_playing_title.setFixedWidth(250)
             self.now_playing_artist.setFixedWidth(250)
 
@@ -2089,13 +2239,7 @@ class Page_Slopify(ConfigWidget):
             self.table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
             self.table.doubleClicked.connect(self._on_double_click)
 
-            # set table background color to transparent
-            from gui.style import PRIMARY_COLOR, TEXT_COLOR
-            from utils.helpers import apply_alpha_to_hex
-            transparent_color = apply_alpha_to_hex(TEXT_COLOR, 0.03)
-            self.table.setStyleSheet(f'background-color: {transparent_color};')
-            # set table header background color to transparent
-            self.table.horizontalHeader().setStyleSheet(f'background-color: {transparent_color};')
+            self.table.setObjectName('slopifyTracks')
 
             btn_bar = CHBoxLayout()
             self.btn_start = QPushButton('Start')

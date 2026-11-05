@@ -1,0 +1,562 @@
+{
+    "Core": {
+        "Module System": {
+            "Dynamic module registry": "ModuleManager discovers, loads and registers every pluggable module type (pages, widgets, fields, members, managers, daemons, connectors, actions, providers, behaviors, environments, highlighters, utils) and exposes them by type/name lookup.",
+            "Module type controllers": "Each module type has a ModulesController subclass declaring its load path, base class, whether it is class-based, and a human-readable description, so new module types can be added by dropping in a controller module.",
+            "Source module discovery": "Recursively walks a package path with pkgutil, imports each module, extracts its registered class and upserts the source code into the modules DB table as the source of truth.",
+            "Plugin module discovery": "Scans src/plugins/*/<type>/ (and mirrored dotted paths) so any plugin can contribute modules of any registered type, with plugin modules taking precedence over same-named core modules.",
+            "Database-backed virtual modules": "Loads modules whose Python source is stored in the DB via a custom importlib loader (VirtualModuleLoader), executing them into synthetic sys.modules entries, gated by the system.allow_importing_db_modules setting.",
+            "Module baking and mirroring": "Writes DB-stored module source back to a real .py file on disk (bake = marks baked=1 and imports normally; mirror = write-only for frozen builds) so IDEs and Claude Code can see real files.",
+            "Class-marking decorator": "set_module_type tags a class with _ap_module_type (plus optional plugin/settings hints) so the extractor knows which class in a file is the module's entry point.",
+            "Module metadata extraction": "Parses each module's source with ast to record its attributes, methods, classes, constructor params, superclass and super() kwargs, plus a config hash, into the DB metadata column.",
+            "Module enable/disable and scaffolding": "Modules carry an enabled flag honoured at registry build time, and new modules can be created from per-controller initial_content templates.",
+            "Module test harness": "test_all / test_scaffold runs per-module smoke tests (e.g. the Pages controller navigates to each page, asserts visibility and invokes test_page / test_widget hooks) and returns pass/skip/fail with tracebacks."
+        },
+        "System Managers": {
+            "BaseManager pattern": "A dict subclass backed by a DB table that provides load/add/delete/save, automatic table definition, pinned/order-aware ordering, default fields and folder support — the base for every manager and module controller.",
+            "SystemManager": "The root object that instantiates ModuleManager, discovers all Managers modules and attaches them as attributes, loads them in order on startup, and can relaunch the app process.",
+            "Config manager": "Loads the JSON app config from the settings table and persists it back automatically on every key set or delete.",
+            "Daemon manager": "Discovers daemon classes from the module registry, starts each as a named asyncio task, exposes read-only views of available and running daemons, and supports stop/restart/start-all/stop-all with crash logging and bookkeeping cleanup.",
+            "Async daemon protocol": "Daemons implement start() / stop() (sync or awaitable) and are wrapped so cancellation and exceptions are logged and instances are always deregistered."
+        },
+        "Database": {
+            "SQLite connector": "Thread-locked SQLite connector providing execute, batched execute_many in a single transaction, get_results with multiple return shapes, and scalar fetch with optional JSON parsing.",
+            "Table auto-definition": "define_table creates a standard table (id, auto-generated UUIDv4, name, kind, config, relations) on demand so managers and plugins can declare their storage lazily.",
+            "SQL facade": "utils.sql wraps the active connector with module-level execute/get_results/get_scalar helpers, DB path resolution, and DB file copy/export.",
+            "Schema migration": "SQLUpgrade applies versioned migrations (0.1.0 through 0.6.0) after backing up data.db, with ensure_column_in_tables for additive column changes.",
+            "Application reset / bootstrap": "reset_application rebuilds the database and config from scratch, re-seeds system folders and models, with a guard preventing forced reset of the main data.db.",
+            "Decimal adapter": "Registers a sqlite3 adapter so Decimal values can be passed directly as query parameters."
+        },
+        "Undo / Actions System": {
+            "Undoable action framework": "A pluggable Actions module type where each action stores JSON-serialisable data and implements undo/redo, recorded onto a 50-entry undo stack.",
+            "Persistent undo history": "Undo and redo stacks are serialised to the undo_history settings row on every record and reloaded on startup, with a guard against overwriting stored history before load.",
+            "Action merging": "Consecutive same-type actions can absorb the previous entry (e.g. per-keystroke config edits within a 5-second window merge into one undo step).",
+            "Grouped action capture": "A capture() context manager collects recorded entries instead of pushing them, so several writes can be wrapped into one composite action (e.g. SaveChatEntityAction).",
+            "Replay guarding": "A _replaying flag plus replay_guard prevents undo/redo from recording spurious new actions, and replay failures are swallowed so they can't kill the Qt event loop.",
+            "Config save action": "Records before/after values of a table item save and reapplies them, then refreshes any visible widget bound to that table and item.",
+            "Navigate action": "Records changes of the current page path (pages, tabs, tree selections) so navigation can be undone and redone.",
+            "Undo labels": "next_undo_label / next_redo_label expose the human-readable label of the next action for menu display."
+        },
+        "Utilities": {
+            "Path resolution": "get_application_path, simplify_path and unsimplify_path resolve the app root for both source and frozen builds and convert between portable and absolute paths.",
+            "Media helpers": "Detect media type from extension, choose preview classes/icons, play files (with optional blocking, partial-wait and interrupt), estimate durations and stop playback.",
+            "FFmpeg-backed timeline rendering": "media_export composites clips into video frames, renders timeline audio with automatic offset alignment, and exports the combined result.",
+            "Process restart": "Computes the correct relaunch command and environment (accounting for debugger and frozen builds) and respawns the application.",
+            "Parameter schema conversion": "params_to_schema converts stored param definitions into a JSON schema suitable for LLM function calling.",
+            "JSON and hashing helpers": "try_parse_json, get_json_value, hash_config (with exclusions) and model-JSON to object conversion.",
+            "Avatar and pixmap helpers": "Compose circular avatars from one or more image paths with sizing, opacity and default-avatar fallback.",
+            "Message and dialog helpers": "display_message (transient toast) and display_message_box (modal with custom buttons) for user-facing notifications from core code.",
+            "Qt signal blocking": "A block_signals context manager that suppresses signals across widgets and optionally their children.",
+            "Network check": "network_connected reports connectivity before attempting remote calls.",
+            "Naming helpers": "convert_to_safe_case normalises names for use as table names, module names and file slugs.",
+            "Baked item loading": "get_all_baked_items reads YAML/JSON-defined seed records off disk for tables that ship with bundled defaults."
+        },
+        "Application Shell": {
+            "Frameless resizable window": "The main window is frameless and translucent with a custom mouse-driven resize/move mixin (FramelessResizeMixin) that changes the cursor at window edges.",
+            "Custom title bar": "A floating title button bar in the top-right provides minimize, maximize/restore and close buttons since the native frame is hidden.",
+            "Always-on-top toggle": "The window can be pinned above all other windows, driven by the system.always_on_top setting and re-applied live without a restart.",
+            "Persistent window size": "Resizing the window writes width/height into the window_size setting so the app reopens at the same size, positioned at the bottom-right of the screen.",
+            "Restored page path on startup": "The last-selected page path is saved in the page_path setting and reselected when the app relaunches.",
+            "Undo/redo with history menu": "Ctrl+Z / Ctrl+Shift+Z application shortcuts plus a '⋮' button open a menu showing the next undo/redo action labels from the core action history.",
+            "Toast notifications": "A NotificationManager stacks fading, auto-dismissing notification cards in the corner of the window, with hover-to-persist and click-to-close behaviour.",
+            "System tray icon": "A tray icon is registered so the app can raise native desktop notifications and stay resident.",
+            "Drag-and-drop file attach": "Dropping files onto the main window forwards their paths to the chat page's attachment bar.",
+            "Terms-of-service gate": "On first run a TOS dialog must be accepted before the app is usable; acceptance is stored in settings.",
+            "Database check and migration": "On startup the app verifies the database exists, upgrades its version, and runs recursive config patch/rename migrations across tables.",
+            "Daemon lifecycle on startup/shutdown": "Background daemons are auto-started shortly after launch and stopped (with timeout) when the window closes.",
+            "Recent-chat side bubbles": "A popup strip of circular avatar buttons for the three most recent chats can slide out beside the main window and auto-hides when the mouse leaves.",
+            "Page load error reporting": "Pages that fail to import are caught individually, recorded with a traceback, and reported via a warning dialog instead of crashing the app."
+        },
+        "Navigation": {
+            "Icon sidebar page navigation": "MainPages renders all 'main' and pinned page modules as a right-hand vertical icon sidebar with 'chat' as the default page.",
+            "Dynamic page discovery": "Pages are loaded at runtime from the modules table by module type 'Pages', so pages can be added, edited or removed without touching the shell.",
+            "Page pinning": "Pages declared as type 'any' can be pinned from the sidebar context menu to move them between the main sidebar and the settings sidebar.",
+            "Preferred/locked page ordering": "Core pages (chat, contexts, agents, blocks, tools, projects, files, tasks) are ordered first and settings is locked to the bottom of the sidebar.",
+            "Add new page": "An 'add page' action prompts for a name, creates a new Pages module, pins it, selects it and opens it in the page editor.",
+            "Breadcrumb trail": "A BreadcrumbWidget shows the current nesting path with a back button, inline title renaming, and an agent-visualisation preview on hover.",
+            "Page disabling": "The sidebar context menu can disable a page module so it no longer appears."
+        },
+        "Pages": {
+            "Settings": "A nested ConfigPages hub that hosts every 'settings'-type page module (system, display, models, roles, blocks, tools, modules...) and persists them into the app_config settings row.",
+            "System settings": "Lets the user set language, dev mode, always-on-top, multi-window, DB module imports, auto-bake, auto-run tools/code, voice input method, default chat/voice/image/video/audio models, auto-title behaviour and prompt, and the default project entity.",
+            "Display settings": "Lets the user pick or save/delete named themes and tune primary/secondary/accent/link/text colours, font and size, bubble collapsing ratio, bubble name/avatar/waiting-bar visibility, bubble spacing, window margin and workflow view.",
+            "Modules": "A DB-backed tree of code modules where the user can add, delete, folder-organise, describe, avatar, load/run, unload, bake and edit each module's Python source and data.",
+            "Page editor": "A snap-to-side frameless editor window for a page module that embeds an application-project widget for editing the page's files, with a reload-modules button that rebuilds all pages in place.",
+            "Daemons": "Lists daemon modules scanned off disk with live status (Running/Stopped/Disabled/Not loaded) and buttons to start, stop, restart, enable or disable each one.",
+            "Files": "Embeds the full file browser (FileTree) as a main page for browsing, previewing and managing files on disk."
+        },
+        "Widget Framework": {
+            "ConfigWidget base": "Common base giving every widget schema building, config load/save to the DB, namespaced config propagation to parents, breadcrumb updating and page-map tracking.",
+            "ConfigFields": "Renders a declarative schema list into labelled form rows, supporting row grouping, left/top labels, auto label width, tooltips (help icons), per-field toggle checkboxes, readonly, visibility and stretch options.",
+            "ConfigJoined": "Stacks several config widgets vertically or horizontally into one combined config surface.",
+            "ConfigPages": "A collection widget that renders child pages behind a sidebar of buttons (icon or text), supporting right-to-left and bottom-to-top layouts and page pinning.",
+            "ConfigTabs": "A collection widget that renders child pages as a tab bar.",
+            "ConfigSideTabs": "A splitter-based layout with collapsible, titled sections instead of tabs.",
+            "ConfigTree": "Base tree widget with add/delete/new-folder/filter toolbar buttons, optional search, filtering, versioning, infinite scroll loading, folder config widget, and a splitter between tree and config pane.",
+            "ConfigDBTree": "Database-backed tree providing item add/delete/rename/duplicate/pin, folder creation and nesting, drag-and-drop reparenting, kind grouping, live search filtering, per-item config saving, bake/unbake, version history and unread notification badges.",
+            "ConfigJsonTree": "Tree whose rows are stored as a JSON list in the parent config, with inline editable cells and add/remove row buttons.",
+            "ConfigJsonDBTree": "Tree that stores a JSON list of references to rows in a database table, rendering each with an icon.",
+            "ConfigExtTree": "Async variant of ConfigJsonTree that fetches its rows on a worker thread and pushes them back via a Qt signal.",
+            "ConfigVoiceTree": "A read-only DB tree of TTS voices grouped by API provider.",
+            "ConfigTable": "A QTableView-based config surface with a schema-driven model, editable cells, selection by id and add/delete/rename hooks.",
+            "BaseTreeWidget": "Shared tree implementation providing schema-derived columns, in-cell widgets, folder branch drawing, nested-folder grouping, tooltips, multi-select by id, and drag-drop that updates folder/parent/kind in the DB.",
+            "Inline widget editing mode": "An EditBar can be attached to any config widget to swap its base widget class, edit its field options, and add/delete pages — rewriting the underlying module source.",
+            "TreeDialog and LibraryDialog": "Modal pickers for selecting an existing DB item or browsing the entity/agent library, used by fields that reference other records.",
+            "CustomMenu toolbar/menubar builder": "Builds toolbars, menu bars and popup menus from a declarative schema with icons, checkable actions, and visibility/enabled predicates evaluated at show time.",
+            "Config presets": "A preset menu button saves the current widget's config under a name and re-applies or deletes saved presets later."
+        },
+        "Fields": {
+            "Text field": "Single- or multi-line text input with configurable line count, font size, alignment, monospace, transparency, placeholder text and readonly mode.",
+            "Code editor (CTextEdit)": "Multi-line editor with code folding for XML and Python, indent/dedent, tab handling, drag-and-drop text, and an expand button that opens the text in a standalone editor window.",
+            "Jinja block suggestions": "Typing inside {{ }} in a text field pops up an autocomplete list of available blocks.",
+            "AI text enhancement": "A wand button next to text fields runs a chosen 'enhancement block' against the field's content and streams the rewritten text back in, with a right-click menu to assign or remove blocks.",
+            "Integer field": "Numeric spinner with min/max, step and optional value snapping.",
+            "Float field": "Double spinner with configurable decimals, range and step; wheel scrolling is suppressed.",
+            "Boolean field": "A checkbox field mapped to a true/false config value.",
+            "Combo field": "A combobox with a type-to-filter popup, grouped non-selectable headers, DB-table-backed item loading, and wheel-scroll suppression.",
+            "Font picker": "A combobox listing system fonts rendered in their own typeface.",
+            "Color picker": "A button that opens the colour dialog and stores the picked hex colour, showing it as the button's swatch.",
+            "File picker": "A line edit plus browse button for choosing a file or directory path.",
+            "Image / avatar field": "A circular image label that opens a file dialog to change the avatar, with a settings popup for its options.",
+            "Media upload": "Uploads an image/audio/video file (or inserts a clip from the studio's collection), previews it inline, and can encode it to base64 for the resolved model provider.",
+            "List field": "A repeatable list of sub-fields with add/remove buttons and drag-handle reordering.",
+            "Model combobox": "Selects an AI model, showing provider-grouped options plus an options button that expands model parameter fields inline.",
+            "Module combobox": "Selects a module of a given type from the modules table.",
+            "Entity field": "Shows an agent/entity avatar and name and opens the library dialog to browse and pick or link an entity.",
+            "Member type menu": "An icon button menu for choosing a workflow member type (agent, block, tool, etc.), including opening the library to insert existing members.",
+            "Project type menu": "An icon button menu for choosing the project type of a project.",
+            "Venv combobox": "Selects a Python virtual environment, with reset and hover affordances.",
+            "Input source / target comboboxes": "Paired comboboxes that pick a workflow input's source structure and its target parameter, updating available options dynamically.",
+            "Button and toggle-button fields": "Schema-declarable action buttons and checkable toggle buttons that run a target callable.",
+            "Popup buttons": "Icon buttons that open a floating popup for member settings, model settings, or an input condition expression.",
+            "Field options editor": "Every field exposes an option_schema, and an options gear button lets the user edit that field's properties while in widget-edit mode.",
+            "Add-field control": "In edit mode a trailing 'add field' row lets the user append a new field of a chosen type to a form, writing it into the module source."
+        },
+        "File Browser": {
+            "Lazy directory model": "A custom QAbstractItemModel streams directory entries in batches so very large folders open without blocking the UI.",
+            "Navigation panel": "A left panel with a bookmarks list (home, desktop, documents, etc.) and a folder tree, with a toggle for showing files in the tree.",
+            "Path bar with history": "An editable path bar plus back/forward/up buttons with a navigation history stack.",
+            "Multiple view modes": "The file view switches between list/detail-style presentations and supports name filtering.",
+            "File operations": "Context menus provide open, rename, delete (to trash), copy, cut, paste with automatic unique-name resolution, and new-folder creation.",
+            "File preview tabs": "Selected files open in preview tabs, dispatching to the studio widget registered for that file extension.",
+            "Properties dialog": "Shows a file or folder's metadata, with directory sizes computed asynchronously.",
+            "Status bar": "Displays the selection count and total size of selected items for the current directory."
+        },
+        "Media Previews": {
+            "Image preview": "Displays an image scaled to a default size with click-to-toggle zoom to full size.",
+            "Video preview": "A QMediaPlayer-backed player with play/pause, a seek slider and a duration label.",
+            "Audio preview": "Shows the filename with a play button that plays the file through the media helper."
+        },
+        "Collections": {
+            "Collections widget": "A tree of media collection folders and clips stored on disk, with add, delete, rename and folder creation.",
+            "Global collections": "Folders can be marked global so they are shared across projects, stored separately in settings.",
+            "Drag out to insert": "Collection items can be dragged out of the tree to insert them elsewhere in the app."
+        },
+        "Theming & Display": {
+            "Runtime stylesheet generation": "The whole Qt stylesheet is generated from the display config (primary, secondary, text, accent colours and text size) and re-applied live when settings change.",
+            "Contrast safeguard": "If the text colour is too close to the background in RGB distance, it is forced to pure white or black so text stays readable.",
+            "Icon recolouring": "Icons are colourised to the active text colour and every IconButton, tree and chart is refreshed when the theme colour changes.",
+            "Named themes": "The current colour set can be saved as a named theme in the themes table, re-selected from a dropdown, or deleted (duplicates are rejected).",
+            "Window margin control": "A display setting adjusts the main layout's content margins around the frameless window.",
+            "Chat bubble appearance settings": "Display settings control bubble spacing, name and avatar visibility, the waiting bar, and automatic collapsing of over-long bubbles by a configurable ratio."
+        },
+        "Syntax Highlighting": {
+            "Python highlighter": "Colourises Python keywords, builtins, strings, numbers, decorators and comments in .py content.",
+            "JSON highlighter": "Colourises keys, string/number values and the true/false/null literals for json, jsonc, jsonl and json5.",
+            "XML highlighter": "Colourises XML tags and attributes and additionally highlights Jinja2 {{ }} expressions and tags.",
+            "CEL highlighter": "Colourises keywords, operators, builtins and strings in CEL condition expressions.",
+            "Extension-based highlighter selection": "Each highlighter declares associated_extensions and is resolved dynamically from the modules registry, so highlighters can be added as modules."
+        },
+        "Module Builder": {
+            "AST source rewriting": "builder.py uses ast/astor to modify a module's Python source in place — changing a class's base class, adding or deleting nested page classes, and adding schema fields.",
+            "Field option schemas": "Common field option schemas drive the generated code for newly added fields, mapping friendly type names to Python types.",
+            "Live module reload": "After edits, modules are reloaded and page trees rebuilt while preserving the user's current page selections and tree expansion state."
+        },
+        "Demo & Testing": {
+            "Scripted UI demo": "A demo runner drives the real UI on a worker thread with synthetic mouse moves, clicks, hovers and typed text against a throwaway copy of the database.",
+            "Demo overlay": "A translucent always-on-top card shows the current demo segment, progress and narration text with a Stop button.",
+            "Automated widget tests": "A background TestRunnable walks every module controller's test scaffold (optionally filtered to specific pages with --pages), prints a pass/fail/skip report, and exits with a non-zero code on failure.",
+            "Disposable test/demo database": "Test and demo runs copy the live DB aside, reset and bootstrap a scratch database, then restore the user's real DB when finished.",
+            "Escape to abort": "Pressing Escape during a scripted run clears the running flag to stop the demo or test."
+        }
+    },
+    "Workflows": {
+        "Engine": {
+            "Graph-based workflow model": "A Workflow is a nested graph of members positioned by loc_x/loc_y with typed input edges; members are instantiated in dependency order and a workflow can itself be a member of another workflow.",
+            "Workflow execution behavior": "DefaultBehavior repeatedly computes the set of members whose inputs are all satisfied and runs them — concurrently via asyncio.gather when several are ready, sequentially otherwise — until the turn completes.",
+            "Streaming output": "Members are async generators yielding (role, chunk) pairs that propagate up through the workflow to the run manager and the attached chat widget for live token streaming.",
+            "Run manager": "WorkflowRunManager tracks which contexts are currently running, routes streamed chunks to whichever widget currently displays that context, supports stop requests, and updates sidebar activity indicators.",
+            "Turn / alt-turn bookkeeping": "Each run toggles an alt_turn_state and tracks per-member turn_output / last_output so partially completed turns, loops and re-entrant runs resolve correctly.",
+            "Loopers and conditional flow": "Input edges can be marked as looper to feed output back upstream, and Condition/Probability/Iterate/Node members provide branching, randomised and iterative control flow.",
+            "CEL condition evaluation": "evaluate_condition builds a context of member outputs and workflow params and evaluates a CEL-style expression to gate flow members.",
+            "Linked configs": "Members and contexts can reference a linked_id pointing at a source entity (agent/block/tool), resolved at load time with circular-link detection and a visited set to prevent infinite expansion.",
+            "Config merging": "merge_config_into_workflow_config normalises a bare single-entity config into a full workflow config, so any agent/block/tool can be run as a one-member workflow.",
+            "Programmatic workflow invocation": "receive_workflow / compute_workflow_async / compute_workflow let any code run a workflow config headlessly and collect the streamed result, including from non-async threads via the main qasync loop.",
+            "Message history with branching": "MessageHistory loads a conversation via recursive SQL over the contexts tree, following the active leaf branch, and supports branching/activating/deactivating alternate message paths.",
+            "Config templating": "Member config values are rendered through Jinja before use, substituting block outputs, member outputs and workflow params.",
+            "Token counting": "Each message computes a tiktoken token count on construction for context-window management."
+        },
+        "Members": {
+            "Agent": "LLM conversation member with a composed system message, model config, tools, declared inputs/outputs and streaming response handling.",
+            "User": "User turn member that also handles microphone capture, discovering a downstream realtime agent and committing captured audio to it.",
+            "Contact": "Non-LLM participant representing an external contact in a conversation.",
+            "Prompt": "One-shot LLM block that sends a single rendered prompt rather than a message history.",
+            "Text": "Static/templated text block that emits its rendered content.",
+            "Code": "Executes code in a chosen language inside a selected environment/venv, wrapping the snippet with parameter bindings.",
+            "Query": "Runs SQL against the app database via execute / scalar / get-results with selectable return shapes.",
+            "Notif": "Shows a desktop/system notification with configurable title, icon, colour and duration.",
+            "Wait": "Sleeps for a configured duration in seconds, minutes or hours before continuing.",
+            "SetVariable": "Sets a workflow- or global-scoped variable, optionally ephemeral.",
+            "Node": "Plain flow node used as a junction in the member graph.",
+            "Iterate": "Loop member that repeats its downstream branch over an input collection.",
+            "Probability": "Randomly gates its branch based on a configured probability.",
+            "Condition": "Gates its branch on a CEL expression evaluated against member outputs and workflow variables.",
+            "Image / Video / Audio": "Media members that resolve a browse path, URL or generated result into a media output for downstream members.",
+            "Tool calling": "LlmMember builds function-call schemas from tool definitions, dispatches tool calls to the tool manager, and feeds results back as result messages.",
+            "Structured output streaming": "stream_structured_output streams a schema-constrained model response for members that need parsed JSON rather than free text.",
+            "Role tag parsing": "CharProcessor scans streamed characters for role tags (e.g. thinking/code/output) and re-routes chunks into the correct message role bubble.",
+            "StreamSpeaker": "Buffers streamed text into sentence-sized blocks and pushes them to TTS as the agent speaks."
+        },
+        "Model Providers": {
+            "Provider base": "Common provider interface for running models, polling request status, fetching result media, and converting OpenAPI schemas into internal field schemas.",
+            "LitellmProvider": "Routes chat completions through LiteLLM (so any LiteLLM-supported API works as a chat backend), including instructor-backed structured output and model-list syncing.",
+            "ReplicateProvider": "Runs Replicate models with prediction polling, result and transcription retrieval, file upload and schema resolution across referenced schemas.",
+            "FalProvider": "Runs fal.ai models with queued request status/result polling, file upload and $ref schema resolution.",
+            "WavespeedProvider": "Runs WaveSpeed models with signed headers, request polling, upload and model syncing.",
+            "SeedanceProvider": "Runs Seedance video tasks, resolving local media into data URIs or uploads and polling task state.",
+            "SonautoProvider": "Runs Sonauto music generation with request polling, result retrieval and model syncing.",
+            "Async queued generation": "Media providers submit a job, return a request id, and are polled for status, letting long-running image/video/audio generations run in the background.",
+            "Media generation manager": "Tracks in-flight generations per studio/clip key, persists pending requests across restarts, polls providers on a timer, delivers finished files and reports status text."
+        },
+        "Managers": {
+            "ModelsManager": "Loads models joined to their APIs, merges API config under model config, resolves API keys (including $ENV_VAR indirection), detects realtime speech-to-speech models and re-uploads media params whose hosted URLs expired.",
+            "APIManager": "Stores API endpoints and credentials in the apis table with environment-variable key resolution, and cascades deletes to dependent models.",
+            "ProviderManager": "Instantiates one live object per registered Provider module for the rest of the system to call.",
+            "AgentManager": "CRUD over the entities table for saved agents, each stored as a workflow config.",
+            "BlockManager": "Stores reusable named blocks, renders strings through an async Jinja environment with member-output/param placeholders, and can execute a block as a workflow.",
+            "ToolManager": "Stores tool definitions, converts their params into JSON call schemas, and executes a tool as a workflow returning a JSON status/output envelope.",
+            "SkillsManager": "Mirrors skill rows to Anthropic-format .claude/skills/<slug>/SKILL.md files on disk, parsing and reassembling frontmatter description plus body on read/write.",
+            "PlansManager": "Mirrors plan rows to markdown files on disk with slugged filenames, supporting read/write/list/delete.",
+            "EnvironmentManager": "Loads execution environments from the DB and instantiates the configured environment class (Docker, safe-integrated, or the default in-process exec).",
+            "VenvManager": "Discovers virtual environments under the app's venvs folder and can create, list and delete new ones via python -m venv / pyenv, cross-platform.",
+            "RolesManager": "Manages message roles and their display attributes."
+        },
+        "Execution Environments": {
+            "Docker environment": "Pulls or builds an image, ensures a named container with port mappings, volume mounts and env vars, starts/stops it, tails logs, runs code inside it and cleans up.",
+            "Safe integrated environment": "Executes Python in-process with access to the app's system managers and sql module for code that needs to drive the app itself.",
+            "Default environment": "Compiles and execs code inline while capturing stdout, returning the captured output as the member's result.",
+            "Environment variables": "Environments can carry configured env vars applied when the environment is updated."
+        },
+        "Realtime Voice": {
+            "RealtimeSession": "Websocket session for realtime speech-to-speech models — connect, send audio, commit, clear input, create/cancel response and read the event stream.",
+            "AudioHandler": "Qt audio capture and playback of PCM with a drain loop plus WAV read/write helpers.",
+            "LocalVAD": "Local voice-activity detection over incoming PCM frames used to decide when to commit a user turn.",
+            "Realtime workflow sessions": "LlmMember can open an OpenAI Realtime websocket session, stream microphone PCM, handle server VAD and barge-in, persist transcripts, and tear sessions down cleanly on workflow close."
+        },
+        "Pages": {
+            "Chat": "Main chat page built on the chattable workflow widget.",
+            "Contexts": "Browsable tree of saved conversations.",
+            "Agents": "Agent tree whose config widget is a full workflow editor.",
+            "Blocks": "Blocks tree with a chattable workflow config widget per block.",
+            "Tools": "Tools tree with a chattable workflow config widget per tool.",
+            "Models": "Models tree with per-kind tabs (chat, image, video, audio, etc.) and API/parameter configuration.",
+            "Environments": "Environments tree with Docker-specific image, container lifecycle, port, volume and env-var sections.",
+            "Skills": "Skills tree kept in two-way sync with <slug>/SKILL.md files via filesystem watching.",
+            "Plans": "Plans tree pairing a markdown editor with a Claude Code chat that edits the selected plan file, with disk-change reconciliation.",
+            "Goals": "Goals tree where each goal owns a Claude Code chat whose cwd tracks the goal, plus a Run button; goals can be created from a chat message."
+        },
+        "Chat UI": {
+            "ChattableWorkflowWidget": "Reusable widget embedding a workflow plus its chat transcript, input bar and run controls.",
+            "ChatInputWidget": "Input area that adapts to the next expected member — showing text+send for user turns and a standalone send button otherwise.",
+            "AttachmentBar": "Attaches files/media to the outgoing message.",
+            "Voice capture control": "Starts/stops microphone capture on the next expected User member.",
+            "Goal command": "Interprets /goal <name> in a Claude Code chat as a goal creation/switch command.",
+            "MessageCollection": "Scrollable transcript managing message containers, bubble grouping, a 'waiting for' bar and refresh on context change.",
+            "MessageContainer": "Per-message row holding avatar, bubble and a button bar with edit, screenshot, resend, branch and promote-to-goal actions.",
+            "CountdownButton": "Button that auto-triggers after a visible countdown."
+        },
+        "Bubbles": {
+            "MessageBubble base": "QTextEdit-based bubble with markdown rendering, code-block extraction with language detection, per-role styling lookup and branch navigation buttons.",
+            "Role bubbles": "Distinct bubbles for user, assistant, system, instruction, output, result, thinking and goal messages.",
+            "CodeBubble": "Code message bubble with a rerun button.",
+            "ToolBubble": "Tool call bubble showing editable parameters, a rerun button and a go-to-tool button.",
+            "ImageBubble / VideoBubble / AudioBubble": "Media bubbles embedding image previews, a video player and an audio player respectively."
+        },
+        "Member Settings Widgets": {
+            "WorkflowSettings": "The workflow graph editor — a QGraphicsView canvas of member nodes and input links with drag-to-connect, circular-reference checks, a member list, compact mode and a save-as menu for agents/blocks/tools/tasks.",
+            "AgentSettings": "Agent config tabs for messages, preloaded messages, tools, variables and voice.",
+            "UserSettings / ContactSettings": "Config fields for user and contact members.",
+            "MediaSettings family": "Shared base for Image/Video/Audio settings with browse, URL and generate tabs, including yt-dlp download for video and audio URLs.",
+            "GenerateWidget": "Generate button that resolves timeline/clip source references into uploads and runs the selected model through the generation manager.",
+            "MultiPreview": "Single-row multi-result preview strip that displays generated media, shows generation status, supports selecting and 'using' a result, and resumes saved polling.",
+            "InputSettings": "Editor for a member input's conditional expression and mapped fields.",
+            "Per-member setting widgets": "Dedicated config widgets for code, prompt, text, query, notif, wait and probability members.",
+            "RunWorkflowPopup": "Modeless popup that runs an entity's workflow on a file and lets the user pick from the resulting images."
+        },
+        "Media Export": {
+            "render_timeline_video": "Renders the timeline to video by decoding active clips per frame and compositing them onto a canvas.",
+            "render_timeline_audio": "Mixes timeline audio clips over a time range into an output audio file.",
+            "Audio offset alignment": "Cross-correlates a reference and generated clip to compute the audio offset for syncing.",
+            "Clip extraction": "Extracts a clip's media segment for rendering or per-frame decoding."
+        }
+    },
+    "Claude_code": {
+        "Agent Member": {
+            "ClaudeCode workflow member": "An LlmMember subclass that drives the Claude Agent SDK (ClaudeSDKClient) as a workflow node, streaming assistant text, thinking, tool-use and tool-result blocks back into the chat.",
+            "Session resume": "Captures the SDK session_id from the first assistant message and passes it as resume on subsequent turns so the conversation continues in the same Claude Code session.",
+            "Built-in tool gating": "Builds the SDK tools allow-list from per-agent toggles for Bash/Read/Write/Edit/Glob/Grep/WebFetch/WebSearch (falling back to Bash if none are enabled).",
+            "Permission modes": "Supports default, acceptEdits (auto-allows Write/Edit/NotebookEdit) and plan permission modes from config.",
+            "Interactive tool approval": "Implements the SDK can_use_tool callback by emitting a tool_approval message into the chat and awaiting an asyncio future resolved by the user's Allow/Deny click.",
+            "AskUserQuestion routing": "Intercepts the AskUserQuestion tool and returns the user's picked answers as updated_input to the SDK instead of a plain allow/deny.",
+            "Entity-backed SDK hooks": "Converts configured hook rows (event + tool matcher + entity) into SDK HookMatchers whose callbacks run the referenced block/tool/agent workflow.",
+            "Interrupt on stop": "Runs a background watcher that calls client.interrupt() when the workflow's stop flag is set, unblocking a turn stuck on a subprocess read.",
+            "Per-block message persistence": "Saves each streamed block as its own DB row immediately so mid-stream context/branch switches don't lose thinking or tool history."
+        },
+        "Chat Bubbles": {
+            "ClaudeToolBubble": "Renders a Claude tool-use payload compactly, resolving file paths relative to the current project cwd.",
+            "ClaudeToolResultBubble": "Renders a tool result block, collapsed/expandable on click.",
+            "ToolApprovalBubble": "Approval prompt bubble that renders tool-specific views — including coloured old/new diffs for Write/Edit — and resolves the pending approval future.",
+            "QuestionBubble + OptionsPicker": "Renders AskUserQuestion payloads as a keyboard- and mouse-navigable numbered option list with a free-text row, returning selections to the SDK."
+        },
+        "Settings Widgets": {
+            "ClaudeCodeSettings": "Per-member tabbed settings covering Messages (model, max turns, permission mode, system message), Tools, Hooks and Voice.",
+            "Custom tools picker": "DB-backed tree for attaching AgentPilot tools rows to a Claude Code member.",
+            "CC_User_Settings editor": "File-backed editor for Claude Code's own settings.json across user / project / project-local scopes, written atomically with empty-key pruning.",
+            "General settings tab": "Edits model, theme, effort level, output style, auto-updates, Co-Authored-By, always-thinking and cleanup period in settings.json.",
+            "Permissions tab": "Edits the permissions block (allow/deny/ask rules) of settings.json.",
+            "Hooks tab": "Two-way maps settings.json's nested hooks structure to a flat event/matcher/command table.",
+            "MCP & Advanced tab": "Edits apiKeyHelper, forceLoginMethod, statusLine, enableAllProjectMcpServers and MCP server definitions."
+        },
+        "Session Import": {
+            "Claude Code transcript import": "Reads ~/.claude JSONL session logs, groups them into resume chains per cwd, extracts messages and imports them as AgentPilot contexts.",
+            "Project auto-creation": "Creates a matching AgentPilot project row for each imported session's working directory.",
+            "Import thread + delete": "Runs the import on a QThread with progress, and offers bulk deletion of previously imported sessions."
+        }
+    },
+    "Computer_use": {
+        "Automation Backends": {
+            "ComputerUseBrowser": "Playwright-driven Chromium controller exposing screenshot, click, double/triple-click, type, key press, scroll, drag and mouse-move actions.",
+            "Click ripple overlay": "Injects a CSS keyframe ripple at the click point in the browser page so the user can see where the agent clicked.",
+            "ComputerUseDesktop": "PyAutoGUI-based full-desktop controller with the same action surface as the browser backend, operating on the real screen.",
+            "Escape-key abort": "Uses pynput to listen for Escape and abort an in-progress desktop automation run.",
+            "Grace period": "Inserts a configurable delay before each action so the user has time to intervene.",
+            "execute_action dispatcher": "Single entry point that maps an action dict (as emitted by a model) onto the corresponding backend method.",
+            "Computer use loop": "The workflow member drives a screenshot/action loop for computer-use tool calls against the desktop or browser."
+        },
+        "UI": {
+            "ComputerUseOverlay": "Transparent, click-through full-screen glow on the screen edges indicating the agent is currently controlling the computer.",
+            "ComputerUseSettings": "Config fields for enabling computer use and setting the grace period and max iteration count."
+        }
+    },
+    "Projects": {
+        "Core": {
+            "ProjectManager": "BaseManager over the projects table handling load, add and delete of project rows.",
+            "Application project bootstrap": "Automatically creates an 'Application' project pointing at AgentPilot's own source path (SOURCE subdir when frozen) if it doesn't exist.",
+            "Project types controller": "Modules controller that discovers project-type classes under plugins.projects.gui.project_types."
+        },
+        "Project Types": {
+            "GeneralProject": "Default project widget combining a path/type field row, a file tree rooted at the working dir, and bottom tabs.",
+            "ApplicationProject": "Specialised type that git-clones AgentPilot if the working dir is missing, then polls src/**/*.py mtimes every 2s and syncs changed files into the DB as modules."
+        },
+        "Project Workspace Tabs": {
+            "Chat tab": "Project-scoped context tree (kind = PROJECT:<id>) with optional directory grouping and a 'chats that edited this file' filter mode.",
+            "Skills tab": "Project-scoped skills tree.",
+            "Blocks tab": "Project-scoped blocks tree.",
+            "Plans tab": "Reuses the standalone Plans page (markdown editor + Claude Code assistant + disk sync) scoped to the project.",
+            "Block Maps tab": "Maps blocks to file paths and provides a 'Bake' button that writes their rendered output into the project tree, refreshing the file tree afterwards.",
+            "File tree context action": "Adds a 'Show chats that edited' action to files, filtering the chat tree to conversations that touched that relative path."
+        },
+        "Sync Utilities": {
+            "resolve_module_type": "Maps a source file's path to its module type and folder id via longest-prefix matching over registered type controllers, including cross-plugin paths.",
+            "sync_file_to_db": "Upserts a changed source file back into the database as a non-baked module, skipping _-prefixed and base.py files."
+        }
+    },
+    "Tasks": {
+        "Scheduling Engine": {
+            "TasksDaemon": "Async daemon that loads all SCHEDULED task rows and runs one long-lived loop per task uuid.",
+            "Loop reconciliation": "Starts, stops and restarts task loops to match current configs, only cancelling loops whose rrule actually changed so a reload can't perturb an imminent firing.",
+            "rrule scheduling": "Parses each task's iCal rrule, sleeps until the next occurrence and re-checks the clock before firing to avoid the early-wake double-fire bug.",
+            "Task execution": "Runs the task's stored workflow config through receive_workflow with kind='TASK', accumulating the streamed response.",
+            "Error surfacing": "Reports task failures through a warning message dialog rather than silently dying.",
+            "Occurrence listing": "Expands all tasks' rrules into per-day occurrence lists for the calendar view."
+        },
+        "Management": {
+            "TaskManager": "BaseManager over the tasks table where each row's config is itself a workflow.",
+            "Natural-language scheduling": "Converts a free-form time expression to an rrule via the expression_to_time block, normalizes it back with time_to_expression, injects a DTSTART if missing, persists both and reloads the daemon."
+        },
+        "UI": {
+            "Page_Tasks_Settings": "Main Tasks page joining a calendar view above the scheduled-tasks tree.",
+            "CustomCalendar": "Calendar widget that paints per-day task occurrence markers and supports jumping to today.",
+            "DayTimelineWidget": "Custom-painted day timeline where task occurrences can be hit-tested, dragged and snapped to a time grid, with a right-click context menu.",
+            "AddTaskDialog": "Dialog for creating a task at a chosen date/time with a recurrence selection, building the rrule from the inputs.",
+            "Scheduled tasks tree": "DB tree of scheduled tasks showing name, time expression and rrule, with a workflow-settings config widget that preserves rrule/time_expression across saves."
+        }
+    },
+    "Studio": {
+        "Video Studio": {
+            "VideoStudio": "Kdenlive-style multi-track video/audio editor registered for all video and audio extensions.",
+            "Timeline": "QGraphicsScene/View timeline with draggable clip members, playhead, loop flags, snapping, zoom and a context menu.",
+            "Track controls": "Per-track control panel with track config fields and a track context menu.",
+            "Lazy waveform/thumbnail loading": "Background loaders that progressively render audio waveforms and video thumbnails onto timeline clips.",
+            "Preview panel": "Compositing preview with per-clip playback workers, a master timeline clock, a threaded seek decoder and draggable/snapping preview items.",
+            "Project files": "New/Open/Open Recent/Save/Save As over .agpm project files, with project settings (resolution and fps).",
+            "MediaCollectionPanel": "Global filesystem-backed library of named scenes and characters, each holding labelled image files shared across all projects.",
+            "StoryboardPanel": "Per-project ordered shot list of cards referencing a scene, a chosen still and a description, serialized into the project file.",
+            "Render dialog and worker": "Configurable export (output path, codec/quality settings) run on a background worker with a progress dialog.",
+            "Effects/operations menus": "Timeline context menu is populated dynamically from the registered effect and operation modules."
+        },
+        "Image Studio": {
+            "ImageStudio": "Photoshop-style layer-based image editor registered for common raster formats.",
+            "Layers": "Raster and image layers with visibility, opacity and blend modes, managed through a layers panel.",
+            "Canvas": "QGraphicsView canvas compositing all layers, with a properties panel and fullscreen mode that hides the chrome.",
+            "Undo/redo history": "Per-studio UndoHistory recording layer-pixel edits and document-structure changes, with mergeable actions and next-undo/redo labels."
+        },
+        "Image Tools": {
+            "Brush": "Paints a stroke onto a temporary layer and composites it onto the current layer on release.",
+            "Eraser": "Brush subclass that clears alpha along the stroke instead of painting.",
+            "Eyedropper": "Picks the colour from the composited canvas at the clicked point as the foreground colour.",
+            "Fill": "Fills at the clicked point with the current foreground colour.",
+            "Move": "Drags the current layer by the offset from the press point.",
+            "CanvasTool base": "Common press/move/release interface all canvas tools implement."
+        },
+        "Text Studio": {
+            "TextStudio": "Single-file code/text editor registered for a wide range of text extensions, with autosave and a status bar showing position, selection, encoding and line endings.",
+            "Syntax highlighting": "Builds an extension-to-highlighter map from the registered Highlighters modules and applies the matching one on open.",
+            "CodeEditor + line numbers": "QPlainTextEdit-based editor with a line-number gutter.",
+            "Search dialog": "Find/replace dialog over the open document."
+        },
+        "AI Operations": {
+            "BaseOperation": "Base class for AI-powered media operations that receive the studio and the selected clips.",
+            "Audio inpaint": "Replaces a section of audio with AI-generated content, using two draggable green region flags on the timeline and a non-modal dialog, uploading the source to the provider CDN and running the model on a background thread.",
+            "Provider timing adaptation": "Resolves the correct start/end parameter names and value casts per provider/model for the inpaint request.",
+            "Audio transcribe": "Chunks audio via ffmpeg, uploads and runs an STT model per chunk, normalizes segments across provider formats and writes an SRT subtitle file.",
+            "Video transcribe": "Video-clip variant of the audio transcription operation."
+        },
+        "Effects": {
+            "Pitch (audio)": "Shifts an audio clip's pitch by a number of semitones.",
+            "Greyscale (image)": "Converts a clip to greyscale."
+        },
+        "Module Controllers": {
+            "Studios controller": "Registers studio modules and their associated file extensions.",
+            "Per-domain controllers": "Separate module controllers for image tools, image effects/operations, audio effects/operations, video operations, text operations and 3D operations.",
+            "Page_Videos": "Exposes the video studio as a top-level page."
+        }
+    },
+    "Slopify": {
+        "Player": {
+            "Page_Slopify": "AI music generator page with a QMediaPlayer-backed player, artist tabs, playlist sidebar, track queue and transport bar.",
+            "PlayerControls": "Fixed-height transport bar with prev/play-pause/next, seekable progress slider and volume control.",
+            "TrackQueue": "Persistent generated-track table with Generate/Clear controls, concurrency and cover-ratio fields, showing in-flight pending rows.",
+            "PlaylistSidebar / PlaylistTrackList": "Spotify-style coloured playlist sidebar switching the content stack between the queue and a playlist's tracks.",
+            "Playback control": "Play by index, next/prev, toggle play-pause, stop, auto-advance on media-status change and duration back-fill into the track row."
+        },
+        "Artists": {
+            "ArtistCollection": "Table of artist presets, each with its own config, avatar and priority weighting for generation picking.",
+            "Info tab": "Artist metadata fields (top fields plus detail tabs) that are passed into generation as workflow params.",
+            "Songs tab": "Per-artist song table synced from Genius, storing lyrics in each row's config.",
+            "Genius sync": "Uses lyricsgenius with GENIUS_API_TOKEN to fetch up to 150 popularity-sorted songs per artist and upsert them with lyrics.",
+            "Generation tab": "Embedded chattable workflow editor plus a header letting a shared default block be used instead, greying out the editor when active."
+        },
+        "Generation": {
+            "Generation loop": "Timer-driven tick that spawns a new generation whenever in-flight plus unplayed tracks fall below the configured concurrency.",
+            "Cover mode": "With a configurable probability, picks a random song by a different artist (filtering live/demo/mix/acoustic/instrumental variants) and feeds its name and lyrics into the workflow as a cover.",
+            "Workflow execution": "Merges the artist's generation config into a workflow, runs it with kind='SLOPIFY' and the artist's info as params, and parses the JSON result.",
+            "Pending tracks and polling": "Inserts placeholder rows into slopify_pending, stores the provider request id, then polls until the audio is ready — cleaning up stale rows with no request data.",
+            "Track completion": "Downloads/records the finished audio file with a sanitized filename and promotes the pending row into a real queue track."
+        }
+    },
+    "Finance": {
+        "Market Data APIs": {
+            "FinanceAPI base": "Shared base class providing per-API asset/market existence lookups and last-update stamping.",
+            "BinanceAPI": "Syncs Binance assets and markets, downloads and combines historical trade ZIP archives into H5 price files, and verifies H5 trade integrity with resumable, stoppable sync loops.",
+            "CoingeckoAPI": "Syncs the CoinGecko coin list, per-coin metadata, market list and historical price series.",
+            "RevolutXAPI": "Syncs trading pairs and pulls the user's own executed trades using Ed25519-signed request headers.",
+            "TwelveDataAPI": "Async client for TwelveData covering asset lists, metadata, historical series, real-time prices, technical indicators, fundamentals and symbol search.",
+            "Finance daemon": "Background daemon that periodically drives the registered API modules' sync routines against a separate finance database.",
+            "API module controller": "Modules controller that discovers and registers finance API modules so they appear in the settings sync table."
+        },
+        "HDF5 Storage": {
+            "PriceFile": "Context-managed wrapper over an .h5 file holding trades, per-interval OHLC and per-interval indicator datasets.",
+            "Interval generation": "Rolls base trade/OHLC data up into candles for 1m through 1Y intervals, resuming from the last stored candle and reprocessing the incomplete tail.",
+            "Indicator datasets": "Generates and reads indicator series stored alongside OHLC under indicators/<interval>/<name>.",
+            "Dataset helpers": "Creation, chunked appending, first/last cell lookup, binary search by unix timestamp, timestamp normalization and H5 file introspection.",
+            "Path/naming helpers": "Sanitizes API/market names into deterministic H5 file paths."
+        },
+        "Operations": {
+            "Operation base": "Abstract streaming operation interface with an on_datapoint hook and an embedded config-fields widget.",
+            "SMA": "Simple moving average operation computed incrementally over incoming datapoints.",
+            "EMA": "Exponential moving average operation computed incrementally over incoming datapoints."
+        },
+        "UI Pages and Widgets": {
+            "Page_Finance": "Main tabbed finance page backed by a dedicated finance.db SQLite connector.",
+            "Portfolio tab": "Portfolio overview tab intended to display asset allocation as a pie chart.",
+            "Assets tab": "Asset table ordered by balance, with per-asset History (trades / deposits-withdrawals) and Chart sub-tabs.",
+            "Users tab": "Fund member table computing each user's share count from their deposits and withdrawals.",
+            "Trades tab": "Flat listing of all recorded trades with dates, exchange and sold/bought amounts.",
+            "DepWiths tab": "Deposit/withdrawal ledger with per-row asset balances at the time of the transaction.",
+            "Settings tab": "Finance settings fields plus a table of finance API modules with per-module sync buttons.",
+            "ChartWidget": "pyqtgraph candlestick chart with x-axis-only wheel zoom, auto y-scaling and indicator sub-plots driven by a PriceFile.",
+            "FundMapWidget": "Interactive graphics-view map of exchanges with a time-scrubbing slider and a holdings table.",
+            "Marriage algorithm": "Matches unmarried withdrawals to deposits at a different exchange by same asset, amount within 2% and within 24 hours, idempotently linking both rows.",
+            "H5Studio": "HDF5 studio (registered for .h5 files) with a lazy-loaded group/dataset tree, paginated dataset table viewer with slicing and cell editing, a metadata panel and a chart tab.",
+            "Asset/balance helpers": "Functions to compute total portfolio value and per-asset balances/prices at an arbitrary unix time, resolve linked assets and convert prices between assets."
+        }
+    },
+    "Embroidery": {
+        "Page": {
+            "Page_Embroidery": "A joined config page pairing an image-processing parameter form with a live preview label that re-renders on every field change."
+        },
+        "Subject Selection": {
+            "Auto background removal": "Runs rembg with a selectable model (e.g. u2net) to isolate the subject and fill the background with a chosen colour.",
+            "Point-based selection": "Lets the user click points on the preview to seed/refine the mask, with click-to-remove of the nearest point and a clear-points button.",
+            "Mask invert and fill": "Supports inverting the computed mask and choosing the RGBA fill colour applied to the masked-out region."
+        },
+        "Image Processing": {
+            "Enhancers": "Brightness, contrast, saturation and sharpness adjustment sliders applied via PIL ImageEnhance.",
+            "Filters": "Gaussian blur radius and odd-sized median filter for noise smoothing before quantization.",
+            "Posterize": "Reduces each channel to N bits to flatten tonal range.",
+            "Colour quantization": "Reduces the image to a chosen number of colours using a selectable quantize method (e.g. median cut) with optional dithering and k-means refinement.",
+            "Small-region removal": "Union-find 4-connected component labelling that merges colour regions below a pixel-count threshold into their neighbours.",
+            "Outline": "Draws an outline of configurable thickness around colour regions to emulate stitch borders.",
+            "Coordinate mapping": "Maps preview-widget clicks back to original image coordinates so selection points survive resizing."
+        }
+    },
+    "Groupon": {
+        "Scraping Pipeline": {
+            "GrouponScraper": "Orchestrates a full run in phases — division discovery, sitemap enumeration, browse pass, detail pass — with cancellation and progress callbacks.",
+            "Sitemap enumeration": "Fetches the sitemap index and streams (loc, lastmod) deal URLs per shard for the local/goods/getaways kinds, backing off when throttled.",
+            "Division discovery": "Derives the set of division slugs and their category slugs from sitemap shard URLs.",
+            "Browse pass": "Visits division (and division/category) listing pages and harvests every deal card.",
+            "Detail pass": "Visits individual deal pages for deals still awaiting a detail scrape, newest sitemap entries first."
+        },
+        "Browser and Parsing": {
+            "GrouponBrowser": "Headless Chromium wrapper holding one Playwright context per concurrent worker, with a context-recycling pool and navigation timeouts.",
+            "Stealth and block detection": "Injects stealth JS and raises GrouponBlocked when Groupon responds with a bot-protection status.",
+            "Infinite-scroll settling": "Scrolls a listing page until the deal-card count stays stable for several rounds before extracting.",
+            "Card parser": "Decodes embedded deal-card payloads — base64 options blobs, minor-unit prices with currency exponents, type-keyed body sections — into flat queryable fields.",
+            "Permalink extraction": "Derives the canonical deal slug from a Groupon deal URL."
+        },
+        "Storage and UI": {
+            "GrouponManager": "Manager defining the deals/divisions tables, upserting deals by permalink and divisions with their categories, and exposing counts, enabled divisions and pending-deal queues.",
+            "Scrape lifecycle": "Starts a scrape as a background task with progress reporting and supports cancelling an in-flight run.",
+            "Deals tab": "Scrape control fields (kinds, max deals, concurrency, which passes to run) above a read-only searchable deals tree with a raw config/metadata JSON dump.",
+            "Divisions tab": "Read-only division tree with a per-division enabled toggle and a 'Discover divisions' button that runs a divisions-only scrape."
+        }
+    },
+    "Mysql": {
+        "Connector": {
+            "MysqlConnector": "Thread-safe MySQL connector built on a mysql-connector pool with auto-reconnect and retry logic.",
+            "Pooled connection context": "Context manager that leases a pooled connection, retries on failure and returns it cleanly.",
+            "Query helpers": "get_results (rows/dict/list shapes), execute with transaction handling returning affected rows, and get_scalar with optional JSON parsing.",
+            "define_table": "Creates/ensures a table and its declared relations exist."
+        }
+    },
+    "Postgresql": {
+        "Connector": {
+            "PostgresConnector": "Thread-safe PostgreSQL connector built on psycopg2 pooling with auto-reconnect and retry logic.",
+            "Pooled connection context": "Context manager leasing a pooled connection with retry handling.",
+            "Query helpers": "execute returning the last inserted id for INSERTs, get_results with multiple return shapes, and get_scalar with optional JSON loading.",
+            "define_table": "Creates/ensures a table and its declared relations exist."
+        }
+    }
+}

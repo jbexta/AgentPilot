@@ -1,0 +1,50 @@
+uuid: cf9e4cd7-23ae-400f-93e0-0058630c177f
+name: telephony
+config:
+  _TYPE: workflow
+  name: telephony
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Telephony Plugin (`src/plugins/telephony`)
+
+        Phone calls with live voice agents. A phone carrier connects calls to **OpenAI's SIP endpoint**, where a Live Agent entity answers.
+
+        ## 1. Carriers (`telephonies/`, controller `telephonies`)
+        `Telephony` (defined in `managers/telephony.py`) is the carrier interface: `place_call`, `connect_contact`, `bridge`, `hangup`, `caller_ids`, `parse_webhook`, `register_webhook`, `ensure_allowed_countries`.
+        Carriers: **Twilio**, **Telnyx**.
+
+        ## 2. Manager (`managers/telephony.py`)
+        `TelephonyManager`:
+        *   **Outbound** (`start_call`): calls the agent's SIP URI first, with custom SIP headers, so the agent is live before the contact's phone rings. The contact is then connected to that call.
+        *   **Inbound/outbound sessions** (`on_openai_incoming`): OpenAI reports a pending SIP session. Calls we placed are answered straight away; for incoming calls the user is asked to answer, unless *Auto-accept after* is set. `answer` opens a chat from the live agent entity, accepts the call with its config, and runs it. For incoming calls the agent is told to greet the caller.
+        *   `setup_telnyx` / `setup_twilio`: configure the carrier entirely through its API (voice app, webhook, caller ID verification, allowed countries).
+        *   `register_public_url`: the tunnel URL changes every launch, so OpenAI's and the carrier's webhooks are re-pointed at the new URL.
+        *   Connection failures are retried once (`_with_retry`).
+
+        ## 3. Daemon (`daemons/telephony_webhook.py`)
+        `TelephonyWebhookDaemon` runs an aiohttp server (routes `/openai`, `/telephony/<name>`, `/twilio/voice`, `/health`) once a provider is configured, and exposes it to the internet through a **Cloudflare quick tunnel** (`pycloudflared`). If the tunnel dies (e.g. when DNS drops) it is reopened, and DNS failures are worked around by resolving the tunnel edge over DoH.
+
+        ## 4. Page (`pages/telephony.py`)
+        `Page_Telephony_Settings` (settings page): Provider, From number, Answer with agent, Auto-accept after, OpenAI project ID, Allowed countries, Telnyx connection ID, Set up Telnyx / Twilio buttons, Public URL, Port.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

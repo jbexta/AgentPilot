@@ -53,93 +53,38 @@ a) Down from root to all leaf widgets:
 b) Up to root from any leaf widget:
 - `update_config()`
 
-Any widget can set the boolean attribute `self.propagate_config` which allows or prevents propagation of `load_config` and `update_config`.
-This is True by default for all widgets, but some widgets such as `ConfigDBTree` and `ConfigTable` have it set to False by default.
+Any widget can set the boolean attribute `self.propagate_config`, which allows or prevents propagation of `load_config` and `update_config`.
+It is **off by default**. Each widget takes its parent's value when it is constructed, and `update_config` checks the flag at every hop. A subtree that must save sets `self.propagate_config = True` in its root's `__init__`, **before** it builds any child widgets (see `MediaSettings.__init__`). Setting it on a leaf does nothing. If it's missing anywhere in the chain, `save_config` never runs.
 
-**All widget modules:**
+## In-app tools (`@llm_tool`)
 
-- **Config_json_tree**
+Any widget or page method can be exposed to agents as a tool that controls the UI, by decorating it with `@llm_tool` from `utils.helpers`:
 
-- **Config_joined**
+```python
+@llm_tool(
+    name='add',
+    description='Add a new item to the tree',
+    params={'name': 'Name of the new item'},
+)
+def add_item(self, name: str = None):
+    ...
+```
 
-- **Config_side_tabs**
+- `name`: tool name, defaults to the method name. It is prefixed with the snake-cased defining class, e.g. `config_db_tree_add`.
+- `description`: defaults to the method docstring.
+- `params`: maps exposed parameter names to descriptions. When omitted, every signature parameter is exposed. `params={}` exposes none.
+- `confirm=True`: the user must approve each call before it runs (honoured by Claude Code agents).
+- Annotations `str`, `int`, `float` and `bool` map to JSON schema types, anything else is a string. Parameters without a default are required.
+- The return value is sent back to the agent as the tool output (`None` -> `Done`). Raise an exception to return an error.
 
-- **Config_ext_tree**
+Tools are discovered automatically from every loaded class, listed on the Tools page under the `Application/<module>` folder, and selected in an agent's tool list like workflow tools (selecting a folder selects all tools in it).
 
-- **Config_table**
+**Widget references**
 
-- **Query_settings**
+Because a widget class can be on screen many times, a non-root tool takes an extra required `widget` argument, e.g. `w3`. The agent gets these references from `view_ui`, which walks the visible UI with `get_agent_visualisation(refs)` and prints a `Tools [wN]:` block for each widget that has tools. A call fails if the referenced widget is no longer in view, so the agent calls `view_ui` again.
 
-- **Code_settings**
+- Mark a class with `_ap_llm_tool_root = True` to make the tools it defines unprefixed and called without a `widget` argument. `MainPages` does this for `view_ui` and `restart_app`. Inherited tools are unaffected, so `switch_page` (from `ConfigPages`) is still `config_pages_switch_page` and takes a `widget`.
+- Override `agent_visualisation()` to describe a widget's state to the agent (see `VideoStudio`). Override `get_agent_visualisation(refs)` to control which children are walked (see `FileTree`).
+- A tool taking a `refs` parameter receives the caller's reference list, cleared, to number widgets itself (only `view_ui` needs this).
 
-- **Config_json_db_tree**
-
-- **Config_tree**
-
-- **Population_view**
-
-- **Image_settings**
-
-- **Config_pages**
-
-- **Text_settings**
-
-- **User_settings**
-
-- **Multi_preview**
-
-- **Input_settings**
-
-- **Probability_settings**
-
-- **Config_collection**
-
-- **Wait_settings**
-
-- **Overlay**
-
-- **Workflow_settings**
-
-- **Config_voice_tree**
-
-- **Config_tabs**
-
-- **Video_settings**
-
-- **Config_db_tree**
-
-- **Generate_widget**
-
-- **File_tree**
-
-- **Message_collection**
-
-- **Chat_widget**
-
-- **Audio_settings**
-
-- **Prompt_settings**
-
-- **Contact_settings**
-
-- **Config_widget**
-
-- **Control_panel**
-
-- **Notif_settings**
-
-- **Fund_map**
-
-- **Fitness_chart**
-
-- **Config_fields**
-
-- **Claude_code_settings**
-
-- **Agent_settings**
-
-- **Media_settings**
-
-- **Computer_use_settings**
-
-- **Collections_widget**
+**All widget modules:** Config_db_tree, Config_json_db_tree, Config_table, Config_widget, Config_side_tabs, Config_fields, Config_tabs, Filter_builder, Config_json_tree, Config_pages, Config_tree, Config_collection, Config_joined, Config_ext_tree, Config_voice_tree, Wait_settings, File_tree_deploy, Prompt_settings, Generate_widget, Overlay, Agent_settings, Computer_use_settings, Chat_widget, Github_account, Vcs_panel, Audio_settings, Input_settings, Text_settings, Fund_map, Claude_context, User_settings, Git_diff_settings, Multi_preview, Notif_settings, Video_settings, File_tree, Deploy_panel, Media_settings, Live_agent_settings, Git_checkpoint_settings, Workflow_settings, Code_settings, Contact_settings, Workflow_popup, Message_collection, Set_variable_settings, Query_settings, Image_settings, Cc_user_settings, Probability_settings, File_tree_vcs, Claude_code_settings

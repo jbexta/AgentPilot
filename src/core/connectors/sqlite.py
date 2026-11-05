@@ -34,6 +34,23 @@ class SqliteConnector:
                 cursor.close()
                 return cursor.lastrowid
 
+    def execute_many(self, statements):
+        """Execute a list of (query, params) statements in a single transaction/connection.
+
+        Collapses many writes into one commit, avoiding thousands of separate
+        connections/fsyncs (which freezes the app during bulk operations).
+        """
+        with sql_thread_lock:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                for statement in statements:
+                    query, params = statement if isinstance(statement, tuple) else (statement, None)
+                    if params:
+                        cursor.execute(query, params)
+                    else:
+                        cursor.execute(query)
+                cursor.close()
+
     def get_results(self, query, params=None, return_type='rows', incl_column_names=False):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()

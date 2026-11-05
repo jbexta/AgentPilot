@@ -1,17 +1,12 @@
+import io
 import json
+import sys
 
 from typing_extensions import override
-
-try:
-    from plugins_old.openinterpreter.src import interpreter
-except ImportError:
-    interpreter = None
 
 from utils import sql
 from utils.helpers import set_module_type
 from utils.helpers import BaseManager
-
-OI_EXECUTOR = interpreter
 
 
 @set_module_type(module_type='Managers')
@@ -60,15 +55,22 @@ class Environment:
         # self.update(config)
 
     def run_code(self, lang, code, venv_path=None):
-        if OI_EXECUTOR is None:
-            raise RuntimeError(
-                "OpenInterpreter is not available. "
-                "Use a Docker or SafeIntegrated environment."
-            )
-        OI_EXECUTOR.venv_path = venv_path
-        oi_res = OI_EXECUTOR.computer.run(lang, code)
-        output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-        return output
+        from gui import system
+
+        exec_globals = {
+            '__builtins__': __builtins__,
+            'system': system,
+            'sql': sql,
+            'json': json,
+        }
+
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            exec(compile(code, '<inline>', 'exec'), exec_globals)
+            return sys.stdout.getvalue()
+        finally:
+            sys.stdout = old_stdout
 
     def update(self, config):
         self.config = config

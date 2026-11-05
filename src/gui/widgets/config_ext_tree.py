@@ -4,7 +4,7 @@ from PySide6.QtGui import Qt
 from typing_extensions import override
 
 from utils.helpers import block_signals, set_module_type
-from gui.util import find_main, safe_single_shot
+from gui.gui_utils.helpers import find_main, safe_single_shot
 
 from gui.widgets.config_json_tree import ConfigJsonTree
 

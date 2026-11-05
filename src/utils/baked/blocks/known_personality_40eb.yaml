@@ -29,7 +29,7 @@ config:
     show_nested_bubbles: false
     mini_view: false
   params:
-  - name: name
-    description: The name of the character or celebrity to embody
-    type: String
+  - description: The name of the character or celebrity to embody
+    name: name
     req: true
+    type: String

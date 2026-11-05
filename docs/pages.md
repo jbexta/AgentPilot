@@ -47,48 +47,4 @@ class Page_Entities(ConfigDBTree):
 
 This keeps related configurations together while maintaining separation.
 
-**All page modules:**
-
-- **Blocks**
-
-- **Finance**
-
-- **Videos**
-
-- **Slopify**
-
-- **Modules**
-
-- **System**
-
-- **Models**
-
-- **Channels**
-
-- **Tasks**
-
-- **Tools**
-
-- **Agents**
-
-- **Images**
-
-- **Chat**
-
-- **Youtube**
-
-- **Display**
-
-- **Projects**
-
-- **Todo**
-
-- **Job_hunter**
-
-- **Files**
-
-- **Settings**
-
-- **Contexts**
-
-- **Environments**
+**All page modules:** Daemons, Settings, Tttt, System, Icons, Modules, Display, Product_search, Projects, Chat, Embroidery, Telephony, Jobs, Skills, Agents, Open_food, Finance, Tasks, Models, Videos, Companies_house, Environments, Claude, Blocks, Slopify, Contexts, Contacts, Voices, Tools, Plans, Company_search, Files

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QMenu
 from PySide6.QtGui import QAction, QFont
 
 from gui import system
-from gui.util import IconButton
+from gui.gui_utils.icon_button import IconButton
 
 
 class ProjectTypeMenu(IconButton):  # todo dedupe

@@ -63,10 +63,7 @@ config:
 
         This keeps related configurations together while maintaining separation.
 
-        **All page modules:**
-        {% for name, module_data in system.modules.type_controllers['pages'].items() %}
-        - **{{ name | capitalize }}**
-        {% endfor %}
+        **All page modules:** {{ system.modules.type_controllers['pages'] | map('capitalize') | join(', ') }}
       _format_block_keys:
       - data
       _TYPE: text
@@ -78,4 +75,5 @@ config:
     show_nested_bubbles: false
     mini_view: false
   params: []
+kind: PROJECT:1
 parent_uuid: b3245998-3a81-4fe0-a032-a2c9bf2ce169

@@ -8,7 +8,7 @@ import os
 
 from PySide6.QtWidgets import QWidget, QPushButton, QLabel, QSizePolicy
 
-from gui.util import CHBoxLayout
+from gui.gui_utils.layouts import CHBoxLayout
 
 
 class AudioPreview(QWidget):

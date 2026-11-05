@@ -23,7 +23,8 @@ from PySide6.QtCore import QSize, QTimer, QUrl
 from PySide6.QtGui import QTextCursor, QTextOption, Qt, QDesktopServices
 
 from gui import system as gui_system
-from gui.util import IconButton, find_chat_widget
+from gui.gui_utils.helpers import find_chat_widget
+from gui.gui_utils.icon_button import IconButton
 from utils.helpers import apply_alpha_to_hex
 from utils import sql
 
@@ -50,21 +51,24 @@ def get_bubble_attr(role, attr, default=None):
 class MessageBubble(QTextEdit):
     bubble_bg_color = '#00000000'
     bubble_bg_opacity = 1.0
-    bubble_text_color = '#ffd1d1d1'
+    bubble_text_color = None  # None means: use display.text_color from config
     bubble_image_size = 25
     show_bubble = True
+    wrap_code = False  # wrap code blocks instead of widening the document
 
     def __init__(self, parent, message, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent
         self.msg_id: int = None
         self.member_id: str = None
-        print(f"MessageBubble: {message.id} {message.member_id} {message.role}")
+        # print(f"MessageBubble: {message.id} {message.member_id} {message.role}")
         self.setContentsMargins(5, 0, 0, 0)
 
         # Per-instance style overrides via kwargs (default to class attrs).
         self.bubble_bg_color = kwargs.get('bubble_bg_color', self.bubble_bg_color)
         self.bubble_text_color = kwargs.get('bubble_text_color', self.bubble_text_color)
+        if self.bubble_text_color is None:
+            self.bubble_text_color = gui_system.manager.config.get('display.text_color', '#ffcacdd5')
         self.bubble_bg_opacity = kwargs.get('bubble_bg_opacity', self.bubble_bg_opacity)
         if self.bubble_bg_opacity != 1.0:
             self.bubble_bg_color = apply_alpha_to_hex(
@@ -116,7 +120,10 @@ class MessageBubble(QTextEdit):
         self.text = ''
         self.code_blocks = []
 
-        self.enable_markdown = self.parent.member_config.get('chat.display_markdown', True)
+        member = self.workflow.members.get(self.member_id)
+        self.enable_markdown = self.parent.member_config.get(
+            'chat.display_markdown', getattr(member, 'display_markdown', True)
+        )
         if self.readonly:  # role not in ('user', 'code'):
             self.setReadOnly(True)
 
@@ -257,6 +264,8 @@ class MessageBubble(QTextEdit):
             text = mistune.markdown(display_text if display_text else text)
             code_color = '#919191' if self.role != 'code' else bubble_text_color
             css_background = f"code {{ color: {code_color}; }}"
+            if self.wrap_code:
+                css_background += " pre { white-space: pre-wrap; }"
             css_font = f"body {{ color: {bubble_text_color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
             css_links = f"""
             a {{
@@ -277,7 +286,10 @@ class MessageBubble(QTextEdit):
             from PySide6.QtGui import QFont, QTextDocument
             # Create new document to fully clear HTML formatting
             doc = QTextDocument()
-            doc.setPlainText(text)
+            doc.setPlainText(
+                display_text if display_text and not self.is_edit_mode
+                else text
+            )
             font_obj = QFont(font, size - 1)
             doc.setDefaultFont(font_obj)
             self.setDocument(doc)
@@ -290,8 +302,9 @@ class MessageBubble(QTextEdit):
 
         # Restore the cursor position and selection
         new_cursor = QTextCursor(self.document())  # New cursor from the updated document
-        new_cursor.setPosition(anchor_position)  # Set the start of the selection
-        new_cursor.setPosition(cursor_position, QTextCursor.KeepAnchor)  # Set the end of the selection
+        max_position = max(0, self.document().characterCount() - 1)
+        new_cursor.setPosition(min(anchor_position, max_position))  # Set the start of the selection
+        new_cursor.setPosition(min(cursor_position, max_position), QTextCursor.KeepAnchor)  # Set the end of the selection
         self.setTextCursor(new_cursor)  # Apply the new cursor with the restored position and selection
 
         # cursor.setPosition(start, cursor.MoveAnchor)
@@ -392,6 +405,22 @@ class MessageBubble(QTextEdit):
 
 
     def sizeHint(self):
+        # Fill the scroll viewport minus the row's other items (avatar, branch
+        # strip, buttons). Buttons stack in a column beside a bubble taller
+        # than the stack, else sit in a row; the container follows this choice.
+        container = self.parent
+        viewport = container.parent.scroll_area.viewport()
+        # A hidden / not-yet-shown viewport keeps a stale ~100px width, which
+        # would wrap the text tall and trip the collapse check.
+        viewport_width = (viewport if viewport.isVisible() else find_chat_widget(self) or viewport).width()
+        self.buttons_stacked = True
+        hint = self._size_for(viewport_width - container.reserved_width(stacked=True))
+        if hint.height() <= container.buttons_height():
+            self.buttons_stacked = False
+            hint = self._size_for(viewport_width - container.reserved_width(stacked=False))
+        return hint
+
+    def _size_for(self, bubble_width):
         import math
         # Clone the document to avoid altering the state of the real one.
         doc = self.document().clone()
@@ -404,35 +433,9 @@ class MessageBubble(QTextEdit):
         doc_margin = int(doc.documentMargin() * 2)
         chrome = frame + doc_margin + 2
 
-        # --- Step 1: Determine the maximum available width for the bubble's text.
-        chat_widget = find_chat_widget(self)
-        # main = find_main_widget(self)
-        max_text_width = 400  # A sensible default width.
-
-        # Horizontal overhead next to the bubble inside its MessageContainer:
-        # avatar column (~25 when shown), action-button column (~64 for two
-        # buttons + spacing), branch-indicator strip, and layout padding. We
-        # subtract a flat estimate so the resulting hint_width — which adds
-        # margins and chrome back on — still fits inside chat_widget.width()
-        # without triggering a horizontal scrollbar.
-        other_columns = 110
-
-        if chat_widget:  #  and hasattr(main, 'main_pages'):
-            try:
-                # This calculation can be fragile during UI setup.
-                # We subtract a bit more to account for layout spacing, scrollbars, etc.
-                available_width = (
-                    chat_widget.width()
-                    - chrome
-                    - margins.left()
-                    - margins.right()
-                    - other_columns
-                )  # - main.main_pages.settings_sidebar.width() - 60
-                if available_width > 0:
-                    max_text_width = available_width
-            except AttributeError:
-                # This can happen if widgets aren't fully initialized.
-                pass
+        # --- Step 1: Max text width = the bubble's width minus its own chrome.
+        available_width = bubble_width - chrome - margins.left() - margins.right()
+        max_text_width = available_width if available_width > 0 else 400
 
         # --- Step 2: Calculate the text's "ideal" unwrapped width.
         # Set text width to -1 to tell the layout to calculate the size without any wrapping.

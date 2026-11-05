@@ -2,8 +2,9 @@ import os
 
 from PySide6.QtWidgets import QWidget, QSizePolicy
 
+from gui import system as gui_system
 from gui.media_previews.audio import AudioPreview
-from gui.util import CVBoxLayout
+from gui.gui_utils.layouts import CVBoxLayout
 from utils.helpers import get_json_value
 
 
@@ -33,6 +34,7 @@ class AudioBubble(QWidget):
         # role_config = system.manager.roles.get(self.role, {})
         # bg_color = role_config.get('bubble_bg_color', '#252427')
         # text_color = role_config.get('bubble_text_color', '#999999')
+        self.bubble_text_color = gui_system.manager.config.get('display.text_color', '#ffcacdd5')
         self.setStyleSheet(
             f"background-color: {self.bubble_bg_color}; "
             f"color: {self.bubble_text_color};"

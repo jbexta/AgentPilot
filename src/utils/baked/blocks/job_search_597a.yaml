@@ -1,0 +1,46 @@
+uuid: 597a20f9-b3da-4d0e-846e-a65378795592
+name: job_search
+config:
+  _TYPE: workflow
+  name: job_search
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Job Search Plugin (`src/plugins/job_search`)
+
+        Searches job listings through the **Adzuna** API and keeps the ones worth applying to.
+
+        ## 1. Manager (`managers/job_search.py`)
+
+        `JobSearchManager` searches Adzuna and stores saved jobs in the `job_search_jobs` table.
+        *   **Credentials:** the Adzuna App ID is the *Client Key* and the App Key is the *API Key* of the Adzuna API in Settings > Models.
+        *   **Countries:** gb, us, at, au, be, br, ca, ch, de, es, fr, in, it, mx, nl, nz, pl, sg, za.
+        *   **Search by:** All words (`what`), Any word (`what_or`), Exact phrase (`what_phrase`), Title (`title_only`).
+        *   **Filters** map to Adzuna params: excluded keywords, location, distance, max days old, min/max salary, include unknown salary, company, category. Contract type (permanent/contract) and hours (full/part time) are flags.
+        *   **Sorting:** only send `sort_by`. Adzuna returns a 400 for `sort_dir`, even though its spec lists it.
+        *   Page sizes 10/20/50 (Adzuna max is 50). Free tier rate limit: 25 a minute, 250 a day.
+        *   `normalize` turns a result into a flat dict and strips the HTML highlight tags. Salaries Adzuna estimated are prefixed with `~`.
+
+        ## 2. Page (`pages/jobs.py`)
+        `Page_Jobs` (main page, ConfigTabs) has two tabs: **Search** and **Saved**.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

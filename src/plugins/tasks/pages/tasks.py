@@ -3,24 +3,41 @@ import json
 import re
 from datetime import datetime, timezone
 
-from PySide6.QtCore import QDate, Slot, QPointF, QTime, QTimer, QRect, Signal
-from PySide6.QtGui import Qt, QColor, QTextCharFormat, QFont, QPainter, QPen, QPainterPath
+import qasync
+from PySide6.QtCore import QDate, QPointF, QTime, QTimer, QRect, Signal
+from PySide6.QtGui import Qt, QColor, QTextCharFormat, QFont, QIcon, QPainter, QPen, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCalendarWidget, QVBoxLayout, QLabel,
     QDialog, QFormLayout, QLineEdit, QTimeEdit, QComboBox,
-    QDialogButtonBox, QHBoxLayout, QMenu, QScrollArea, QWidget,
-    QSpinBox,
+    QDialogButtonBox, QHBoxLayout, QMenu, QMessageBox, QScrollArea,
+    QWidget, QSpinBox,
 )
 
-from plugins.workflows.widgets.workflow_settings import WorkflowSettings
+from plugins.tasks.managers.tasks import STATUSES
+from plugins.workflows.utils.runs import get_run_manager
+from plugins.workflows.widgets.chat_widget import ChattableWorkflowWidget
 
+from gui.fields.text import CTextEdit
 from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_widget import ConfigWidget
-from gui.util import IconButton
+from gui.gui_utils.helpers import auto_bake_table_item, colorize_pixmap
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.layouts import CVBoxLayout
 from utils import sql
-from utils.helpers import block_signals, apply_alpha_to_hex, set_module_type
+from utils.helpers import block_signals, apply_alpha_to_hex, display_message_box, set_module_type, exec_non_modal
 from gui import system
+
+STATUS_ICONS = {
+    'TODO': ':/resources/icon-dot.svg',
+    'RUNNING': ':/resources/icon-run.png',
+    'AWAITING_APPROVAL': ':/resources/icon-pause.png',
+    'DONE': ':/resources/icon-tick.svg',
+    'FAILED': ':/resources/icon-cross.png',
+    'RECURRING': ':/resources/icon-refresh.png',
+    'SCHEDULED': ':/resources/icon-clock.png',
+}
 
 
 def build_rrule(selected_date, selected_time, recurrence):
@@ -485,7 +502,7 @@ class CustomCalendar(QCalendarWidget):
 @set_module_type('Pages')
 class Page_Tasks_Settings(ConfigJoined):
     display_name = 'Tasks'
-    icon_path = ":/resources/icon-tasks.png"
+    icon_path = ":/resources/icon-schedule.png"
     page_type = 'main'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
 
     def __init__(self, parent):
@@ -541,9 +558,7 @@ class Page_Tasks_Settings(ConfigJoined):
 
                 header_layout = QHBoxLayout()
                 self.label = QLabel('')
-                self.label.setStyleSheet(
-                    'font-size: 10pt; font-weight: bold;'
-                )
+                self.label.setObjectName('calendarDayLabel')
                 header_layout.addWidget(self.label)
 
                 self.add_btn = IconButton(
@@ -677,17 +692,9 @@ class Page_Tasks_Settings(ConfigJoined):
                     r'\d{2}:\d{2}', time_str, time_expr,
                 )
 
-                sql.execute(
-                    "UPDATE tasks SET config = json_set("
-                    "config, '$.rrule', ?, "
-                    "'$.time_expression', ?, "
-                    "'$.duration', ?) "
-                    "WHERE id = ?",
-                    (rrule, time_expr, duration, task_id),
-                )
+                system.manager.tasks.set_schedule(task_id, rrule, time_expr, duration)
 
                 scheduled_tasks = self.parent.parent.widgets[1]
-                scheduled_tasks.load()
                 scheduled_tasks.on_edited()
 
             def add_task_for_date(self):
@@ -707,42 +714,46 @@ class Page_Tasks_Settings(ConfigJoined):
                 )
 
                 scheduled_tasks = self.parent.parent.widgets[1]
-                scheduled_tasks.manager.add(
-                    name=name, kind='SCHEDULED',
-                )
-                last_id = scheduled_tasks.db_connector.get_scalar(
-                    "SELECT seq FROM sqlite_sequence WHERE name=?",
-                    (scheduled_tasks.table_name,),
-                )
+                manager = system.manager.tasks
+                task_id = manager.add(name=name)
+                manager.set_schedule(task_id, rrule_str, time_expression, duration)
 
-                sql.execute(
-                    "UPDATE tasks SET config = json_set("
-                    "config, '$.rrule', ?, "
-                    "'$.time_expression', ?, "
-                    "'$.duration', ?"
-                    ") WHERE id = ?",
-                    (rrule_str, time_expression, duration, last_id),
-                )
-
-                scheduled_tasks.load(select_id=last_id)
+                scheduled_tasks.load(select_id=task_id)
                 scheduled_tasks.on_edited()
 
     class Page_Scheduled_Tasks(ConfigDBTree):
-        def __init__(self, parent):
+        """Every task, those of other kinds (e.g. `PROJECT:1:Issues`) grouped
+        under their kind; or, given another `kind`, just the tasks of it."""
+        def __init__(self, parent, kind='SCHEDULED', folder_key='tasks_scheduled'):
+            is_main = kind == 'SCHEDULED'
             super().__init__(
                 parent=parent,
-                table_name='tasks',
-                query="""
+                manager='tasks',
+                query=f"""
                     SELECT
                         name,
                         id,
-                        COALESCE(json_extract(config, '$.time_expression'), ''),
+                        status,
                         COALESCE(json_extract(config, '$.rrule'), ''),
-                        -- COALESCE(json_extract(config, '$.enabled'), 1),
-                        folder_id
+                        folder_id,
+                        parent_id
+                        {", CASE WHEN kind = :kind THEN '' ELSE kind END" if is_main else ''}
                     FROM tasks
-                    WHERE kind = 'SCHEDULED'
-                    ORDER BY pinned DESC, ordr, name COLLATE NOCASE""",
+                    {'' if is_main else 'WHERE kind = :kind'}
+                    ORDER BY
+                        kind != :kind,
+                        replace(replace(kind, ':Todo', ''), ':Issues', ''),
+                        CASE WHEN kind LIKE '%:Todo' THEN 0 WHEN kind LIKE '%:Issues' THEN 1 ELSE 2 END,
+                        CASE status
+                            WHEN 'AWAITING_APPROVAL' THEN 0
+                            WHEN 'RUNNING' THEN 1
+                            WHEN 'FAILED' THEN 2
+                            WHEN 'TODO' THEN 3
+                            WHEN 'SCHEDULED' THEN 4
+                            WHEN 'RECURRING' THEN 5
+                            ELSE 6
+                        END,
+                        pinned DESC, ordr, name COLLATE NOCASE""",
                 schema=[
                     {
                         'text': 'Tasks',
@@ -758,11 +769,10 @@ class Page_Tasks_Settings(ConfigJoined):
                         'visible': False,
                     },
                     {
-                        'text': 'When',
-                        'key': 'time_expression',
+                        'text': 'Status',
+                        'key': 'status',
                         'type': str,
-                        'is_config_field': True,
-                        'stretch': True,
+                        'width': 120,
                     },
                     {
                         'text': 'RRule',
@@ -781,20 +791,71 @@ class Page_Tasks_Settings(ConfigJoined):
                 ],
                 add_item_options={'title': 'Add Task', 'prompt': 'Enter a name for the task:'},
                 del_item_options={'title': 'Delete Task', 'prompt': 'Are you sure you want to delete this task?'},
-                folder_key='tasks_scheduled',
-                kind='SCHEDULED',
+                folder_key=folder_key,
+                kind=kind,
+                group_by_kind=is_main,
+                kind_folder_key=lambda row_kind: f'{row_kind.lower()}:task',
                 readonly=False,
                 layout_type='horizontal',
                 config_widget=self.Task_Config_Widget(self),
                 default_item_icon=':/resources/icon-tasks-small.png',
+                support_item_nesting=True,
+                notify_unread=True,
             )
             self.splitter.setSizes([400, 1000])
+
+        def load(self, *args, **kwargs):
+            super().load(*args, **kwargs)
+            self.apply_status_icons(self.tree.items_mapping.values())
+
+        def reload_current_row(self):
+            super().reload_current_row()
+            if self.get_selected_item_id() is not None:
+                self.apply_status_icons([self.tree.currentItem()])
+
+        def apply_status_icons(self, items):
+            done_ids = getattr(self.tree, '_disabled_ids', set())
+            with block_signals(self.tree):  # setIcon emits itemChanged
+                for item in items:
+                    status = item.text(2)
+                    icon_path = STATUS_ICONS.get(status)
+                    if icon_path:
+                        item.setIcon(0, QIcon(colorize_pixmap(QPixmap(icon_path))))
+                    if status in ('TODO', 'DONE'):
+                        item.setText(2, '')
+                    item.setFirstColumnSpanned(status in ('TODO', 'DONE'))
+                    item_id = item.data(0, Qt.UserRole)['id']
+                    if status == 'DONE':
+                        done_ids.add(item_id)
+                    else:
+                        done_ids.discard(item_id)
+            self.tree._disabled_ids = done_ids  # painted dimmed
+
+        def get_notify_ids(self, unread_context_ids):
+            if not unread_context_ids:
+                return set()
+            placeholders = ','.join('?' * len(unread_context_ids))
+            kinds = sql.get_results(
+                f"SELECT kind FROM contexts WHERE id IN ({placeholders}) AND kind LIKE 'TASK:%'",
+                tuple(unread_context_ids), return_type='list',
+            )
+            return {int(kind.partition(':')[2]) for kind in kinds}
 
         def on_edited(self):
             daemon = system.manager.daemons.running_daemons.get('tasks')
             if daemon:
                 asyncio.ensure_future(daemon.load())
-            self.parent.widgets[0].load()
+            self.reload_calendar()
+
+        def reload_calendar(self):
+            if isinstance(self.parent, Page_Tasks_Settings):
+                self.parent.widgets[0].load()
+
+        def on_manager_changed(self):
+            super().on_manager_changed()
+            self.reload_calendar()
+            if self.get_selected_item_id():
+                self.config_widget.refresh_from_db()
 
         def on_item_selected(self):
             current_parent = self.config_widget.parent
@@ -804,89 +865,329 @@ class Page_Tasks_Settings(ConfigJoined):
             self.config_widget.parent = self
             super().on_item_selected()
 
+        def get_new_item_values(self):
+            title = self.add_item_options['title']
+            dlg = QDialog(self)
+            dlg.setObjectName('newTaskDialog')
+            dlg.setWindowTitle(title)
+            dlg.setFixedWidth(520)
+            name_edit = QLineEdit(dlg)
+            task_edit = CTextEdit(dlg, enhancement_key='task')
+            task_edit.setPlaceholderText("What's the task?")
+            buttons = QDialogButtonBox(
+                QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dlg,
+            )
+            ok_btn = buttons.button(QDialogButtonBox.Ok)
+            ok_btn.setText('Create')
+            for btn in buttons.buttons():
+                btn.setIcon(QIcon())
+            ok_btn.setEnabled(False)
+            for edit in (name_edit, task_edit):
+                edit.textChanged.connect(lambda *_: ok_btn.setEnabled(bool(
+                    name_edit.text().strip()
+                    or task_edit.toPlainText().strip()
+                )))
+            buttons.accepted.connect(dlg.accept)
+            buttons.rejected.connect(dlg.reject)
+            title_lbl = QLabel(title, dlg)
+            title_lbl.setObjectName('newProjectTitle')
+            layout = CVBoxLayout(dlg)
+            layout.setContentsMargins(24, 20, 24, 20)
+            layout.addWidget(title_lbl)
+            layout.addSpacing(16)
+            for text, edit in (('Name', name_edit), ('Task', task_edit)):
+                label = QLabel(text, dlg)
+                label.setProperty('class', 'new-project-label')
+                layout.addWidget(label)
+                layout.addSpacing(6)
+                layout.addWidget(edit)
+                layout.addSpacing(14)
+            layout.addSpacing(4)
+            layout.addWidget(buttons)
+            if exec_non_modal(dlg) != QDialog.Accepted:
+                return None
+            task = task_edit.toPlainText().strip()
+            name = name_edit.text().strip() or ' '.join(task.split())[:50]
+            return {'name': name, 'task': task}
+
+        def update_name(self):
+            pass  # the task name is the chat title, not the workflow name
+
+        def rename_item(self):
+            super().rename_item()
+            self.show_name_in_chat()
+
+        def show_name_in_chat(self):
+            item_id = self.get_selected_item_id()
+            if item_id is None or not self.config_widget.chat_shows_task():
+                return
+            name = sql.get_scalar("SELECT name FROM tasks WHERE id = ?", (item_id,))
+            self.config_widget.chat.set_chat_title(name)
+
+        def on_context_menu(self, menu):
+            task_id = self.get_selected_item_id()
+            if task_id is None:
+                return
+            status_menu = menu.addMenu('Set Status')
+            for status in STATUSES:
+                action = status_menu.addAction(
+                    QIcon(colorize_pixmap(QPixmap(STATUS_ICONS[status]))), status)
+                action.triggered.connect(
+                    lambda _, s=status: self.manager.set_item_status(task_id, s))
+
         def on_cell_edited(self, item):
             col_indx = self.tree.currentColumn()
-            if col_indx != 2:
-                super().on_cell_edited(item)
+            if col_indx == 2:  # status is set from the panel
+                self.load(silent_select_id=self.get_selected_item_id())
                 return
-
-            item_id = self.get_selected_item_id()
-            if item_id is None:
-                return
-            time_expression = item.text(col_indx)
-
-            if time_expression.strip() == '':
-                self.handle_result('', '', item_id)
-                return
-
-            asyncio.ensure_future(
-                self._process_time_expression(time_expression, item_id)
-            )
+            super().on_cell_edited(item)
+            if col_indx == 0:
+                self.show_name_in_chat()
 
         async def _process_time_expression(self, time_expression, item_id):
             try:
-                result = await system.manager.blocks.compute_block_async(
-                    'expression_to_time', {'expression': time_expression}
+                await system.manager.tasks.apply_time_expression(
+                    item_id, time_expression,
                 )
-                match = re.search(r'<answer>(.*?)</answer>', result, re.DOTALL)
-                result = match.group(1).strip() if match else result.strip()
-
-                clean_time_expression = await system.manager.blocks.compute_block_async(
-                    'time_to_expression', {'time': result}
-                )
-                match = re.search(r'<answer>(.*?)</answer>', clean_time_expression, re.DOTALL)
-                clean_time_expression = match.group(1).strip() if match else clean_time_expression.strip()
-                self.handle_result(result, clean_time_expression, item_id)
+                auto_bake_table_item('tasks', item_id)
+                self.reload_current_row()
+                self.reload_calendar()
+                if self.get_selected_item_id() == item_id:
+                    self.config_widget.refresh_from_db()
             except Exception as e:
                 print(f"Error processing time expression: {e}")
 
-        @Slot(str, str, int)
-        def handle_result(self, result, time_expression, item_id):
-            result = result.strip()
-            if 'DTSTART' not in result and result != '':
-                now = datetime.now(timezone.utc)
-                result = f"DTSTART:{now.strftime('%Y%m%dT%H%M%SZ')}\n{result}"
+        def delete_item(self):
+            item = self.tree.currentItem()
+            if not item or not isinstance(item.data(0, Qt.UserRole), dict):
+                return super().delete_item()
+            retval = display_message_box(
+                icon=QMessageBox.Warning,
+                title='Delete Task',
+                text='Delete this task, its sub-tasks and their chats?',
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval == QMessageBox.Yes:
+                self.manager.delete(self.get_selected_item_id())  # the tree reloads on its changed signal
 
-            sql.execute(f"""
-                UPDATE tasks
-                SET config = json_set(config, '$.rrule', ?)
-                WHERE id = ?
-            """ , (result.strip(), item_id))
-            sql.execute(f"""
-                UPDATE tasks
-                SET config = json_set(config, '$.time_expression', ?)
-                WHERE id = ?
-            """ , (time_expression.strip(), item_id))
+        class Task_Config_Widget(ConfigJoined):
+            """The task's text, and its workflow above the task's latest
+            chat."""
 
-            daemon = system.manager.daemons.running_daemons.get('tasks')
-            if daemon:
-                asyncio.ensure_future(daemon.load())
-            self.reload_current_row()
-            self.parent.calendar.load()
-
-        class Task_Config_Widget(WorkflowSettings):
             def __init__(self, parent):
-                super().__init__(parent=parent, compact_mode=True)
+                self.propagate_config = True  # inherited by the children built below
+                self.task_id = None
+                self.description = self.Task_Description(parent=self)
+                self.chat = self.Task_Chat(parent=self)
+                super().__init__(
+                    parent=parent,
+                    widgets=[self.description, self.chat],
+                    layout_type='vertical',
+                    resizable=True,
+                    propagate_config=True,
+                )
 
-            def get_config(self):
-                config = super().get_config()
-                for key in ('rrule', 'time_expression'):
-                    if key in self.config and key not in config:
-                        config[key] = self.config[key]
-                return config
+            def after_init(self):
+                self.splitter.setSizes([120, 800])
 
-            def load_config(self, json_config=None):
-                if json_config is None:
-                    parent_config = getattr(self.parent, 'config', {})
-
-                    if self.conf_namespace is None and not isinstance(self, ConfigDBTree):
-                        json_config = parent_config
-                    else:
-                        json_config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
-                super().load_config(json_config)
+            def maybe_rebuild_schema(self, schema_overrides, item_id):
+                self.description.maybe_rebuild_schema(schema_overrides, item_id)
 
             def update_config(self):
                 self.save_config()
 
             def save_config(self):
+                # the chat saves through its parent, so route it to the tree
                 self.parent.update_config()
+
+            def chat_shows_task(self):
+                """Whether the chat is on one of the selected task's chats
+                (or its unsaved draft), so its workflow is the task's."""
+                workflow = self.chat.workflow
+                context_id = workflow.context_id
+                kind = sql.get_scalar("SELECT kind FROM contexts WHERE id = ?", (context_id,)) if context_id else workflow._kind
+                return kind == f'TASK:{self.task_id}'
+
+            def get_config(self):
+                stored = sql.get_scalar(
+                    "SELECT config FROM tasks WHERE id = ?",
+                    (self.parent.get_selected_item_id(),),
+                    load_json=True,
+                ) or {}
+                if self.chat_shows_task():
+                    config = super().get_config()
+                else:  # keep the task's workflow, not the other chat's
+                    config = {**stored, **self.description.get_config()}
+                for key in ('rrule', 'time_expression', 'duration'):
+                    if key in stored:
+                        config[key] = stored[key]
+                    else:
+                        config.pop(key, None)
+                return config
+
+            def apply_time_expression(self):
+                """Schedule the task from the `When` field, as typed."""
+                text = self.description.time_expression_wgt.get_value().strip()
+                stored = sql.get_scalar(
+                    "SELECT json_extract(config, '$.time_expression') FROM tasks WHERE id = ?",
+                    (self.task_id,),
+                ) or ''
+                if text == stored:
+                    return
+                asyncio.ensure_future(
+                    self.parent._process_time_expression(text, self.task_id)
+                )
+
+            def load_config(self, json_config=None):
+                self.task_id = self.parent.get_selected_item_id()
+                self.load_task_text()
+                self.chat.load_for_task(self.task_id, json_config)
+
+            def load_task_text(self):
+                # read from the row, `json_config` may be wrapped into a
+                # workflow config without the `task` key
+                stored = sql.get_scalar("SELECT config FROM tasks WHERE id = ?", (self.task_id,), load_json=True) or {}
+                self.description.load_config({
+                    'task': stored.get('task', ''),
+                    'time_expression': stored.get('time_expression', ''),
+                })
+
+            def load(self):
+                self.description.load()
+
+            def refresh_from_db(self):
+                """Show changes made outside the panel, e.g. by an agent,
+                unless the user is typing in the description."""
+                if self.description.task_wgt.hasFocus():
+                    return
+                self.load_task_text()
+                self.description.load()
+
+            class Task_Description(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.schema = [
+                        {
+                            'text': 'When',
+                            'key': 'time_expression',
+                            'type': str,
+                            'default': '',
+                            'stretch_x': True,
+                            'placeholder_text': 'When it runs, e.g. "every weekday at 9am"',
+                            'label_position': None,
+                        },
+                        {
+                            'text': 'Task',
+                            'key': 'task',
+                            'type': str,
+                            'default': '',
+                            'num_lines': 5,
+                            'stretch_x': True,
+                            'stretch_y': True,
+                            'placeholder_text': 'What is the task?',
+                            'label_position': None,
+                            'wrap_text': True,
+                        },
+                    ]
+
+                def build_schema(self):
+                    super().build_schema()
+                    self.time_expression_wgt.widget.editingFinished.connect(
+                        self.parent.apply_time_expression
+                    )
+
+            class Task_Chat(ChattableWorkflowWidget):
+                """The task's workflow above its latest chat. The task text is
+                the user's first message, so an empty chat has no message
+                input, only the run button."""
+
+                def __init__(self, parent):
+                    super().__init__(parent=parent, kind='TASK', workflow_editable=False)
+                    self.is_minimal = None
+
+                def new_chat(self):
+                    if not self.workflow.message_history.messages:
+                        return
+                    context_id, _ = system.manager.tasks.prepare_context(
+                        self.parent.task_id, new=True,
+                    )
+                    self.goto_context(context_id)
+
+                def resize_for_context(self):
+                    """Shrink to the header and input while the chat is
+                    empty, giving the task text the space."""
+                    super().resize_for_context()
+                    self.set_minimal(not self.message_collection.chat_bubbles)
+
+                def set_minimal(self, is_minimal):
+                    if is_minimal == self.is_minimal:
+                        return
+                    self.is_minimal = is_minimal
+                    self.parent.splitter.setSizes(
+                        [10000, 0] if is_minimal else [120, 800]
+                    )
+
+                class ChatInputWidget(ChattableWorkflowWidget.ChatInputWidget):
+                    def __init__(self, parent):
+                        super().__init__(parent)
+                        self.btn_new_chat = IconButton(
+                            parent=self,
+                            icon_path=':/resources/icon-new.png',
+                            tooltip='New chat',
+                        )
+                        self.btn_new_chat.clicked.connect(parent.new_chat)
+                        new_chat_layout = CVBoxLayout()
+                        new_chat_layout.addStretch()
+                        new_chat_layout.addWidget(self.btn_new_chat)
+                        self.layout.insertLayout(2, new_chat_layout)  # after the run button
+
+                    def update_for_next_member(self):
+                        workflow = self.parent.workflow
+                        has_messages = bool(workflow and workflow.message_history.messages)
+                        self.btn_new_chat.setVisible(has_messages and workflow.context_id is not None)
+                        if has_messages:
+                            super().update_for_next_member()
+                            return
+                        self.set_non_user_mode()
+                        self.send_button.set_style_mode(joined=False)
+                        self.send_button.update_icon(is_generating=False)
+
+                @qasync.asyncSlot()
+                async def on_send_message(self, restore_scroll_pos=None):
+                    if self.workflow.message_history.messages or get_run_manager().is_running(self.workflow.context_id):
+                        super().on_send_message(restore_scroll_pos)
+                        return
+                    task_id = self.parent.task_id
+                    manager = system.manager.tasks
+                    context_id, continuing = manager.prepare_context(task_id)
+                    self.goto_context(context_id)
+                    self.set_minimal(False)
+                    user_member_id = manager.first_user_member_id(self.workflow)
+                    if user_member_id is None:
+                        await self.run_workflow_async()
+                    else:
+                        message = await manager.run_message(task_id, continuing)
+                        await self.workflow.send_message(message, as_member_id=user_member_id)
+
+                def set_chat_title(self, text):
+                    self.workflow_settings.header_widget.context_bar.title_label.setText(text)
+
+                def on_chat_title_edited(self, text):
+                    # the task name is the chat title
+                    if not self.parent.chat_shows_task():
+                        return
+                    sql.execute("UPDATE tasks SET name = ? WHERE id = ?", (text, self.parent.task_id))
+                    tree = self.parent.parent.tree
+                    with block_signals(tree):
+                        tree.currentItem().setText(0, text)
+
+                def load_config(self, json_config=None):
+                    pass  # driven by load_for_task()
+
+                def load_for_task(self, task_id, task_config):
+                    manager = system.manager.tasks
+                    if manager.context_id(task_id) is None:
+                        self.new_context(config=task_config, kind=f'TASK:{task_id}')
+                    else:
+                        context_id, _ = manager.prepare_context(task_id)
+                        self.goto_context(context_id)

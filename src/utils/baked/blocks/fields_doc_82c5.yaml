@@ -27,10 +27,7 @@ config:
         - Self-contained with their own validation and styling
         - Have an option_schema defining how they themselves can be configured
 
-        **All field modules:**
-        {% for name, module_data in system.modules.type_controllers['fields'].items() %}
-        - **{{ name | capitalize }}**
-        {% endfor %}
+        **All field modules:** {{ system.modules.type_controllers['fields'] | map('capitalize') | join(', ') }}
 
         Common field kwargs (kwargs that can be used with **any** field module):
       _format_block_keys:
@@ -44,4 +41,5 @@ config:
     show_nested_bubbles: false
     mini_view: false
   params: []
+kind: PROJECT:1
 parent_uuid: b3245998-3a81-4fe0-a032-a2c9bf2ce169

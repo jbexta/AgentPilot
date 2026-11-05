@@ -1,12 +1,15 @@
 import re
 
-from PySide6.QtCore import QRect
-from PySide6.QtGui import Qt, QTextCursor, QPainter, QFontDatabase
+from PySide6.QtCore import QEvent, QRect, QTimer
+from PySide6.QtGui import Qt, QKeySequence, QTextCursor, QPainter, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QWidget, QPlainTextEdit, QApplication, QSizePolicy, QCompleter, QListWidget, QVBoxLayout
 
 from gui import system
 from gui.highlighters.xml import XMLHighlighter
-from gui.util import TextEnhancerButton, IconButton, TextEditorWindow, CVBoxLayout  # XML used dynamically
+from gui.gui_utils.text_enhancer_button import TextEnhancerButton  # XML used dynamically
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.text_editor_window import TextEditorWindow
+from gui.gui_utils.layouts import CVBoxLayout
 from utils.helpers import set_module_type
 
 
@@ -136,12 +139,13 @@ class Text(QWidget):
                 format_blocks=format_blocks,
             )
             self.widget.setTabStopDistance(self.widget.fontMetrics().horizontalAdvance(' ') * 4)
+            # self.widget.setUndoRedoEnabled(False)  # app-level undo history handles text edits
         else:
             self.widget = QLineEdit(self)
             self.widget.setAlignment(text_align)
 
-        transparency = 'background-color: transparent;' if transparent else ''
-        self.widget.setStyleSheet(f"border-radius: 6px;" + transparency)
+        self.widget.setProperty('class', 'text-field')
+        self.widget.setProperty('transparent', transparent)
 
         font = self.widget.font()
         if monospaced:
@@ -182,19 +186,34 @@ class Text(QWidget):
             height = (font_metrics.lineSpacing() + 2) * num_lines + self.widget.contentsMargins().top() + self.widget.contentsMargins().bottom()
             self.widget.setFixedHeight(height)
 
-        self.widget.textChanged.connect(parent.update_config)
+        # self.widget._ap_no_native_undo = True
+        # self.widget.installEventFilter(self)
+
+        self.save_timer = QTimer(self)
+        self.save_timer.setSingleShot(True)
+        self.save_timer.setInterval(300)
+        self.save_timer.timeout.connect(parent.update_config)
+        self.widget.textChanged.connect(self.save_timer.start)
         self.layout = CVBoxLayout(self)
         self.layout.addWidget(self.widget)
 
+    # def eventFilter(self, obj, event):
+    #     # Block the widget's built-in undo/redo so the app-level history handles it
+    #     if obj is self.widget and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress):
+    #         if event.matches(QKeySequence.Undo) or event.matches(QKeySequence.Redo):
+    #             event.ignore()
+    #             return True
+    #     return super().eventFilter(obj, event)
+
     def get_value(self):
-        if isinstance(self.widget, CTextEdit):
+        if isinstance(self.widget, QPlainTextEdit):
             return self.widget.toPlainText()
         else:
             return self.widget.text()
 
     def set_value(self, value):
         value = str(value)
-        if isinstance(self.widget, CTextEdit):
+        if isinstance(self.widget, QPlainTextEdit):
             self.widget.setPlainText(value)
         else:
             self.widget.setText(value)
@@ -239,7 +258,7 @@ class CTextEdit(QPlainTextEdit):
         #     self.setLineWrapColumnOrWidth(10000)
 
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
-        self.expand_button.setStyleSheet("background-color: transparent;")
+        self.expand_button.setObjectName('textExpandButton')
         self.expand_button.clicked.connect(self.on_button_clicked)
         self.expand_button.hide()
 

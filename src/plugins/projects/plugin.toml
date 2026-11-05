@@ -1,0 +1,8 @@
+[plugin]
+name = "projects"
+version = "0.1.0"
+description = "Project manager: project types, web stacks, services and git/GitHub version control."
+requires = ["files", "tasks"]
+
+[dependencies]
+aiohttp = { version = "3.13.0", import = "aiohttp" }

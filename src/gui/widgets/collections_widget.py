@@ -1,625 +1,435 @@
 import json
 import os
-import shutil
+from functools import partial
 
-from PySide6.QtCore import Qt, QMimeData, QUrl
-from PySide6.QtGui import QDrag, QIcon, QPixmap
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QCursor, QDrag, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QTreeWidget, QTreeWidgetItem, QMenu,
-    QInputDialog, QMessageBox, QAbstractItemView
+    QAbstractItemView, QFileDialog, QMenu, QMessageBox,
+    QTreeWidgetItem,
 )
 
-from gui.widgets.config_widget import ConfigWidget
-from gui.util import CVBoxLayout, TreeButtons, colorize_pixmap
+from gui.gui_utils.helpers import colorize_pixmap
+from gui.gui_utils.base_tree_widget import BaseTreeWidget
+from gui.gui_utils.media_icon_list_widget import MediaIconListWidget
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.config_side_tabs import CollapsibleSection
 from utils import sql
+from utils.filesystem import get_application_path
+from utils.helpers import display_message, display_message_box, get_text
+from utils.media import (
+    ALL_MEDIA_EXTS, get_media_icon_path, get_media_type_from_ext,
+)
 
-from utils.helpers import ALL_MEDIA_EXTS, get_media_icon_path, get_media_type_from_ext
+SETTINGS_KEY = 'current_project_collection'
+GEN_DIRS = ('videos', 'music', 'images')
+MAX_RECENT_FILES = 100
 
-SETTINGS_KEY = 'video_studio_global_collections'
+MEDIA_FILE_FILTER = ';;'.join([
+    'Media Files (' + ' '.join(f'*{e}' for e in sorted(ALL_MEDIA_EXTS)) + ')',
+    'All Files (*)',
+])
 
 
-class CollectionsWidget(ConfigWidget):
-    """Tree view widget for organizing media assets."""
+class MediaTreeWidget(BaseTreeWidget):
+    """BaseTreeWidget that drags media items out as file URLs (for media
+    upload fields and the timeline) and imports dropped file URLs (from the
+    recent generations list or a file manager) into the collection."""
+
+    def __init__(self, parent, view_mode='list'):
+        super().__init__(parent)
+        self.view_mode = view_mode
+        self._icon_grids = []
+        self.setDragDropMode(QAbstractItemView.DragDrop)
+
+    def _item_filepath(self, item):
+        if item.data(0, Qt.UserRole) == 'folder':
+            return None
+        return sql.get_scalar("""
+            SELECT json_extract(config, '$.path')
+            FROM project_collection_items
+            WHERE id = ?""", (int(item.text(1)),))
+
+    def mimeData(self, items):
+        mime_data = super().mimeData(items)
+        urls = [QUrl.fromLocalFile(path) for item in items
+                if (path := self._item_filepath(item)) and os.path.isfile(path)]
+        if urls:
+            mime_data.setUrls(urls)
+        return mime_data
+
+    def startDrag(self, supported_actions):
+        items = self.selectedItems()
+        if not items:
+            return
+        drag = QDrag(self)
+        drag.setMimeData(self.mimeData(items))
+        # Copy as the default action so external drop targets never trigger
+        # Qt's remove-on-move behaviour; internal drops persist to the db.
+        drag.exec_(Qt.CopyAction | Qt.MoveAction, Qt.CopyAction)
+
+    def _target_folder_id(self, pos):
+        item = self.itemAt(pos)
+        if item is not None and item.data(0, Qt.UserRole) != 'folder':
+            item = item.parent()
+        if item is not None and item.data(0, Qt.UserRole) == 'folder':
+            return int(item.text(1))
+        return None
+
+    def apply_view_mode(self):
+        """In 'icons' mode, hide media item rows and show each folder's items
+        (and root items) as an embedded icon grid row instead."""
+        self._icon_grids = []
+        if self.view_mode != 'icons':
+            return
+        self.blockSignals(True)
+        try:
+            self._build_icon_grids()
+        finally:
+            self.blockSignals(False)
+
+    def _build_icon_grids(self):
+        containers = [self.invisibleRootItem()]
+        stack = [self.invisibleRootItem()]
+        while stack:
+            node = stack.pop()
+            for i in range(node.childCount()):
+                child = node.child(i)
+                if child.data(0, Qt.UserRole) == 'folder':
+                    containers.append(child)
+                    stack.append(child)
+        for container in containers:
+            media_items = [
+                container.child(i) for i in range(container.childCount())
+                if container.child(i).data(0, Qt.UserRole) != 'folder']
+            if not media_items:
+                continue
+            entries = []
+            for item in media_items:
+                filepath = self._item_filepath(item)
+                if filepath:
+                    entries.append((int(item.text(1)), filepath))
+                item.setHidden(True)
+            if not entries:
+                continue
+            grid_item = QTreeWidgetItem(container)
+            grid_item.setData(0, Qt.UserRole, 'icon_grid')
+            grid_item.setFlags(Qt.ItemIsEnabled)
+            grid_item.setFirstColumnSpanned(True)
+            grid = MediaIconListWidget(parent=self)
+            grid.load_files(
+                [filepath for _, filepath in entries],
+                ids=[item_id for item_id, _ in entries])
+            grid.itemClicked.connect(partial(self._on_grid_item_clicked, grid))
+            self._icon_grids.append(grid)
+            self._fit_grid_height(grid)
+            self.setItemWidget(grid_item, 0, grid)
+
+    def _fit_grid_height(self, grid):
+        cell = grid.iconSize().width() + grid.spacing() * 2 + 8
+        cols = max(1, self.viewport().width() // cell)
+        rows = (grid.count() + cols - 1) // cols
+        grid.setFixedHeight(rows * cell + 8)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        for grid in self._icon_grids:
+            self._fit_grid_height(grid)
+
+    def _on_grid_item_clicked(self, grid, item):
+        for other in self._icon_grids:
+            if other is not grid:
+                other.clearSelection()
+        hidden_item = self.items_mapping.get(item.data(Qt.UserRole + 1))
+        if hidden_item is not None:
+            self.setCurrentItem(hidden_item)
+
+    def dragEnterEvent(self, event):
+        if event.source() is self:
+            super().dragEnterEvent(event)
+        elif event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.source() is not self:
+            event.acceptProposedAction()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        source = event.source()
+        item_ids = [item.data(Qt.UserRole + 1) for item in source.selectedItems()] \
+            if isinstance(source, MediaIconListWidget) else []
+        item_ids = [item_id for item_id in item_ids if item_id is not None]
+        if item_ids:
+            # Drag from an embedded icon grid: move within the collection
+            folder_id = self._target_folder_id(event.pos())
+            for item_id in item_ids:
+                sql.execute("""
+                    UPDATE project_collection_items
+                    SET folder_id = ?, collection_id = ?
+                    WHERE id = ?""",
+                    (folder_id, self.parent.current_collection_id, item_id))
+            event.acceptProposedAction()
+            self.parent.load()
+            return
+        if source is not self:
+            paths = [url.toLocalFile() for url in event.mimeData().urls()]
+            self.parent.import_files(paths, self._target_folder_id(event.pos()))
+            event.acceptProposedAction()
+            return
+        # Never drop a folder into itself or its own subtree (the embedded
+        # grid rows are children, so this is easy to do by accident and
+        # creates a parent_id cycle that hangs the folder loading loop)
+        dragging_item = self.currentItem()
+        node = self.itemAt(event.pos())
+        while node is not None:
+            if node is dragging_item:
+                event.ignore()
+                return
+            node = node.parent()
+        super().dropEvent(event)
+
+
+class CollectionsWidget(ConfigDBTree):
+    """Tree view widget for organizing media assets.
+
+    Shows a 'Recent Generations' icon list on top, followed by the folders
+    and media items of the active collection. The active collection is
+    switched from a toolbar button."""
 
     def __init__(self, parent=None):
-        super().__init__(parent=parent)
-        self.root_path = 'collections/'
-        self.default_folders = ['scenes', 'characters']
-        self.folder_key = 'collections'  # Enable folder button in TreeButtons
-
-        self.layout = CVBoxLayout(self)
-
-        # Add tree buttons toolbar
-        self.tree_buttons = TreeButtons(parent=self, extra_buttons=[
-            {
-                'text': 'Toggle Global',
-                'icon_path': ':/resources/icon-globe.png',
-                'target': self.toggle_global,
-                'tooltip': 'Toggle selected folder as global',
-            },
-        ])
-        self.layout.addWidget(self.tree_buttons)
-
-        self.tree = QTreeWidget()
-        self.tree.setHeaderHidden(True)
-        self.tree.setDragEnabled(True)
-        self.tree.setDragDropMode(QAbstractItemView.DragOnly)
-        self.tree.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.tree.customContextMenuRequested.connect(self.show_context_menu)
-        self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
-
-        self.layout.addWidget(self.tree)
-
-        self._ensure_root_path()
-        self.load()
-
-    def build_schema(self):
-        """Override to prevent ConfigWidget from calling build_columns_from_schema on QTreeWidget."""
-        pass
-
-    def _ensure_root_path(self):
-        """Ensure the collections root directory and default folders exist."""
-        if not os.path.exists(self.root_path):
-            os.makedirs(self.root_path)
-
-        for folder in self.default_folders:
-            folder_path = os.path.join(self.root_path, folder)
-            if not os.path.exists(folder_path):
-                os.makedirs(folder_path)
-
-    def _get_global_collections(self):
-        """Load global collections from settings table."""
-        value = sql.get_scalar(
-            f"SELECT value FROM settings WHERE field = ?",
-            (SETTINGS_KEY,),
-            load_json=True
+        self.current_collection_id = None
+        self._ensure_collection()
+        super().__init__(
+            parent=parent,
+            table_name='project_collection_items',
+            tree_class=partial(MediaTreeWidget, view_mode='icons'),
+            query="""
+                SELECT
+                    name,
+                    id,
+                    kind,
+                    folder_id
+                FROM project_collection_items
+                WHERE collection_id = :collection_id
+                ORDER BY pinned DESC, ordr, name COLLATE NOCASE""",
+            query_params={'collection_id': lambda: self.current_collection_id},
+            schema=[
+                {
+                    'text': 'Name',
+                    'key': 'name',
+                    'type': str,
+                    'stretch': True,
+                },
+                {
+                    'text': 'id',
+                    'key': 'id',
+                    'type': int,
+                    'visible': False,
+                },
+                {
+                    'text': 'kind',
+                    'key': 'kind',
+                    'type': str,
+                    'visible': False,
+                },
+            ],
+            folder_key=f'collection:{self.current_collection_id}',
+            del_item_options={'title': 'Remove Media', 'prompt': 'Remove this item from the collection?'},
+            tree_header_hidden=True,
+            init_select=False,
+            searchable=True,
+            extra_buttons=[
+                {
+                    'text': 'Collections',
+                    'icon_path': ':/resources/icon-blocks.png',
+                    'target': self.show_collections_menu,
+                    'tooltip': 'Switch collection',
+                },
+            ],
         )
-        return value if isinstance(value, dict) else {}
+        self.recent_list = MediaIconListWidget(
+            parent=self, on_delete=self.delete_recent_file)
+        self.recent_list.setMaximumHeight(150)
+        self.recent_section = CollapsibleSection(
+            parent=self,
+            title='Recent Generations',
+            content_widget=self.recent_list,
+        )
+        self.tree_layout.addWidget(self.recent_section)
 
-    def _save_global_collections(self, collections):
-        """Save global collections to settings table."""
+        self.build_schema()
+        self.loaded_on_show = False
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.loaded_on_show:
+            self.loaded_on_show = True
+            self.load()
+
+    def _ensure_collection(self):
+        collection_ids = sql.get_results(
+            "SELECT id FROM project_collections ORDER BY ordr, id",
+            return_type='list')
+        if not collection_ids:
+            sql.execute("INSERT INTO project_collections (name) VALUES ('Default')")
+            collection_ids = [sql.get_scalar("SELECT MAX(id) FROM project_collections")]
+
+        last_id = sql.get_scalar(
+            "SELECT value FROM settings WHERE field = ?", (SETTINGS_KEY,))
+        if last_id is not None and int(last_id) in collection_ids:
+            self.current_collection_id = int(last_id)
+        else:
+            self.current_collection_id = collection_ids[0]
+
+    def _save_current_collection(self):
         existing = sql.get_scalar(
-            f"SELECT value FROM settings WHERE field = ?",
-            (SETTINGS_KEY,)
-        )
+            "SELECT value FROM settings WHERE field = ?", (SETTINGS_KEY,))
         if existing is None:
-            sql.execute(
-                "INSERT INTO settings (field, value) VALUES (?, ?)",
-                (SETTINGS_KEY, json.dumps(collections))
-            )
+            sql.execute("INSERT INTO settings (field, value) VALUES (?, ?)",
+                        (SETTINGS_KEY, self.current_collection_id))
         else:
-            sql.execute(
-                "UPDATE settings SET value = ? WHERE field = ?",
-                (json.dumps(collections), SETTINGS_KEY)
-            )
+            sql.execute("UPDATE settings SET value = ? WHERE field = ?",
+                        (self.current_collection_id, SETTINGS_KEY))
 
-    def load(self):
-        """Load the collections tree from filesystem and global storage."""
-        self.tree.clear()
+    def get_collections(self):
+        """Return list of (id, name) for all collections."""
+        return sql.get_results(
+            "SELECT id, name FROM project_collections ORDER BY ordr, name COLLATE NOCASE")
 
-        # Load global collections first
-        global_collections = self._get_global_collections()
-        for folder_name, folder_data in global_collections.items():
-            folder_item = QTreeWidgetItem([f"🌐 {folder_name}"])
-            folder_item.setData(0, Qt.UserRole, folder_name)
-            folder_item.setData(0, Qt.UserRole + 1, 'global_folder')
-            folder_item.setData(0, Qt.UserRole + 2, folder_data)  # Store clips data
-            folder_item.setIcon(0, QIcon(colorize_pixmap(QPixmap(':/resources/icon-folder.png'))))
-
-            # Load items from global folder
-            items = folder_data.get('items', [])
-            for item_data in items:
-                item_name = item_data.get('name', 'Untitled')
-                file_item = QTreeWidgetItem([item_name])
-                file_item.setData(0, Qt.UserRole, item_data)  # Store full clip config
-                file_item.setData(0, Qt.UserRole + 1, 'global_item')
-                file_item.setFlags(file_item.flags() | Qt.ItemIsDragEnabled)
-
-                media_type = item_data.get('_TYPE', 'video')
-                icon_path = get_media_icon_path(media_type=media_type)
-                file_item.setIcon(0, QIcon(colorize_pixmap(QPixmap(icon_path))))
-                folder_item.addChild(file_item)
-
-            self.tree.addTopLevelItem(folder_item)
-            folder_item.setExpanded(True)
-
-        # Load local filesystem folders
-        if os.path.exists(self.root_path):
-            for folder_name in sorted(os.listdir(self.root_path)):
-                folder_path = os.path.join(self.root_path, folder_name)
-                if not os.path.isdir(folder_path):
-                    continue
-
-                folder_item = QTreeWidgetItem([folder_name])
-                folder_item.setData(0, Qt.UserRole, folder_path)
-                folder_item.setData(0, Qt.UserRole + 1, 'folder')
-                folder_item.setIcon(0, QIcon(colorize_pixmap(QPixmap(':/resources/icon-folder.png'))))
-                folder_item.setFlags(folder_item.flags() | Qt.ItemIsDropEnabled)
-
-                self._load_folder_contents(folder_item, folder_path)
-                self.tree.addTopLevelItem(folder_item)
-                folder_item.setExpanded(True)
-
-    def _load_folder_contents(self, parent_item, folder_path):
-        """Recursively load folder contents from filesystem."""
-        if not os.path.exists(folder_path):
-            return
-
-        for filename in sorted(os.listdir(folder_path)):
-            filepath = os.path.join(folder_path, filename)
-
-            if os.path.isdir(filepath):
-                subfolder_item = QTreeWidgetItem([filename])
-                subfolder_item.setData(0, Qt.UserRole, filepath)
-                subfolder_item.setData(0, Qt.UserRole + 1, 'folder')
-                subfolder_item.setIcon(0, QIcon(colorize_pixmap(QPixmap(':/resources/icon-folder.png'))))
-                self._load_folder_contents(subfolder_item, filepath)
-                parent_item.addChild(subfolder_item)
-            else:
-                ext = os.path.splitext(filename)[1].lower()
-                if ext not in ALL_MEDIA_EXTS:
-                    continue
-
-                file_item = QTreeWidgetItem([filename])
-                file_item.setData(0, Qt.UserRole, filepath)
-                file_item.setData(0, Qt.UserRole + 1, 'file')
-                file_item.setFlags(file_item.flags() | Qt.ItemIsDragEnabled)
-
-                icon_path = get_media_icon_path(ext=ext)
-                file_item.setIcon(0, QIcon(colorize_pixmap(QPixmap(icon_path))))
-
-                parent_item.addChild(file_item)
-
-    def get_folders(self):
-        """Return list of all folder names in collections."""
-        folders = []
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            item_type = item.data(0, Qt.UserRole + 1)
-            if item_type in ('folder', 'global_folder'):
-                # Strip globe emoji for global folders
-                name = item.text(0)
-                if name.startswith('🌐 '):
-                    name = name[2:].strip()
-                folders.append(name)
-        return folders
-
-    def add_item(self, folder_name=None, source_filepath=None, clip_config=None):
-        """Add a file or clip config to a collection folder.
-
-        For local folders: copies the file to the folder.
-        For global folders: stores the serialized clip config.
-        """
-        # If called from TreeButtons without args, prompt user
-        if folder_name is None:
-            item = self.tree.currentItem()
-            if item:
-                item_type = item.data(0, Qt.UserRole + 1)
-                if item_type == 'global_folder':
-                    QMessageBox.information(
-                        self, "Add Item",
-                        "To add items to a global folder, select a clip on the timeline "
-                        "and use 'Add to Collection' from the context menu."
-                    )
-                    return
-                elif item_type == 'folder':
-                    # For local folders, open file dialog
-                    from PySide6.QtWidgets import QFileDialog
-                    filters = [
-                        "Media Files (*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg *.gif *.mp3 *.wav *.flac)",
-                        "All Files (*)"
-                    ]
-                    filepath, _ = QFileDialog.getOpenFileName(
-                        self, "Add Media File", "", ";;".join(filters)
-                    )
-                    if filepath:
-                        folder_path = item.data(0, Qt.UserRole)
-                        folder_name = os.path.basename(folder_path)
-                        return self.add_item(folder_name, source_filepath=filepath)
-            return
-
-        # Find if this is a global or local folder
-        is_global = False
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            item_type = item.data(0, Qt.UserRole + 1)
-            name = item.text(0)
-            if name.startswith('🌐 '):
-                name = name[2:].strip()
-            if name == folder_name and item_type == 'global_folder':
-                is_global = True
-                break
-
-        if is_global:
-            # Add to global collection (store clip config)
-            if clip_config is None:
-                return False
-            global_collections = self._get_global_collections()
-            if folder_name not in global_collections:
-                global_collections[folder_name] = {'items': []}
-            global_collections[folder_name]['items'].append(clip_config)
-            self._save_global_collections(global_collections)
-            self.load()
-            return True
-        else:
-            # Add to local collection (copy file)
-            if source_filepath is None or not os.path.exists(source_filepath):
-                return False
-
-            dest_folder = os.path.join(self.root_path, folder_name)
-            if not os.path.exists(dest_folder):
-                os.makedirs(dest_folder)
-
-            filename = os.path.basename(source_filepath)
-            dest_filepath = os.path.join(dest_folder, filename)
-
-            # Handle duplicate filenames
-            if os.path.exists(dest_filepath):
-                base, ext = os.path.splitext(filename)
-                counter = 1
-                while os.path.exists(dest_filepath):
-                    dest_filepath = os.path.join(dest_folder, f"{base}_{counter}{ext}")
-                    counter += 1
-
-            shutil.copy2(source_filepath, dest_filepath)
-            self.load()
-            return True
-
-    def delete_item(self):
-        """Delete the currently selected item."""
-        item = self.tree.currentItem()
-        if item is None:
-            return
-
-        item_type = item.data(0, Qt.UserRole + 1)
-
-        if item_type == 'global_folder':
-            self.delete_global_folder(item)
-        elif item_type == 'global_item':
-            self.delete_global_item(item)
-        elif item_type == 'folder':
-            self.delete_folder(item)
-        elif item_type == 'file':
-            self.delete_file(item)
-
-    def add_folder(self, parent_item=None):
-        """Add a new folder to collections."""
-        name, ok = QInputDialog.getText(self, "New Folder", "Enter folder name:")
-        if not ok or not name:
-            return
-
-        if parent_item and parent_item.data(0, Qt.UserRole + 1) == 'global_folder':
-            QMessageBox.warning(self, "Error", "Cannot create subfolders in global folders.")
-            return
-
-        if parent_item:
-            parent_path = parent_item.data(0, Qt.UserRole)
-        else:
-            parent_path = self.root_path
-
-        new_folder_path = os.path.join(parent_path, name)
-
-        if os.path.exists(new_folder_path):
-            QMessageBox.warning(self, "Error", "A folder with that name already exists.")
-            return
-
-        os.makedirs(new_folder_path)
+    def set_collection(self, collection_id):
+        self.current_collection_id = collection_id
+        self.folder_key = f'collection:{collection_id}'
+        self.manager.folder_key = self.folder_key
+        self._save_current_collection()
         self.load()
 
-    def toggle_global(self):
-        """Toggle the selected folder between local and global."""
-        item = self.tree.currentItem()
-        if item is None:
-            QMessageBox.information(self, "Toggle Global", "Please select a folder first.")
-            return
-
-        item_type = item.data(0, Qt.UserRole + 1)
-
-        if item_type == 'folder':
-            # Convert local folder to global
-            folder_path = item.data(0, Qt.UserRole)
-            folder_name = item.text(0)
-
-            reply = QMessageBox.question(
-                self, "Make Global",
-                f"Convert '{folder_name}' to a global folder?\n\n"
-                "Global folders are accessible across all projects.\n"
-                "The local files will be removed and clips will be stored as configs.",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-            # Collect file configs from local folder
-            items = []
-            for j in range(item.childCount()):
-                child = item.child(j)
-                if child.data(0, Qt.UserRole + 1) == 'file':
-                    filepath = child.data(0, Qt.UserRole)
-                    ext = os.path.splitext(filepath)[1].lower()
-                    media_type = get_media_type_from_ext(ext)
-
-                    items.append({
-                        '_TYPE': media_type,
-                        'name': os.path.basename(filepath),
-                        'browse': {'path': filepath},
-                    })
-
-            # Save as global
-            global_collections = self._get_global_collections()
-            global_collections[folder_name] = {'items': items}
-            self._save_global_collections(global_collections)
-
-            # Remove local folder
-            shutil.rmtree(folder_path)
-            self.load()
-
-        elif item_type == 'global_folder':
-            # Convert global folder to local
-            folder_name = item.data(0, Qt.UserRole)
-
-            reply = QMessageBox.question(
-                self, "Make Local",
-                f"Convert '{folder_name}' to a local folder?\n\n"
-                "The folder will no longer be accessible across projects.\n"
-                "Only items with valid file paths will be preserved.",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-            folder_data = item.data(0, Qt.UserRole + 2)
-            items = folder_data.get('items', [])
-
-            # Create local folder
-            folder_path = os.path.join(self.root_path, folder_name)
-            os.makedirs(folder_path, exist_ok=True)
-
-            # Copy files that have valid paths
-            for item_config in items:
-                browse = item_config.get('browse', {})
-                filepath = browse.get('path', '')
-                if filepath and os.path.exists(filepath):
-                    dest = os.path.join(folder_path, os.path.basename(filepath))
-                    if not os.path.exists(dest):
-                        shutil.copy2(filepath, dest)
-
-            # Remove from global
-            global_collections = self._get_global_collections()
-            if folder_name in global_collections:
-                del global_collections[folder_name]
-            self._save_global_collections(global_collections)
-
-            self.load()
-        else:
-            QMessageBox.information(self, "Toggle Global", "Please select a folder (not a file).")
-
-    def delete_global_folder(self, item):
-        """Delete a global folder."""
-        folder_name = item.data(0, Qt.UserRole)
-
-        reply = QMessageBox.question(
-            self, "Delete Global Folder",
-            f"Are you sure you want to delete the global folder '{folder_name}'?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        global_collections = self._get_global_collections()
-        if folder_name in global_collections:
-            del global_collections[folder_name]
-        self._save_global_collections(global_collections)
-        self.load()
-
-    def delete_global_item(self, item):
-        """Delete an item from a global folder."""
-        parent = item.parent()
-        if not parent:
-            return
-
-        folder_name = parent.data(0, Qt.UserRole)
-        item_config = item.data(0, Qt.UserRole)
-        item_name = item.text(0)
-
-        reply = QMessageBox.question(
-            self, "Remove from Collection",
-            f"Remove '{item_name}' from the global collection?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        global_collections = self._get_global_collections()
-        if folder_name in global_collections:
-            items = global_collections[folder_name].get('items', [])
-            # Remove matching item
-            global_collections[folder_name]['items'] = [
-                i for i in items if i != item_config
-            ]
-        self._save_global_collections(global_collections)
-        self.load()
-
-    def delete_folder(self, item):
-        """Delete a local folder and its contents."""
-        folder_path = item.data(0, Qt.UserRole)
-        folder_name = item.text(0)
-
-        reply = QMessageBox.question(
-            self, "Delete Folder",
-            f"Are you sure you want to delete '{folder_name}' and all its contents?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        shutil.rmtree(folder_path)
-        self.load()
-
-    def delete_file(self, item):
-        """Delete a file from local collections."""
-        filepath = item.data(0, Qt.UserRole)
-        filename = item.text(0)
-
-        reply = QMessageBox.question(
-            self, "Remove from Collection",
-            f"Remove '{filename}' from the collection?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        os.remove(filepath)
-        self.load()
-
-    def show_context_menu(self, position):
-        """Show context menu for tree items."""
-        item = self.tree.itemAt(position)
+    def show_collections_menu(self):
         menu = QMenu(self)
+        for collection_id, name in self.get_collections():
+            action = menu.addAction(name)
+            action.setCheckable(True)
+            action.setChecked(collection_id == self.current_collection_id)
+            action.triggered.connect(partial(self.set_collection, collection_id))
+        menu.addSeparator()
+        menu.addAction('New Collection').triggered.connect(self.new_collection)
+        menu.addAction('Rename Collection').triggered.connect(self.rename_collection)
+        menu.addAction('Delete Collection').triggered.connect(self.delete_collection)
+        menu.exec_(QCursor.pos())
 
-        if item is None:
-            add_folder_action = menu.addAction("New Folder")
-            add_folder_action.triggered.connect(lambda: self.add_folder())
-            add_global_action = menu.addAction("New Global Folder")
-            add_global_action.triggered.connect(self.add_global_folder)
-        else:
-            item_type = item.data(0, Qt.UserRole + 1)
-
-            if item_type == 'folder':
-                add_subfolder_action = menu.addAction("New Subfolder")
-                add_subfolder_action.triggered.connect(lambda: self.add_folder(item))
-                menu.addSeparator()
-
-                toggle_global_action = menu.addAction("Make Global")
-                toggle_global_action.triggered.connect(self.toggle_global)
-                menu.addSeparator()
-
-                rename_action = menu.addAction("Rename")
-                rename_action.triggered.connect(lambda: self.rename_item(item))
-
-                delete_action = menu.addAction("Delete Folder")
-                delete_action.triggered.connect(lambda: self.delete_folder(item))
-
-            elif item_type == 'global_folder':
-                toggle_local_action = menu.addAction("Make Local")
-                toggle_local_action.triggered.connect(self.toggle_global)
-                menu.addSeparator()
-
-                delete_action = menu.addAction("Delete Folder")
-                delete_action.triggered.connect(lambda: self.delete_global_folder(item))
-
-            elif item_type == 'file':
-                rename_action = menu.addAction("Rename")
-                rename_action.triggered.connect(lambda: self.rename_item(item))
-
-                delete_action = menu.addAction("Remove from Collection")
-                delete_action.triggered.connect(lambda: self.delete_file(item))
-
-            elif item_type == 'global_item':
-                delete_action = menu.addAction("Remove from Collection")
-                delete_action.triggered.connect(lambda: self.delete_global_item(item))
-
-        menu.exec_(self.tree.mapToGlobal(position))
-
-    def add_global_folder(self):
-        """Add a new global folder."""
-        name, ok = QInputDialog.getText(self, "New Global Folder", "Enter folder name:")
+    def new_collection(self):
+        name, ok = get_text(self, 'New Collection', 'Enter a name for the collection:')
         if not ok or not name:
             return
+        sql.execute("INSERT INTO project_collections (name) VALUES (?)", (name,))
+        self.set_collection(sql.get_scalar("SELECT MAX(id) FROM project_collections"))
 
-        global_collections = self._get_global_collections()
-        if name in global_collections:
-            QMessageBox.warning(self, "Error", "A global folder with that name already exists.")
+    def rename_collection(self):
+        current_name = sql.get_scalar(
+            "SELECT name FROM project_collections WHERE id = ?",
+            (self.current_collection_id,))
+        name, ok = get_text(self, 'Rename Collection', 'Enter a new name:', text=current_name)
+        if not ok or not name:
             return
+        sql.execute("UPDATE project_collections SET name = ? WHERE id = ?",
+                    (name, self.current_collection_id))
 
-        global_collections[name] = {'items': []}
-        self._save_global_collections(global_collections)
+    def delete_collection(self):
+        retval = display_message_box(
+            icon=QMessageBox.Warning,
+            title='Delete Collection',
+            text='Are you sure you want to delete this collection and all its items?',
+            buttons=QMessageBox.Yes | QMessageBox.No,
+        )
+        if retval != QMessageBox.Yes:
+            return
+        sql.execute("DELETE FROM project_collection_items WHERE collection_id = ?",
+                    (self.current_collection_id,))
+        sql.execute("DELETE FROM folders WHERE type = ?",
+                    (f'collection:{self.current_collection_id}',))
+        sql.execute("DELETE FROM project_collections WHERE id = ?",
+                    (self.current_collection_id,))
+        self._ensure_collection()
+        self.set_collection(self.current_collection_id)
+
+    def load(self, *args, **kwargs):
+        if self.current_collection_id is None:
+            return
+        super().load(*args, **kwargs)
+        self._apply_media_icons()
+        self.tree.apply_view_mode()
+        if hasattr(self, 'recent_list'):
+            self.recent_list.load_files(self._recent_generation_files())
+
+    def _apply_media_icons(self):
+        for item in self.tree.items_mapping.values():
+            icon_path = get_media_icon_path(media_type=item.text(2))
+            item.setIcon(0, QIcon(colorize_pixmap(QPixmap(icon_path))))
+
+    def _recent_generation_files(self):
+        """Return generated media files not yet in any collection, newest first."""
+        known_paths = set(sql.get_results(
+            "SELECT json_extract(config, '$.path') FROM project_collection_items",
+            return_type='list'))
+        files = []
+        for subdir in GEN_DIRS:
+            dir_path = os.path.join(get_application_path(), subdir)
+            if not os.path.isdir(dir_path):
+                continue
+            for filename in os.listdir(dir_path):
+                filepath = os.path.join(dir_path, filename)
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in ALL_MEDIA_EXTS and os.path.isfile(filepath) \
+                        and filepath not in known_paths:
+                    files.append((os.path.getmtime(filepath), filepath))
+        files.sort(reverse=True)
+        return [filepath for _, filepath in files[:MAX_RECENT_FILES]]
+
+    def delete_recent_file(self, filepath):
+        retval = display_message_box(
+            icon=QMessageBox.Warning,
+            title='Delete Generation',
+            text='Delete this generated file from disk?',
+            buttons=QMessageBox.Yes | QMessageBox.No,
+        )
+        if retval != QMessageBox.Yes:
+            return
+        if filepath and os.path.isfile(filepath):
+            os.remove(filepath)
         self.load()
 
-    def rename_item(self, item):
-        """Rename a folder or file."""
-        item_type = item.data(0, Qt.UserRole + 1)
+    def add_media_item(self, filepath, folder_id=None, collection_id=None):
+        """Insert a media file reference into a collection. Returns the new id."""
+        kind = get_media_type_from_ext(os.path.splitext(filepath)[1].lower())
+        if kind is None:
+            display_message(
+                message='Unsupported media file type',
+                icon=QMessageBox.Warning,
+            )
+            return None
+        sql.execute("""
+            INSERT INTO project_collection_items (collection_id, name, kind, config, folder_id)
+            VALUES (?, ?, ?, ?, ?)""",
+            (collection_id or self.current_collection_id, os.path.basename(filepath),
+             kind, json.dumps({'path': filepath}), folder_id))
+        return sql.get_scalar("SELECT MAX(id) FROM project_collection_items")
 
-        if item_type in ('global_folder', 'global_item'):
-            QMessageBox.information(self, "Rename", "Renaming global items is not yet supported.")
+    def import_files(self, filepaths, folder_id=None):
+        """Add dropped files to the active collection."""
+        item_id = None
+        for filepath in filepaths:
+            item_id = self.add_media_item(filepath, folder_id) or item_id
+        if item_id:
+            self.load(select_id=item_id)
+
+    def add_item(self):
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, 'Add Media File', '', MEDIA_FILE_FILTER)
+        if not filepath:
             return
-
-        old_path = item.data(0, Qt.UserRole)
-        old_name = item.text(0)
-
-        label = "Enter new name:" if item_type == 'folder' else "Enter new filename:"
-        new_name, ok = QInputDialog.getText(self, "Rename", label, text=old_name)
-
-        if not ok or not new_name or new_name == old_name:
-            return
-
-        parent_path = os.path.dirname(old_path)
-        new_path = os.path.join(parent_path, new_name)
-
-        if os.path.exists(new_path):
-            QMessageBox.warning(self, "Error", "An item with that name already exists.")
-            return
-
-        os.rename(old_path, new_path)
-        self.load()
-
-    def on_item_double_clicked(self, item, column):
-        """Handle double-click to expand/collapse folders."""
-        item_type = item.data(0, Qt.UserRole + 1)
-        if item_type in ('folder', 'global_folder'):
-            item.setExpanded(not item.isExpanded())
-
-    def startDrag(self, supportedActions):
-        """Start drag operation for tree items."""
-        item = self.tree.currentItem()
-        if not item:
-            return
-
-        item_type = item.data(0, Qt.UserRole + 1)
-
-        if item_type == 'file':
-            filepath = item.data(0, Qt.UserRole)
-            if not filepath or not os.path.exists(filepath):
-                return
-
-            mime_data = QMimeData()
-            mime_data.setUrls([QUrl.fromLocalFile(filepath)])
-
-            drag = QDrag(self.tree)
-            drag.setMimeData(mime_data)
-            drag.exec_(Qt.CopyAction)
-
-        elif item_type == 'global_item':
-            # For global items, we pass the config as JSON in mime data
-            item_config = item.data(0, Qt.UserRole)
-            filepath = item_config.get('browse', {}).get('path', '')
-
-            if filepath and os.path.exists(filepath):
-                mime_data = QMimeData()
-                mime_data.setUrls([QUrl.fromLocalFile(filepath)])
-                drag = QDrag(self.tree)
-                drag.setMimeData(mime_data)
-                drag.exec_(Qt.CopyAction)
-
-    def mouseMoveEvent(self, event):
-        """Handle mouse move for drag initiation."""
-        if event.buttons() == Qt.LeftButton:
-            item = self.tree.currentItem()
-            if item:
-                item_type = item.data(0, Qt.UserRole + 1)
-                if item_type in ('file', 'global_item'):
-                    self.startDrag(Qt.CopyAction)
-        super().mouseMoveEvent(event)
-
-    def is_folder_global(self, folder_name):
-        """Check if a folder is global."""
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            item_type = item.data(0, Qt.UserRole + 1)
-            name = item.text(0)
-            if name.startswith('🌐 '):
-                name = name[2:].strip()
-            if name == folder_name:
-                return item_type == 'global_folder'
-        return False
+        item_id = self.add_media_item(filepath, self.tree.get_selected_folder_id())
+        if item_id:
+            self.load(select_id=item_id)

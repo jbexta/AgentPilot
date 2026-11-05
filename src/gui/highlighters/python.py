@@ -56,6 +56,18 @@ class PythonHighlighter(QSyntaxHighlighter):
             '__delitem__', '__iter__', '__next__', '__contains__',
         ]
 
+        self.keyword_rules = [
+            (QRegularExpression(
+                r'\b(' + '|'.join(QRegularExpression.escape(k) for k in words) + r')\b'
+            ), fmt)
+            for words, fmt in (
+                (self.keywords, self.keywordFormat),
+                (self.blue_keywords, self.blueKeywordFormat),
+                (self.purple_keywords, self.purpleKeywordFormat),
+                (self.pink_keywords, self.pinkKeywordFormat),
+            )
+        ]
+
         # inline single-line string regexes (tolerant)
         self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
         self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
@@ -75,33 +87,11 @@ class PythonHighlighter(QSyntaxHighlighter):
 
     def highlightBlock(self, text):
         # --- keywords ---
-        for keyword in self.keywords:
-            expression = QRegularExpression(r'\b' + QRegularExpression.escape(keyword) + r'\b')
+        for expression, fmt in self.keyword_rules:
             it = expression.globalMatch(text)
             while it.hasNext():
                 m = it.next()
-                self.setFormat(m.capturedStart(), m.capturedLength(), self.keywordFormat)
-
-        for keyword in self.blue_keywords:
-            expression = QRegularExpression(r'\b' + QRegularExpression.escape(keyword) + r'\b')
-            it = expression.globalMatch(text)
-            while it.hasNext():
-                m = it.next()
-                self.setFormat(m.capturedStart(), m.capturedLength(), self.blueKeywordFormat)
-
-        for keyword in self.purple_keywords:
-            expression = QRegularExpression(r'\b' + QRegularExpression.escape(keyword) + r'\b')
-            it = expression.globalMatch(text)
-            while it.hasNext():
-                m = it.next()
-                self.setFormat(m.capturedStart(), m.capturedLength(), self.purpleKeywordFormat)
-
-        for keyword in self.pink_keywords:
-            expression = QRegularExpression(r'\b' + QRegularExpression.escape(keyword) + r'\b')
-            it = expression.globalMatch(text)
-            while it.hasNext():
-                m = it.next()
-                self.setFormat(m.capturedStart(), m.capturedLength(), self.pinkKeywordFormat)
+                self.setFormat(m.capturedStart(), m.capturedLength(), fmt)
 
         # decorators, inline comments, parameters
         self.match_decorator(text, self.decorator, self.decoratorFormat)

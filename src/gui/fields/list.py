@@ -1,7 +1,32 @@
-from PySide6.QtWidgets import QWidget, QPushButton, QHBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QLabel
 
-from gui.util import CVBoxLayout, get_field_widget
+from gui.gui_utils.helpers import get_field_widget
+from gui.gui_utils.layouts import CVBoxLayout
 from utils.helpers import set_module_type
+
+
+class ListItemGrip(QLabel):
+    """Drag handle for interactively reordering list items."""
+
+    def __init__(self, list_widget, row_widget):
+        super().__init__('⠿', parent=row_widget)
+        self.list_widget = list_widget
+        self.row_widget = row_widget
+        self.setFixedSize(18, 25)
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.OpenHandCursor)
+
+    def mousePressEvent(self, event):
+        event.accept()  # keep mouse-move events on the grip
+
+    def mouseMoveEvent(self, event):
+        self.list_widget.drag_row_to(
+            self.row_widget, event.globalPosition().toPoint()
+        )
+
+    def mouseReleaseEvent(self, event):
+        self.list_widget.update_config()
 
 
 @set_module_type('Fields')
@@ -72,6 +97,7 @@ class List(QWidget):
 
         # Store field widgets
         self.field_widgets = []
+        self._populating = False
 
         # Main layout
         self.main_layout = CVBoxLayout(self)
@@ -124,12 +150,16 @@ class List(QWidget):
             if hasattr(field_widget, 'set_value'):
                 field_widget.set_value(value)
 
+        # Create drag grip
+        grip = ListItemGrip(self, row_widget)
+
         # Create remove button
         remove_button = QPushButton('-')
         remove_button.setFixedSize(25, 25)
         remove_button.clicked.connect(lambda: self.remove_field(row_widget, field_widget))
 
         # Add widgets to row
+        row_layout.addWidget(grip)
         row_layout.addWidget(field_widget, stretch=1)
         row_layout.addWidget(remove_button)
 
@@ -143,8 +173,7 @@ class List(QWidget):
         self.update_button_states()
 
         # Notify parent of config change
-        if self.parent and hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
+        self.update_config()
 
     def remove_field(self, row_widget, field_widget):
         """Remove a field from the list."""
@@ -164,11 +193,27 @@ class List(QWidget):
         self.update_button_states()
 
         # Notify parent of config change
-        if self.parent and hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
+        self.update_config()
+
+    def drag_row_to(self, row_widget, global_pos):
+        """Move a row while dragging, based on the cursor's global position."""
+        y = self.mapFromGlobal(global_pos).y()
+        rows = [self.items_layout.itemAt(i).widget()
+                for i in range(self.items_layout.count())]
+        index = rows.index(row_widget)
+        target = sum(1 for w in rows
+                     if w is not row_widget and w.geometry().center().y() < y)
+        if target != index:
+            self.items_layout.removeWidget(row_widget)
+            self.items_layout.insertWidget(target, row_widget)
+            self.field_widgets.insert(target, self.field_widgets.pop(index))
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        if self._populating:
+            # set_value is populating the list; emitting updates here would
+            # rebuild the parent config before its other fields are loaded.
+            return
         if hasattr(self.parent, 'update_config'):
             self.parent.update_config()
 
@@ -193,12 +238,16 @@ class List(QWidget):
         if not isinstance(value, (list, tuple)):
             value = [value] if value else []
 
-        # Clear existing fields
-        self.clear_value()
+        self._populating = True
+        try:
+            # Clear existing fields
+            self.clear_value()
 
-        # Add a field for each value
-        for item in value:
-            self.add_field(value=item)
+            # Add a field for each value
+            for item in value:
+                self.add_field(value=item)
+        finally:
+            self._populating = False
 
     def clear_value(self):
         """Clear all field widgets."""

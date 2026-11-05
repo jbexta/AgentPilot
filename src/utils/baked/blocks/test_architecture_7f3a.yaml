@@ -1,0 +1,182 @@
+uuid: 7f3a2c4d-8b1e-4a9f-9c2d-5e8b1f4a7c3e
+name: test_architecture
+config:
+  _TYPE: workflow
+  name: test_architecture
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |
+        # Testing
+
+        Tests run inside a live app process against a disposable copy of the
+        database, driven by OS-level input events. There is no `pytest`
+        suite — the commented-out files under `tests/` are historical. The
+        live mechanism is an in-app runner orchestrated by per-module
+        scaffolds that delegate to per-page and per-widget hooks.
+
+        **The Hierarchy:**
+
+        **Runner:** Top level - boots the app and walks every controller
+        **Scaffolds:** Mid level - `test_scaffold` on each `ModulesController`
+        **Hooks:** Lowest level - `test_page` / `test_widget` on each class
+
+        Testing Abstraction:
+        1. Pages and Widgets own their own tests as instance methods
+        2. Scaffolds provide free baseline coverage (navigate + assert visible, walk descendants)
+        3. The runner just iterates controllers and aggregates results
+
+        Coverage is added by adding a method to the page or widget class.
+        There is no registration step, no separate test file, no fixtures.
+
+        ## Entry Point
+
+        `scripts/run_tests.sh` sets `AP_RUN_TESTS=1` and launches the normal
+        app. `Main.__init__` detects the env var, swaps to a disposable
+        `test_data.db`, calls `reset_application(force=True, ...)`, and arms
+        `Main.run_tests` to fire 1.5s after `init_app()` so TOS / DB patching
+        have settled.
+
+        `Main.run_tests` dispatches `gui.tests.TestRunnable` to the app's
+        `QThreadPool`. When the runnable finishes,
+        `Main._restore_after_dummy_run` exits the app with `0` if all tests
+        passed or `1` otherwise — the shell wrapper propagates that as its
+        own exit code.
+
+        Outside `AP_RUN_TESTS` (interactive `Main.run_tests` call), the
+        runner restores the real DB and deletes the dummy file instead of
+        exiting.
+
+        ## TestRunnable
+
+        `src/gui/tests.py` defines `TestRunnable(QRunnable)`. In `run()` it:
+
+        1. Waits for `main.main_pages.isVisible()` and sleeps 0.5s for layout
+        2. Iterates `system.manager.modules.type_controllers.items()` and
+           calls `controller.test_all(main)` on each
+        3. Aggregates `{module_type: {module_name: (status, err)}}`
+        4. Prints a `PASS`/`FAIL` summary and a `passed/total` line
+        5. Writes `tests/last_run.json` for offline inspection
+        6. Stores the failure count on `main._last_test_failures`
+        7. Schedules `on_finished` via `QTimer.singleShot(0, ...)` so the
+           DB restore / app exit happens on the GUI thread
+
+        Because the runnable lives in the thread pool but UI manipulation
+        must happen on the main thread, the test helpers use `pyautogui` to
+        inject real OS-level mouse/keyboard events. Those flow through Qt's
+        normal event loop without needing `QApplication.processEvents()` —
+        which is banned project-wide.
+
+        ## Scaffolds
+
+        Each `ModulesController` subclass may override `test_scaffold(self,
+        main, module_name, module_cls)` to define how its module type is
+        tested. Controllers that don't override it are skipped silently —
+        `test_all` returns `{}` to avoid noisy `extract_module_class`
+        lookups for types not yet covered.
+
+        `test_all` iterates every registered module of the type, resolves
+        the class via `extract_module_class`, calls `test_scaffold`, and
+        captures pass/fail with `traceback.format_exc()`.
+
+        ## PagesController.test_scaffold
+
+        `src/core/controllers/pages.py:17` is currently the only fleshed-out
+        scaffold. For every page module it:
+
+        1. Checks `main._page_load_errors[module_name]` and fails with the
+           captured traceback if the page didn't construct during init
+        2. Locates the page in `main.main_pages.pages` or, failing that,
+           under the settings sub-pages. If under settings, clicks the
+           settings sidebar button first
+        3. Clicks the page's sidebar button via `gui.demo.click_widget`
+           (pyautogui → real OS events) and asserts `page.isVisible()`
+        4. Builds a `ui` SimpleNamespace wrapping the demo input helpers:
+           `click_widget`, `hover_widget`, `type_text`, `get_widget_coords`,
+           `click_coords`, `click_tree_item_cell`, `move_mouse`,
+           `resolve_widget`, `test_widgets`
+        5. If the page class defines `test_page(self, main, ui)`, invokes it
+        6. Walks every `ConfigWidget` descendant under the page and invokes
+           `test_widget(main, ui)` on each that defines one. Failures
+           aggregate into a single `AssertionError` with a `--- ClassName ---`
+           block per failing widget
+
+        ## Per-page and per-widget hooks
+
+        Pages and widgets own their tests. To add coverage, define a method
+        directly on the class:
+
+        ```python
+        class Page_Agents(ConfigDBTree):
+            def test_page(self, main, ui):
+                if self.tree.topLevelItemCount() == 0:
+                    raise AssertionError("Agents tree has no rows after bootstrap")
+                ui.click_tree_item_cell(self.tree, 0, 'name')
+                # ... further assertions
+        ```
+
+        ```python
+        class WorkflowSettings(ConfigWidget):
+            def test_widget(self, main, ui):
+                if not self.header_widget.isVisible():
+                    raise AssertionError(
+                        "WorkflowSettings.header_widget should be visible "
+                        "when the widget is mounted in a visible page"
+                    )
+        ```
+
+        Raise on failure. Return value is ignored. Missing hook is fine —
+        the page still gets the free baseline (navigate + assert visible)
+        and widgets without a hook are skipped silently.
+
+        The `ui` namespace is the documented input API — page/widget authors
+        should not import `gui.demo` directly.
+
+        Currently implemented hooks:
+
+        - `src/gui/pages/word_game.py:390` — `test_page`
+        - `src/gui/pages/snake.py:239` — `test_page`
+        - `src/plugins/workflows/pages/agents.py:66` — `test_page`
+        - `src/plugins/workflows/widgets/workflow_settings.py:1904` — `test_widget`
+
+        ## Results
+
+        Two artifacts per run:
+
+        - `run_tests.log` — full app stdout/stderr (tee'd by the shell wrapper)
+        - `tests/last_run.json` — `{module_type: {module_name: {status, error}}}`
+
+        Module types whose controller doesn't override `test_scaffold` appear
+        as empty `{}`. Process exit code is the failure count clamped to
+        `0` or `1`.
+
+        ## Adding coverage
+
+        - **New page test:** add `test_page(self, main, ui)` to the page class
+        - **New widget test:** add `test_widget(self, main, ui)` to the widget class
+        - **New module-type coverage:** override `test_scaffold` on that
+          type's `ModulesController` subclass (mirror
+          `PagesController.test_scaffold` as a reference)
+
+        No file under `tests/` needs editing. No registration. The runner
+        picks the hook up the next time the suite runs.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 673d84a8-fd6b-4f41-b585-87fd53026401

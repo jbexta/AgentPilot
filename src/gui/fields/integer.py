@@ -1,9 +1,7 @@
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QSlider, QSpinBox, QWidget, QLabel
 
-from gui.style import ACCENT_COLOR_1
-from gui.util import CVBoxLayout, CHBoxLayout
-from utils.helpers import apply_alpha_to_hex
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
 
 
 class Integer(QWidget):
@@ -97,36 +95,8 @@ class Integer(QWidget):
                 # Snap during dragging for better UX
                 self.inner_widget.valueChanged.connect(self._handle_value_changed)
 
-            # # Apply stylesheet to hide/show the fill bar (sub-page)
-            from gui.style import TEXT_COLOR
-            orientation_style = 'horizontal' if orientation == Qt.Horizontal else 'vertical'
-            fill_color = apply_alpha_to_hex(ACCENT_COLOR_1, 0.6) if show_slider_fill else 'transparent'
-            self.inner_widget.setStyleSheet(f"""
-                QSlider::groove:{orientation_style} {{
-                    border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.3)};
-                    height: 8px;
-                    background: {apply_alpha_to_hex(TEXT_COLOR, 0.1)};
-                    border-radius: 2px;
-                }}
-                QSlider::handle:{orientation_style} {{
-                    background: {apply_alpha_to_hex(TEXT_COLOR, 0.5)};
-                    border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.6)};
-                    width: 8px;
-                    border-radius: 2px;
-                }}
-                QSlider::handle:{orientation_style}:hover {{
-                    background: {apply_alpha_to_hex(TEXT_COLOR, 0.7)};
-                    border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.8)};
-                }}
-                QSlider::sub-page:{orientation_style} {{
-                    background: {fill_color};
-                    border: none;
-                }}
-                QSlider::add-page:{orientation_style} {{
-                    background: none;
-                    border: none;
-                }}
-            """)
+            self.inner_widget.setProperty('class', 'int-slider')
+            self.inner_widget.setProperty('fill', show_slider_fill)
 
             # If labels are provided, create a horizontal layout with labels
             if left_label or right_label:
@@ -136,7 +106,7 @@ class Integer(QWidget):
                 if left_label:
                     left_label_widget = QLabel(left_label)
                     left_label_widget.setFixedWidth(18)
-                    left_label_widget.setStyleSheet("font-size: 10px;")
+                    left_label_widget.setProperty('class', 'slider-label')
                     slider_layout.addWidget(left_label_widget)
 
                 slider_layout.addWidget(self.inner_widget, stretch=1)
@@ -144,7 +114,7 @@ class Integer(QWidget):
                 if right_label:
                     right_label_widget = QLabel(right_label)
                     right_label_widget.setFixedWidth(18)
-                    right_label_widget.setStyleSheet("font-size: 10px;")
+                    right_label_widget.setProperty('class', 'slider-label')
                     slider_layout.addWidget(right_label_widget)
 
                 self.layout.addWidget(slider_container)

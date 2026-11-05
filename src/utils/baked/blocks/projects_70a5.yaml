@@ -1,0 +1,56 @@
+uuid: 70a5c746-b301-4302-ac5c-b008ce15c7a6
+name: projects
+config:
+  _TYPE: workflow
+  name: projects
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Projects Plugin (`src/plugins/projects`)
+
+        Projects are working directories that group chats, issues, todos, skills, blocks and plans. A project can also serve a website.
+        This plugin groups its modules into `core/` and `gui/` folders.
+
+        ## 1. Manager (`core/managers/projects.py`)
+        `ProjectManager` (BaseManager, table `projects`):
+        *   `ensure_application_project` creates the **Application** project (`_PROJECT_TYPE: application`, `working_dir` = the app source) if it is missing.
+        *   LLM tools `add_issue` / `add_todo` add tasks of kind `PROJECT:<id>:Issues` / `PROJECT:<id>:Todo`. A sub-item must have the same kind as its parent.
+        *   Items such as blocks and chats belong to a project through their `kind` (e.g. `PROJECT:1`).
+
+        ## 2. Page (`gui/pages/projects.py`)
+        `Page_Projects` (main page, ConfigDBTree over `projects`, pinned first). Each project's config widget is its **project type**.
+
+        ## 3. Project types (`gui/project_types/`, module type `Project_types`)
+        *   `GeneralProject`: project fields (Path, Project type), a file tree (with "chats that edited this file"), and bottom tabs: **Chat**, **Issues**, **Todo**, **Skills**, **Context** (`ClaudeContext` for CLAUDE.md / AGENTS.md), **Blocks**, **Plans**, **Block Maps**. The Chat tree can be grouped by the files each chat edited.
+        *   `ApplicationProject`: the app's own source. If the working dir does not exist, it clones the AgentPilot repo into it.
+        *   `WebsiteProject`: adds a Stack picker, Port, HTTPS toggle and run button, a live preview browser, and a services log.
+
+        ## 4. Web stacks (`core/web_stacks/`, controller `web_stacks`)
+        `WebStack` subclasses declare how to recognise a project, what to run and where the preview should point. They only have classmethods and hold no state.
+        Stacks: Static, PHP, Node, Python, plus `BundledStack` bundles (XAMPP, WAMP) that serve the project in place with the bundle's own PHP binary (Apache is not started).
+
+        ## 5. Utils
+        *   `utils/services.py`: `ServiceRunner` supervises the stack's processes. They stop when another project opens, when the user stops them, or when the app quits.
+        *   `utils/tls_proxy.py`: a local HTTPS front with a self-signed certificate for the plain HTTP dev server.
+        *   `utils/sync.py`: for the Application project, mirrors the source tree to a temp dir, detects files changed by Claude Code, and upserts them as non-baked modules.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

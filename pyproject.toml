@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "src"
 version = "0.6.0"
-description = "Create, manage, and chat with AI workflows"
+description = "The anything app"
 authors = ["jbexta <agentpilot.ai@gmail.com>"]
 license = "AGPL-3.0"
 readme = "README.md"
@@ -10,85 +10,65 @@ readme = "README.md"
 python = ">=3.11,<3.12"
 PySide6 = "6.8.3"
 qasync = "0.27.1"
-# numpy = "<2.0.0"
-docker = "7.1.0"
-mistune = "3.1.3"
-posthog = "3.25.0"
 keyring = "25.6.0"
-# realtime-ai = {url = "https://github.com/jhakulin/realtime-ai/releases/download/v0.1.0/realtime_ai-0.1.0-py3-none-any.whl"}
 pyautogui = "0.9.54"
-jinja2 = "3.1.6"
+astor = "0.8.1"
+cryptography = "46.0.7"
 
-# Provider dependencies
-litellm = "1.77.7"
-# instructor = "1.11.3"
-elevenlabs = "1.59.0"
-fal-client = "0.12.0"
-# openai = "2.2.0"
+# === BEGIN GENERATED PLUGIN DEPS — do not edit by hand ===
+[tool.poetry.group.plugins.dependencies]
 
-# Database dependencies
-psycopg2-binary = "2.9.11"
+# claude_code
+claude-agent-sdk       = "0.2.168"
+psutil                 = "7.2.2"
+
+# companies_house
+aiohttp                = "3.13.0"
+
+# computer_use
+playwright             = "1.58.0"
+pyautogui              = "0.9.54"
+pynput                 = "1.8.1"
+
+# finance
+binance-sdk-spot       = "1.2.0"
+coingecko-sdk          = "1.8.2"
+h5py                   = "3.14.0"
+pyqtgraph              = "0.13.7"
+
+# mysql
 mysql-connector-python = "9.4.0"
 
-# Open Interpreter dependencies
-# astor = "^0.8.1"
-# git-python = "^1.0.3"
-# inquirer = "^3.1.3"
-# pyyaml = "^6.0.1"
-# rich = "^13.4.2"
-# six = "^1.16.0"
-# tokentrim = "^0.1.13"
-# wget = "^3.2"
-# psutil = "^5.9.6"
-# pyreadline3 = {version = "^3.4.1", markers = "sys_platform == 'win32'"}
-# html2image = "^2.0.4.3"
-# send2trash = "^1.8.2"
-# ipykernel = "^6.26.0"
-# jupyter-client = "^8.6.0"
-# matplotlib = "^3.8.2"
-# toml = "^0.10.2"
-# tiktoken = "^0.7.0"
-# platformdirs = "^4.2.0"
-# pydantic = "^2.6.4"
-# google-generativeai = "^0.7.1"
-# pyperclip = "^1.9.0"
-# yaspin = "^3.0.2"
-# shortuuid = "^1.0.13"
-# # litellm = "^1.41.26"
-# # starlette = "^0.37.2"
-# html2text = "^2024.2.26"
-# selenium = "^4.24.0"
-# webdriver-manager = "^4.0.2"
-# anthropic = "^0.37.1"
-# typer = "^0.12.5"
-# fastapi = "^0.115.2"
-# uvicorn = "^0.30.1"
+# openinterpreter
+ipykernel              = "6.29.5"
+jupyter-client         = "8.6.3"
 
-# Finance dependencies
-seolpyo-mplchart = "1.4.1.3"
-pyqtgraph = "0.13.7"
-binance-sdk-spot = "1.2.0"
-coingecko-sdk = "1.8.2"
-h5py = "3.14.0"
+# postgresql
+psycopg2-binary        = "2.9.11"
 
-# External agent dependencies
+# slopify
+lyricsgenius           = "3.7.6"
 
-# Studios dependencies
-yt-dlp = "2025.12.8"
-aiofiles = "25.1.0"
-aiohttp = "3.13.0"
-av = "16.0.1"
-moviepy = "2.2.1"
-replicate = "1.0.7"
-scenedetect = "0.6.7.1"
-srt = "3.5.3"
-cel-python = "0.5.0"
+# studio
+scenedetect            = "0.6.7.1"
+srt                    = "3.5.3"
 
-# Slopify dependencies
-lyricsgenius = "3.7.6"
-playwright = "1.58.0"
-pynput = "1.8.1"
-claude-agent-sdk = "^0.1.58"
+# telephony
+pycloudflared          = "0.3.0"
+
+# workflows
+aiofiles               = "25.1.0"
+cel-python             = "0.5.0"
+docker                 = "7.1.0"
+fal-client             = "0.12.0"
+instructor             = "1.11.3"
+jinja2                 = "3.1.6"
+litellm                = "1.77.7"
+mistune                = "3.1.3"
+moviepy                = "2.2.1"
+replicate              = "1.0.7"
+yt-dlp                 = "2025.12.8"
+# === END GENERATED PLUGIN DEPS ===
 
 [build-system]
 requires = ["poetry-core"]

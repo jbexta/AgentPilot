@@ -1,0 +1,6 @@
+uuid: f34e1a34-c680-4dd2-939c-3b2b66401586
+name: prompt_gen_seedance
+config:
+  _TYPE: text
+  name: clip_gen
+folder_path: Video

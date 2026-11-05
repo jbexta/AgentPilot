@@ -8,6 +8,8 @@ from utils import sql
 
 
 class APIManager(BaseManager):
+    llm_crud = False  # holds api keys
+
     def __init__(self, system):
         super().__init__(
             system,

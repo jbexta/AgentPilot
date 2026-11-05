@@ -2,7 +2,8 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
 from gui.fields.combo import BaseCombo
-from gui.util import find_attribute, CVBoxLayout, find_workflow_widget  # , BaseComboBox
+from gui.gui_utils.helpers import find_attribute, find_workflow_widget  # , BaseComboBox
+from gui.gui_utils.layouts import CVBoxLayout
 from utils import sql
 from utils.helpers import convert_model_json_to_obj, block_signals
 

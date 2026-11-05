@@ -3,8 +3,6 @@ from utils.helpers import message_button
 
 
 class CodeBubble(MessageBubble):
-    bubble_text_color = '#ff949494'
-
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -37,8 +35,8 @@ class CodeBubble(MessageBubble):
                 member_id=member_id
             )
 
-            from plugins.openinterpreter.src import interpreter
-            oi_res = interpreter.computer.run(lang, code)
+            from plugins.openinterpreter.computer import computer
+            oi_res = computer.run(lang, code)
             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
             self.msg_container.parent.send_message(
                 output,

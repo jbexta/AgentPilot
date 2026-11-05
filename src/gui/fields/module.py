@@ -1,8 +1,6 @@
-from PySide6.QtWidgets import QInputDialog
-
 from gui import system
 from gui.fields.combo import BaseCombo
-from utils.helpers import block_signals
+from utils.helpers import block_signals, get_text
 
 
 class ModuleComboBox(BaseCombo):
@@ -33,7 +31,7 @@ class ModuleComboBox(BaseCombo):
             #     module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
 
             module_label = 'module' if not self.module_type else f'{self.module_type} module'
-            new_module_name, ok = QInputDialog.getText(self, f"New {module_label.title()}", f"Enter the name for the new {module_label}:")
+            new_module_name, ok = get_text(self, f"New {module_label.title()}", f"Enter the name for the new {module_label}:")
             if ok and new_module_name:
                 system.manager.modules.add(new_module_name, module_type=self.module_type)
 

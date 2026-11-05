@@ -12,24 +12,17 @@ class ContactSettings(ConfigFields):
         self.field_alignment = Qt.AlignHCenter
         self.schema = [
             {
-                'text': 'Avatar',
-                'key': 'avatar_path',
-                'type': 'image',
-                'label_position': None,
-                'diameter': 30,
-                'row_key': 0,
-                'default': '',
+                'text': 'Type',
+                'type': ('Individual', 'Company'),
+                'default': 'Individual',
+                'row_key': 1,
             },
             {
-                'text': 'Name',
+                'text': 'Company',
                 'type': str,
-                'stretch_x': True,
-                'text_size': 15,
-                # 'text_alignment': Qt.AlignCenter,
-                'label_position': None,
-                'transparent': True,
-                'row_key': 0,
-                'default': 'Contact',
+                'width': 200,
+                'default': '',
+                'row_key': 1,
             },
             {
                 'text': 'Phone number',

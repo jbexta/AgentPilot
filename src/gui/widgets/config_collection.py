@@ -1,17 +1,21 @@
-from PySide6.QtWidgets import QMessageBox, QInputDialog
+import json
+
+from PySide6.QtWidgets import QMessageBox
 from typing_extensions import override
 
 from gui import system
 
 
-from gui.util import find_main
+from gui.gui_utils.helpers import find_main, save_table_config
 from gui.widgets.config_widget import ConfigWidget
 from utils import sql
-from utils.helpers import display_message, display_message_box, convert_to_safe_case, set_module_type
+from utils.helpers import display_message, display_message_box, convert_to_safe_case, format_llm_tools, get_text, readable_class_name, set_module_type
 
 
 @set_module_type('Widgets')
 class ConfigCollection(ConfigWidget):
+    agent_list_label = 'Pages'
+
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.content = None
@@ -24,6 +28,31 @@ class ConfigCollection(ConfigWidget):
             current_page.load()
 
     @override
+    def get_agent_visualisation(self, refs):
+        from textwrap import indent
+        parts = [f'{readable_class_name(self)}:']
+        tools = format_llm_tools(self, refs)
+        if tools:
+            parts.append(indent(tools, '    '))
+        own = self.agent_visualisation()
+        if own:
+            parts.append(indent(own, '    '))
+        parts.append(f'    {self.agent_list_label}:')
+        current = self.content.currentWidget()
+        current_name = None
+        for page_name, page in self.pages.items():
+            if page is current:
+                current_name = page_name
+                continue
+            parts.append(f'        - {page_name}')
+        if current_name is not None:
+            parts.append(f'        - {current_name} (current)')
+            sub = current.get_agent_visualisation(refs) if hasattr(current, 'get_agent_visualisation') else ''
+            if sub:
+                parts.append(indent(sub, ' ' * 12))
+        return '\n'.join(parts)
+
+    @override
     def get_config(self):
         config = {}
         format_block_keys = []
@@ -32,7 +61,11 @@ class ConfigCollection(ConfigWidget):
                 is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
             else:
                 page_button = self.settings_sidebar.page_buttons.get(page_name, None)
-                is_vis = page_button.isVisible() if page_button else False
+                # isVisibleTo, not isVisible: the latter is False whenever an
+                # ancestor is hidden, so saving while this collection isn't the
+                # displayed page would drop every page's config.
+                is_vis = (page_button.isVisibleTo(self.settings_sidebar)
+                          if page_button else False)
 
             if (not getattr(page, 'propagate_config', True) or
                     not hasattr(page, 'get_config') or
@@ -50,13 +83,32 @@ class ConfigCollection(ConfigWidget):
             config['_format_block_keys'] = format_block_keys
         return config
 
+    @staticmethod
+    def _write_module_data(module_id, new_class):
+        """Update ``modules.config.data`` for the edited module.
+
+        Routes through :func:`save_table_config` so the shared autobake
+        hook fires (matches what happens when module source is edited
+        via PageEditor).
+        """
+        config = sql.get_scalar(
+            "SELECT config FROM modules WHERE id = ?",
+            (module_id,), load_json=True,
+        ) or {}
+        config['data'] = new_class
+        save_table_config(
+            table_name='modules',
+            item_id=module_id,
+            value=json.dumps(config),
+        )
+
     def add_page(self):  # todo dedupe
         result = self.get_edit_bar()
         edit_bar, page_editor = result if result else (None, None)
         if not edit_bar:
             return
 
-        new_page_name, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the new page:")
+        new_page_name, ok = get_text(self, "Enter name", "Enter a name for the new page:")
         if not ok:
             return
 
@@ -72,14 +124,7 @@ class ConfigCollection(ConfigWidget):
         from gui.builder import modify_class_add_page
         new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, new_page_name)
         if new_class:
-            # `config` is a table json column (a dict)
-            # the code needs to go in the 'data' key
-            sql.execute("""
-                UPDATE modules
-                SET config = json_set(config, '$.data', ?)
-                WHERE id = ?
-            """, (new_class, edit_bar.editing_module_id))
-
+            self._write_module_data(edit_bar.editing_module_id, new_class)
             system.manager.load()  # _manager('modules')
             page_editor.load()
             page_editor.config_widget.widgets[0].reimport()
@@ -101,12 +146,7 @@ class ConfigCollection(ConfigWidget):
             from gui.builder import modify_class_delete_page
             new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
             if new_class:
-                sql.execute("""
-                    UPDATE modules
-                    SET config = json_set(config, '$.data', ?)
-                    WHERE id = ?
-                """, (new_class, edit_bar.editing_module_id))
-
+                self._write_module_data(edit_bar.editing_module_id, new_class)
                 system.manager.load()
                 page_editor.load()
                 page_editor.config_widget.widgets[0].reimport()
@@ -123,16 +163,17 @@ class ConfigCollection(ConfigWidget):
             self.build_schema()
 
     def edit_page(self, page_name):
-        from gui.pages.modules import PageEditor
-
-        page_widget = self.pages[page_name]
-        if hasattr(page_widget, 'toggle_widget_edit'):
-            page_widget.toggle_widget_edit(True)
-
-        main = find_main()
-        if getattr(main, 'module_popup', None):
-            main.module_popup.close()
-            main.module_popup = None
-        main.module_popup = PageEditor(main, page_name)
-        main.module_popup.load()
-        main.module_popup.show()
+        # from gui.pages.modules import PageEditor
+        #
+        # page_widget = self.pages[page_name]
+        # if hasattr(page_widget, 'toggle_widget_edit'):
+        #     page_widget.toggle_widget_edit(True)
+        #
+        # main = find_main()
+        # if getattr(main, 'module_popup', None):
+        #     main.module_popup.close()
+        #     main.module_popup = None
+        # main.module_popup = PageEditor(main, page_name)
+        # main.module_popup.load()
+        # main.module_popup.show()
+        find_main().open_page_editor()

@@ -1,4 +1,4 @@
-from gui.util import ToggleIconButton
+from gui.gui_utils.toggle_icon_button import ToggleIconButton
 
 
 class ButtonToggle(ToggleIconButton):

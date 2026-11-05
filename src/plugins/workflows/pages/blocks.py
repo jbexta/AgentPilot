@@ -18,9 +18,10 @@ class Page_Block_Settings(ConfigDBTree):
                     id,
                     uuid,
                     folder_id,
-                    parent_id
+                    parent_id,
+                    kind
                 FROM blocks
-                ORDER BY pinned DESC, ordr, name COLLATE NOCASE""",
+                ORDER BY kind, pinned DESC, ordr, name COLLATE NOCASE""",
             schema=[
                 {
                     'text': 'Name',
@@ -49,8 +50,11 @@ class Page_Block_Settings(ConfigDBTree):
             folder_config_widget=self.Folder_Config_Widget(parent=self),
             folder_key='blocks',
             support_item_nesting=True,
+            group_by_kind=True,
+            kind_folder_key=lambda kind: f'{kind.lower()}:block',
             searchable=True,
             has_chat=True,
+            notify_unread=True,
         )
         self.splitter.setSizes([400, 1000])
 

@@ -1,4 +1,4 @@
-from gui.util import find_main
+from gui.gui_utils.helpers import find_main
 from gui.widgets.config_db_tree import ConfigDBTree
 
 
@@ -37,7 +37,8 @@ class Page_Contexts(ConfigDBTree):
                     END as member_count,
                     c.config,
                     '' AS goto_button,
-                    c.folder_id
+                    c.folder_id,
+                    CASE WHEN c.kind LIKE :kind || ':%' THEN c.kind ELSE '' END AS kind
                 FROM contexts c
                 LEFT JOIN (
                     SELECT
@@ -47,9 +48,21 @@ class Page_Contexts(ConfigDBTree):
                     GROUP BY context_id
                 ) cmsg ON c.id = cmsg.context_id
                 WHERE c.parent_id IS NULL
-                AND c.kind = :kind
+                AND (c.kind = :kind OR c.kind LIKE :kind || ':%')
+                AND (
+                    :search = ''
+                    OR c.name LIKE '%' || :search || '%'
+                    OR json_extract(c.config, '$."name"') LIKE '%' || :search || '%'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM json_each(c.config, '$.members') m
+                        WHERE json_extract(m.value, '$.config._TYPE') != 'user'
+                        AND json_extract(m.value, '$.config."name"') LIKE '%' || :search || '%'
+                    )
+                )
                 GROUP BY c.id
                 ORDER BY
+                    kind = '',
                     pinned DESC,
                     COALESCE(cmsg.latest_message_id, 0) DESC, 
                     c.id DESC
@@ -95,12 +108,15 @@ class Page_Contexts(ConfigDBTree):
             config_widget=None,
             tree_header_hidden=True,
             kind='CHAT',
-            kind_list=['CHAT', 'BLOCK', 'TOOL', 'TASK'],
-            folder_key={'CHAT': 'contexts', 'BLOCK': 'block_contexts', 'TOOL': 'tool_contexts', 'TASK': 'task_contexts'},
+            kind_list=['CHAT', 'PROJECT', 'BLOCK', 'TOOL', 'TASK'],
+            folder_key={'CHAT': 'contexts', 'PROJECT': '', 'BLOCK': 'block_contexts', 'TOOL': 'tool_contexts', 'TASK': 'task_contexts'},
+            group_by_kind=True,
+            kind_folder_key=lambda kind: f'{kind.lower()}:task',
             init_select=False,
             filterable=True,
             searchable=True,
             archiveable=True,
+            notify_unread=True,
         )
         self.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
 
@@ -119,8 +135,6 @@ class Page_Contexts(ConfigDBTree):
     def chat_with_context(self, context_id):
         main = find_main()
         page_chat = main.main_pages.get('chat')
-        if page_chat.workflow and page_chat.workflow.responding:
-            return
         page_chat.goto_context(context_id=context_id)
         # page_chat.ensure_visible()
         main.main_pages.goto_page('chat')

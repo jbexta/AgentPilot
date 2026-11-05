@@ -1,16 +1,108 @@
 import json
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMessageBox, QInputDialog
+from PySide6.QtCore import QTimer, Qt, QRectF
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPalette, QPen
+from PySide6.QtWidgets import QMessageBox, QPushButton
 
 from gui import system
-from gui.util import CHBoxLayout, IconButton, find_main, safe_single_shot
+from gui.gui_utils.helpers import clear_layout, find_main, safe_single_shot
+from gui.gui_utils.layouts import CHBoxLayout
+from gui.gui_utils.icon_button import IconButton
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
-from utils.helpers import block_signals, display_message_box, display_message
+from gui.widgets.config_widget import ConfigWidget
+from utils.helpers import convert_to_safe_case, set_module_type, display_message_box, display_message, get_text
 from utils import sql
 
+THEME_KEYS = (
+    'primary_color',
+    'secondary_color',
+    'accent_color_1',
+    'accent_color_2',
+    'link_color',
+    'text_color',
+    'widget_style',
+    'scrollbars',
+    'corner_radius',
+)
+class ThemeTile(QPushButton):
+    """The theme name above a miniature window drawn in its colors."""
+    def __init__(self, parent, name, display_config):
+        super().__init__(parent=parent)
+        self.name = name
+        self.colors = {key: QColor(value) for key, value in display_config.items()
+                       if key.endswith('_color') or key.startswith('accent_color')}
+        self.selected = False
+        self.setFixedSize(150, 112)
+        self.setCursor(Qt.PointingHandCursor)
 
+    def set_selected(self, selected):
+        self.selected = selected
+        self.update()
+
+    def faded(self, key, alpha):
+        color = QColor(self.colors[key])
+        color.setAlphaF(alpha)
+        return color
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        rect = QRectF(self.rect()).adjusted(6, 4, -6, -6)
+
+        name_rect = QRectF(rect.left(), rect.top(), rect.width(), 20)
+        painter.setPen(self.palette().color(QPalette.ButtonText))
+        name = self.fontMetrics().elidedText(
+            self.name, Qt.ElideRight, int(name_rect.width()))
+        painter.drawText(name_rect, Qt.AlignLeft | Qt.AlignVCenter, name)
+
+        window = QRectF(rect.left(), name_rect.bottom() + 2,
+                        rect.width(), rect.bottom() - name_rect.bottom() - 2)
+        path = QPainterPath()
+        path.addRoundedRect(window, 5, 5)
+        painter.save()
+        painter.setClipPath(path)
+        painter.setPen(Qt.NoPen)
+        painter.fillRect(window, self.colors['primary_color'])
+
+        sidebar = QRectF(window.left(), window.top(), 20, window.height())
+        painter.fillRect(sidebar, self.colors['secondary_color'])
+        for i in range(4):
+            icon = QRectF(sidebar.left() + 6, sidebar.top() + 7 + i * 13, 8, 8)
+            if i == 0:
+                painter.fillRect(icon.adjusted(-6, -3, 6, 3), self.faded('text_color', 0.08))
+            painter.setBrush(self.colors['accent_color_1'] if i == 0
+                             else self.faded('text_color', 0.5))
+            painter.drawRoundedRect(icon, 2, 2)
+
+        left = sidebar.right() + 8
+        top = window.top() + 8
+        lines = ((0.6, 'text_color', 0.9), (0.85, 'text_color', 0.5),
+                 (0.7, 'text_color', 0.5), (0.4, 'link_color', 1))
+        width = window.right() - 8 - left
+        for i, (fraction, key, alpha) in enumerate(lines):
+            painter.setBrush(self.faded(key, alpha))
+            painter.drawRoundedRect(QRectF(left, top + i * 9, width * fraction, 4), 2, 2)
+
+        field = QRectF(left, window.bottom() - 18, width - 22, 11)
+        painter.setBrush(self.colors['secondary_color'])
+        painter.drawRoundedRect(field, 3, 3)
+        painter.setBrush(self.colors['accent_color_2'])
+        painter.drawRoundedRect(QRectF(field.right() + 4, field.top(), 18, 11), 3, 3)
+        painter.restore()
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(self.faded('text_color', 0.2), 1))
+        painter.drawPath(path)
+
+        if self.selected:
+            painter.setPen(QPen(self.palette().color(QPalette.Highlight), 2))
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 5, 5)
+
+
+@set_module_type('Pages')
 class Page_Display_Settings(ConfigJoined):
     display_name = 'Display'
     page_type = 'settings'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
@@ -19,6 +111,7 @@ class Page_Display_Settings(ConfigJoined):
         super().__init__(parent=parent)
 
         self.conf_namespace = 'display'
+        self.propagate_config = True
         button_layout = CHBoxLayout()
         self.btn_delete_theme = IconButton(
             parent=self,
@@ -57,7 +150,7 @@ class Page_Display_Settings(ConfigJoined):
             display_message('Theme already exists', 'Error')
             return
 
-        theme_name, ok = QInputDialog.getText(
+        theme_name, ok = get_text(
             self,
             'Save Theme',
             'Enter a name for the theme:',
@@ -72,8 +165,8 @@ class Page_Display_Settings(ConfigJoined):
         self.load()
 
     def delete_theme(self):
-        theme_name = self.widgets[0].theme_wgt.currentText()
-        if theme_name == 'Custom':
+        theme_name = self.widgets[0].selected
+        if theme_name is None:
             return
 
         retval = display_message_box(
@@ -114,9 +207,8 @@ class Page_Display_Settings(ConfigJoined):
             #     'bubble_text_color': roles_config['code']['bubble_text_color'],
             # },
             'display': {
-                'primary_color': display_page.primary_color_wgt.get_value(),
-                'secondary_color': display_page.secondary_color_wgt.get_value(),
-                'text_color': display_page.text_color_wgt.get_value(),
+                key: getattr(display_page, f'{key}_wgt').get_value()
+                for key in THEME_KEYS
             },
             # 'user': {
             #     'bubble_bg_color': roles_config['user']['bubble_bg_color'],
@@ -125,21 +217,16 @@ class Page_Display_Settings(ConfigJoined):
         }
         return current_config
 
-    class Page_Display_Themes(ConfigFields):
+    class Page_Display_Themes(ConfigWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.auto_label_width = True
-            self.margin_left = 20
             self.propagate_config = False
             self.all_themes = {}
-            self.schema = [
-                {
-                    'text': 'Theme',
-                    'type': ('Dark',),
-                    'width': 100,
-                    'default': 'Dark',
-                },
-            ]
+            self.tiles = []
+            self.selected = None  # None when the display config matches no theme
+            self.layout = CHBoxLayout(self)
+            self.layout.setContentsMargins(20, 0, 0, 0)
+            self.layout.setSpacing(8)
 
         def load(self):
             temp_themes = sql.get_results("""
@@ -148,41 +235,54 @@ class Page_Display_Settings(ConfigJoined):
             """, return_type='dict')
             self.all_themes = {theme_name: json.loads(config) for theme_name, config in temp_themes.items()}
 
-            # load items into ComboBox
-            with block_signals(self.theme_wgt):
-                self.theme_wgt.clear()
-                self.theme_wgt.addItems(['Custom'])
-                self.theme_wgt.addItems(self.all_themes.keys())
+            clear_layout(self.layout)
+            self.tiles = []
+            for theme_name in self.all_themes:
+                tile = ThemeTile(self, theme_name, self.get_theme_display_config(theme_name))
+                tile.clicked.connect(lambda _, name=theme_name: self.select_theme(name))
+                self.layout.addWidget(tile)
+                self.tiles.append(tile)
+            self.layout.addStretch(1)
 
             safe_single_shot(50, self.setTheme)
             # self.setTheme()
 
-        def setTheme(self):
-            current_display_config = self.parent.get_current_display_config()
-            for theme_name in self.all_themes:
-                if self.all_themes[theme_name] == current_display_config:
-                    with block_signals(self.theme_wgt):
-                        indx = self.theme_wgt.findText(theme_name)
-                        self.theme_wgt.setCurrentIndex(indx)
-                    return
-            self.theme_wgt.setCurrentIndex(0)
+        def get_theme_display_config(self, theme_name):
+            display_fields = self.parent.widgets[1]
+            defaults = {
+                convert_to_safe_case(param['text'].lower()): param['default']
+                for param in display_fields.schema
+            }
+            theme_config = {key: defaults[key] for key in THEME_KEYS}
+            theme_config.update(self.all_themes[theme_name]['display'])
+            return theme_config
 
-        def after_init(self):
-            try:
-                self.theme_wgt.currentIndexChanged.connect(self.changeTheme)
-            except Exception as e:
-                pass
+        def setTheme(self):
+            current_display_config = self.parent.get_current_display_config()['display']
+            for theme_name in self.all_themes:
+                if self.get_theme_display_config(theme_name) == current_display_config:
+                    self.set_selected(theme_name)
+                    return
+            self.set_selected(None)
+
+        def set_selected(self, theme_name):
+            self.selected = theme_name
+            for tile in self.tiles:
+                tile.set_selected(tile.name == theme_name)
+
+        def select_theme(self, theme_name):
+            self.set_selected(theme_name)
+            self.changeTheme()
 
         def changeTheme(self):
-            theme_name = self.theme_wgt.currentText()
-            if theme_name == 'Custom':
+            theme_name = self.selected
+            if theme_name is None:
                 return
 
             patch_dicts = {
                 'settings': {
-                    'display.primary_color': self.all_themes[theme_name]['display']['primary_color'],
-                    'display.secondary_color': self.all_themes[theme_name]['display']['secondary_color'],
-                    'display.text_color': self.all_themes[theme_name]['display']['text_color'],
+                    f'display.{key}': value
+                    for key, value in self.get_theme_display_config(theme_name).items()
                 },
                 # 'roles': {}
             }
@@ -274,6 +374,24 @@ class Page_Display_Settings(ConfigJoined):
                     'default': '#ffffff',
                 },
                 {
+                    'text': 'Widget style',
+                    'type': ('Flat', 'Native',),
+                    'default': 'Flat',
+                },
+                {
+                    'text': 'Scrollbars',
+                    'type': ('Thin', 'Native',),
+                    'default': 'Thin',
+                },
+                {
+                    'text': 'Corner radius',
+                    'type': int,
+                    'minimum': 0,
+                    'maximum': 24,
+                    'step': 1,
+                    'default': 5,
+                },
+                {
                     'text': 'Text font',
                     'type': 'font',
                     'default': 'Default',
@@ -351,5 +469,5 @@ class Page_Display_Settings(ConfigJoined):
             main.apply_stylesheet()
             main.apply_margin()
             main.page_chat.message_collection.refresh_waiting_bar()
-            self.load()  # reload theme combobox for custom
+            self.load()  # reload theme tiles for custom
             self.parent.widgets[0].load()

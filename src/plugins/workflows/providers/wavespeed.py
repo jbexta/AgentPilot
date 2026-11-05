@@ -224,7 +224,7 @@ class WavespeedProvider(Provider):
         #     (api_id,),
         # )
 
-        api_key = self._get_api_key()
+        api_key = os.getenv("WAVESPEED_API_KEY") # todo self._get_api_key()
         if not api_key:
             display_message(
                 icon=QMessageBox.Warning,
@@ -317,6 +317,7 @@ class WavespeedProvider(Provider):
                 table_name='models',
                 item_configs=all_models,
                 delete_existing=False,
+                match_on=('name', 'api_id'),
             )
 
         except Exception as e:

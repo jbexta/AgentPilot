@@ -17,7 +17,7 @@ config:
         # Modules
         The codebase is highly modular and extensible, allowing anyone to extend or override almost any aspect of the app.
 
-        This document describes the different types of modules supported by the app, where they are used, how they interact, and how to create them.
+        The following are different types of modules supported by the app, where they are used, how they interact, and how to create them.
 
         {% for category in ['Core', 'GUI'] %}
         {% set category_lower = category.lower() %}
@@ -32,7 +32,7 @@ config:
         <details>
           <summary>Implementations</summary>
         {% for module_name, module in system.modules.type_controllers[name].items() %}
-        - [{{ module[3].__name__ }}](src/{{ controller.load_to_path | replace('.', '/') }}/{{ module_name }})
+        - [{{ module[4].__name__ }}](src/{{ controller.load_to_path | replace('.', '/') }}/{{ module_name }})
         {% endfor %}
         </details>
         <details>
@@ -58,4 +58,5 @@ config:
     show_nested_bubbles: false
     mini_view: true
   params: []
+kind: PROJECT:1
 parent_uuid: 673d84a8-fd6b-4f41-b585-87fd53026401

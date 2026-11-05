@@ -6,7 +6,10 @@ from gui.widgets.config_widget import ConfigWidget
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
-from gui.util import find_main, CVBoxLayout, CHBoxLayout, IconButton, FramelessResizeMixin
+from gui.gui_utils.helpers import find_main, set_style_property
+from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.frameless_resize_mixin import FramelessResizeMixin
 from utils import sql
 from utils.helpers import display_message, set_module_type
 
@@ -78,17 +81,15 @@ class Page_Module_Settings(ConfigDBTree):
         sql.execute('UPDATE modules SET baked = 0 WHERE id = ?', (item_id,))
         self.load()
 
-    def bake_item(self, force=False):
-        item_id = self.get_selected_item_id()
+    def bake_item(self, force=False, item_id=None):
+        item_id = item_id or self.get_selected_item_id()
         if not item_id:
             return
 
-        module_name = sql.get_scalar('SELECT name FROM modules WHERE id = ?', (item_id,))
         file_path = get_module_abs_path(item_id)
         if file_path is None:
             return
 
-        # Check if file exists and ask for confirmation if not forcing
         if file_path.exists() and not force:
             retval = QMessageBox.question(
                 self,
@@ -99,32 +100,23 @@ class Page_Module_Settings(ConfigDBTree):
             if retval != QMessageBox.Yes:
                 return
 
-        folder_id = sql.get_scalar(
-            'SELECT folder_id FROM modules WHERE id = ?', (item_id,)
-        )
-        folder_name = sql.get_scalar(
-            'SELECT name FROM folders WHERE id = ?', (folder_id,)
-        ) if folder_id else None
-        controller = system.manager.modules.type_controllers.get(
-            folder_name.lower().replace(' ', '_')
-        ) if folder_name else None
-        if controller is None:
-            display_message(
-                message=f"No controller for module type: {folder_name}",
-                icon=QMessageBox.Warning,
-            )
-            return
-
+        from gui.gui_utils.helpers import bake_table_item
         try:
-            controller.bake_module(module_name)
+            target = bake_table_item('modules', item_id)
+            if target is None:
+                display_message(
+                    message=f"Could not bake module — missing controller or folder.",
+                    icon=QMessageBox.Warning,
+                )
+                return
             if not force:
                 display_message(
-                    message=f"Successfully baked module {module_name} to {file_path}",
+                    message=f"Successfully baked module to {target}",
                     icon=QMessageBox.Information,
                 )
         except Exception as e:
             display_message(
-                message=f"Error baking module {module_name}: {e}",
+                message=f"Error baking module: {e}",
                 icon=QMessageBox.Critical,
             )
     
@@ -172,6 +164,7 @@ class Page_Module_Settings(ConfigDBTree):
 class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):
         super().__init__(parent=parent)
+        self.propagate_config = True
         self.widgets = [
             self.Module_Config_Fields(parent=self),
         ]
@@ -317,19 +310,11 @@ class Module_Config_Widget(ConfigJoined):
         def set_status(self, status, text=None):
             if text is None:
                 text = status
-            status_color_classes = {
-                'Loaded': '#6aab73',
-                'Unloaded': '#B94343',
-                'Baked': '#438BB9',
-                'Modified': '#438BB9',
-                'Error': '#B94343',
-                'Externally Modified': '#B94343',
-            }
             can_reimport = status in ['Modified', 'Unloaded']
             self.load_button_wgt.setVisible(can_reimport)
             self.unload_button_wgt.setVisible(status == 'Loaded')
             self.lbl_status.setText(text)
-            self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
+            set_style_property(self.lbl_status, 'status', status)
 
         def reimport(self):
             module_id = self.get_item_id()
@@ -486,7 +471,7 @@ def get_module_abs_path(module_id, module_name=None):
 
 
 class PageEditor(FramelessResizeMixin, ConfigWidget):
-    def __init__(self, main, module_name):
+    def __init__(self, main, module_name=None):
         super().__init__(parent=main)
         from plugins.projects.gui.project_types.application import (
             ApplicationProject,
@@ -510,21 +495,28 @@ class PageEditor(FramelessResizeMixin, ConfigWidget):
         self.lbl_title.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Preferred,
         )
-        font = self.lbl_title.font()
-        font.setBold(True)
-        self.lbl_title.setFont(font)
         self.titlebar_layout.addWidget(self.lbl_title)
-        self.btn_close = IconButton(
+        self.btn_reload = IconButton(
             parent=self.titlebar,
+            icon_path=':/resources/icon-refresh.png',
+            text='Reload Modules',
+            size=20,
+            tooltip='Reload all modules',
+        )
+        self.btn_reload.clicked.connect(self.reload_modules)
+        self.titlebar_layout.addWidget(self.btn_reload)
+        self.btn_close = IconButton(
+            parent=self,
             icon_path=':/resources/close.png',
             # icon_size_percent=0.5,
             size=20,
+            icon_size_percent=0.65,
         )
         self.btn_close.clicked.connect(self.close)
-        self.titlebar_layout.addWidget(self.btn_close)
+        self.titlebar_layout.addSpacing(self.btn_close.width() + 10)
         self.layout.addWidget(self.titlebar)
 
-        self.lbl_title.setText(f'Editing module > {module_name}')
+        self.lbl_title.setText('Editing: Application')
 
         # Application project widget
         self.project_widget = ApplicationProject(parent=self)
@@ -534,12 +526,43 @@ class PageEditor(FramelessResizeMixin, ConfigWidget):
         # Hide the Project_Fields row (Path picker + project type)
         self.project_widget.widgets[0].hide()
 
-        # Hide the 'Block Maps' tab
-        bottom_tabs = self.project_widget.widgets[2]
-        for i in range(bottom_tabs.content.count()):
-            if bottom_tabs.content.tabText(i) == 'Block Maps':
-                bottom_tabs.content.setTabVisible(i, False)
-                break
+        self.tasks_tree = self.project_widget.widgets[2].pages['Chat']
+        input_widget = self.tasks_tree.config_widget.input_widget
+        input_widget.toggle_project_button.show()
+        input_widget.toggle_project_button.toggled.connect(
+            self.toggle_project)
+
+        self.btn_new_chat = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-new.png',
+            size=20,
+            icon_size_percent=0.86,
+            tooltip='New chat',
+        )
+        self.btn_new_chat.clicked.connect(self.tasks_tree.add_item)
+        self.btn_new_chat.hide()
+
+        input_widget.toggle_project_button.setChecked(
+            system.manager.config.get('ui.page_editor_chat_only', False))
+
+    def toggle_project(self, hidden):
+        system.manager.config['ui.page_editor_chat_only'] = hidden
+        chat_widget = self.tasks_tree.config_widget
+        self.titlebar.setVisible(not hidden)
+        self.btn_new_chat.setVisible(hidden)
+        self.project_widget.widgets[1].setVisible(not hidden)
+        self.project_widget.widgets[2].content.tabBar().setVisible(not hidden)
+        self.tasks_tree.tree_container.setVisible(not hidden)
+        chat_widget.workflow_settings.setVisible(not hidden)
+        chat_widget.show_member_bar = not hidden
+        chat_widget.member_bar.load()
+        if hidden:
+            self.tasks_tree.collapsed_buttons.hide()
+        else:
+            self.tasks_tree.update_collapsed_buttons()
+
+    def reload_modules(self):
+        self.main.main_pages.reload_modules()
 
     def close(self):
         if hasattr(self, 'project_widget'):
@@ -573,6 +596,14 @@ class PageEditor(FramelessResizeMixin, ConfigWidget):
         self._snap_to_main()
         super().showEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.btn_close.move(self.width() - self.btn_close.width() - 11, 4)
+        self.btn_close.raise_()
+        self.btn_new_chat.move(
+            self.btn_close.x() - self.btn_new_chat.width() - 4, 4)
+        self.btn_new_chat.raise_()
+
     def load(self):
         project_id = sql.get_scalar(
             "SELECT id FROM projects WHERE name = 'Application'",
@@ -585,20 +616,22 @@ class PageEditor(FramelessResizeMixin, ConfigWidget):
             return
         self.project_widget.load_config(app_config)
 
-        file_tree = self.project_widget.widgets[1]
+        file_tree = self.project_widget.widgets[1].pages['Files']
         file_tree.load()
 
-        # Load the tasks tree with the correct project ID
+        # The bottom tabs resolve their project id via
+        # find_ancestor_tree_item_id, which finds no tree in this popup,
+        # so pin the id here, then load every tab.
+        self.tree_item_id = project_id
         if project_id:
             bottom_tabs = self.project_widget.widgets[2]
-            tasks_tree = bottom_tabs.pages.get('Chat')
-            if tasks_tree:
-                tasks_tree.kind = f'PROJECT:{project_id}'
-                tasks_tree.folder_key = f'project:{project_id}:task'
-                tasks_tree.load()
+            for page in bottom_tabs.pages.values():
+                if hasattr(page, 'load'):
+                    page.load()
+            bottom_tabs.block_maps.load()
 
         controller = system.manager.modules.type_controllers.get('pages')
-        if controller and controller.load_to_path:
+        if controller and controller.load_to_path and self.module_name:
             import os
             module_file = self.module_name.lower() + '.py'
 

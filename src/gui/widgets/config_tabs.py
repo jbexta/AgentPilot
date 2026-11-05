@@ -3,15 +3,19 @@ from typing_extensions import override
 
 
 
-from utils.helpers import block_signals, set_module_type
+from utils.helpers import block_signals, set_module_type, tr
 
-from gui.util import find_attribute, IconButton, CVBoxLayout
+from gui.gui_utils.helpers import find_attribute
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.layouts import CVBoxLayout
 
 from gui.widgets.config_collection import ConfigCollection
 
 
 @set_module_type('Widgets')
 class ConfigTabs(ConfigCollection):
+    agent_list_label = 'Tabs'
+
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
@@ -37,21 +41,21 @@ class ConfigTabs(ConfigCollection):
     @override
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""
-        # remove all tabs
-        for i in reversed(range(self.content.count())):
-            widget = self.content.widget(i)
-            self.content.removeTab(i)
-            # widget.deleteLater()
-        
-        # build all tabs
         with block_signals(self):
+            # remove all tabs
+            for i in reversed(range(self.content.count())):
+                widget = self.content.widget(i)
+                self.content.removeTab(i)
+                # widget.deleteLater()
+
+            # build all tabs
             for tab_name, tab in self.pages.items():
                 if hasattr(tab, 'build_schema'):
                     tab.build_schema()
-                self.content.addTab(tab, tab_name)
+                self.content.addTab(tab, tr(tab_name))
 
-        if not find_attribute(self, 'user_editing'):
-            self.new_page_btn.hide()
+        # if not find_attribute(self, 'user_editing'):
+        self.new_page_btn.hide()
         self.recalculate_new_page_btn_position()
 
         if hasattr(self, 'after_init'):
@@ -75,7 +79,9 @@ class ConfigTabs(ConfigCollection):
         if is_current:
             return
         # set tab
-        tab_index = list(self.pages.keys()).index(page_name)
+        # tab_index = list(self.pages.keys()).index(page_name)
+        # Positional lookup broke when only some pages are added as tabs.
+        tab_index = self.content.indexOf(self.pages[page_name])
         self.content.setCurrentIndex(tab_index)
 
     # def show_tab_context_menu(self, pos):

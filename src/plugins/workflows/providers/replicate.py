@@ -2,17 +2,17 @@
 import json
 import asyncio
 import os
-import time
 from typing import Any
 
 from PySide6.QtWidgets import QMessageBox
+import aiohttp
 import replicate
-import requests
 
 from gui import system
 from utils.reset import reset_table
 from utils import sql
-from utils.helpers import display_message, get_media_type_from_ext, network_connected, convert_model_json_to_obj
+from utils.helpers import display_message, network_connected, convert_model_json_to_obj
+from utils.media import get_media_type_from_ext
 from utils.helpers import set_module_type
 from plugins.workflows.managers.providers import Provider
 
@@ -58,14 +58,22 @@ class ReplicateProvider(Provider):
         arguments = {k: v for k, v in model_obj.get('model_params', {}).items()
                      if k not in ['api_key', 'api_base']}
 
+        def extract_url(v):
+            if not isinstance(v, str):
+                return v
+            try:
+                obj = json.loads(v)
+                if isinstance(obj, dict) and 'url' in obj:
+                    return obj['url']
+            except (json.JSONDecodeError, TypeError):
+                pass
+            return v
+
         for k, v in arguments.items():
-            if isinstance(v, str):
-                try:
-                    obj = json.loads(v)
-                    if isinstance(obj, dict) and 'url' in obj:
-                        arguments[k] = obj['url']
-                except (json.JSONDecodeError, TypeError):
-                    pass
+            if isinstance(v, list):
+                arguments[k] = [extract_url(item) for item in v]
+            else:
+                arguments[k] = extract_url(v)
 
         client = replicate.Client(api_token=api_key)
         if ':' in model_name:
@@ -85,6 +93,7 @@ class ReplicateProvider(Provider):
             yield json.dumps({
                 'request_id': prediction_id,
                 'model_name': model_name,
+                'provider': 'replicate',
                 'status': 'queued'
             })
 
@@ -103,7 +112,7 @@ class ReplicateProvider(Provider):
         """
         api_key = os.environ.get('REPLICATE_API_TOKEN')
         client = replicate.Client(api_token=api_key)
-        prediction = client.predictions.get(request_id)
+        prediction = await asyncio.to_thread(client.predictions.get, request_id)
         status = prediction.status
         if status in ('starting', 'queued'):
             return {'status': 'queued'}
@@ -125,7 +134,7 @@ class ReplicateProvider(Provider):
         """
         api_key = os.environ.get('REPLICATE_API_TOKEN')
         client = replicate.Client(api_token=api_key)
-        prediction = client.predictions.get(request_id)
+        prediction = await asyncio.to_thread(client.predictions.get, request_id)
         output = prediction.output
 
         media_urls = []
@@ -156,7 +165,7 @@ class ReplicateProvider(Provider):
         client = replicate.Client(api_token=api_key)
 
         while True:
-            prediction = client.predictions.get(request_id)
+            prediction = await asyncio.to_thread(client.predictions.get, request_id)
             if prediction.status == 'succeeded':
                 break
             elif prediction.status in ('failed', 'canceled'):
@@ -177,13 +186,14 @@ class ReplicateProvider(Provider):
         if not media_url:
             raise ValueError(f"Could not find media URL in response: {output}")
 
-        media_response = requests.get(media_url, stream=True)
-        media_response.raise_for_status()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(media_url) as media_response:
+                media_response.raise_for_status()
+                content = await media_response.read()
 
         def chunk_generator():
-            for chunk in media_response.iter_content(chunk_size=8192):
-                if chunk:
-                    yield chunk
+            for i in range(0, len(content), 8192):
+                yield content[i:i + 8192]
 
         return chunk_generator()
 
@@ -208,7 +218,7 @@ class ReplicateProvider(Provider):
         api_key = os.environ.get('REPLICATE_API_TOKEN')
         client = replicate.Client(api_token=api_key)
         while True:
-            prediction = client.predictions.get(request_id)
+            prediction = await asyncio.to_thread(client.predictions.get, request_id)
             if prediction.status == 'succeeded':
                 return prediction.output
             elif prediction.status in ('failed', 'canceled'):
@@ -217,14 +227,13 @@ class ReplicateProvider(Provider):
                 )
             await asyncio.sleep(2)
 
-    def sync_models(self):
-        
-        def get_output_ext(value):
-            if isinstance(value, str) and value.startswith('http'):
-                return os.path.splitext(value)[1].lower()
-            else:
-                return None
+    async def sync_models(self, model_names=None, default_kind=None):
+        """Sync Replicate models into the models table.
 
+        With `model_names`, fetches only those models (owner/name) instead of
+        paginating the full catalog. `default_kind` is used for targeted models
+        whose kind can't be inferred from their default example output.
+        """
         reset_table(
             table_name='apis',
             item_configs={
@@ -234,12 +243,12 @@ class ReplicateProvider(Provider):
         )
         api_id = sql.get_scalar("SELECT id FROM apis WHERE LOWER(name) = 'replicate'")
 
-        api_key = os.environ.get('REPLICATE_API_KEY')
+        api_key = self._get_api_key()
         if not api_key:
             display_message(
                 icon=QMessageBox.Warning,
                 title="API Key Required",
-                message="REPLICATE_API_KEY environment variable not set"
+                message="Replicate API key not set"
             )
             return
 
@@ -250,147 +259,47 @@ class ReplicateProvider(Provider):
 
         try:
             all_models = {}
-            next_url = 'https://api.replicate.com/v1/models'
 
-            while next_url:
-                time.sleep(1)
-                response = requests.get(
-                    next_url,
-                    headers=headers
-                )
+            async def fetch(url):
+                async with session.get(url) as resp:
+                    return resp.status, await resp.text()
 
-                if response.status_code != 200:
-                    raise Exception(f"Error syncing models: {response.text}")
+            async with aiohttp.ClientSession(headers=headers) as session:
+                if model_names:
+                    for model_name in model_names:
+                        status, text = await fetch(
+                            f'https://api.replicate.com/v1/models/{model_name}'
+                        )
+                        if status != 200:
+                            print(f"Skipping {model_name} - {text}")
+                            continue
+                        entry = self._build_model_entry(json.loads(text), api_id, default_kind=default_kind)
+                        if entry:
+                            all_models[entry[0]] = entry[1]
+                else:
+                    next_url = 'https://api.replicate.com/v1/models'
 
-                data = response.json()
+                    while next_url:
+                        await asyncio.sleep(1)
+                        status, text = await fetch(next_url)
 
-                for model in data.get('results', []):
-                    owner = model.get('owner')
-                    name = model.get('name')
-                    model_name = f"{owner}/{name}"
-                    description = model.get('description', '') or ''
+                        if status != 200:
+                            raise Exception(f"Error syncing models: {text}")
 
-                    latest_version = model.get('latest_version')
-                    if not latest_version:
-                        print(f"Skipping {model_name} - No latest version")
-                        continue
+                        data = json.loads(text)
 
-                    openapi_schema = latest_version.get('openapi_schema')
-                    if not openapi_schema:
-                        print(f"Skipping {model_name} - No openapi schema")
-                        continue
+                        for model in data.get('results', []):
+                            entry = self._build_model_entry(model, api_id)
+                            if entry:
+                                all_models[entry[0]] = entry[1]
 
-                    components = openapi_schema.get('components', {})
-                    schemas = components.get('schemas', {})
-                    output_schema_format = schemas.get('Output', {}).get('items', {}).get('format', 'string')
-
-                    mode = 'CHAT'
-                    default_output = model.get('default_example', {}).get('output', None)
-
-                    if default_output is None:
-                        print(f"Skipping {model_name} - No default output")
-                        continue
-
-                    if default_output:
-                        # Unwrap single-entry dict wrappers
-                        # e.g. {"output": {"bass": "https://...", ...}} → {"bass": "https://...", ...}
-                        while isinstance(default_output, dict) and len(default_output) == 1:
-                            default_output = next(iter(default_output.values()))
-
-                        collection = None
-                        if isinstance(default_output, dict):
-                            collection = list(default_output.values())
-                        elif isinstance(default_output, list):
-                            collection = default_output
-
-                        output_ext = None
-                        if 'demucs' in model_name.lower():
-                            output_ext = ".mp3"  # todo hack
-                        elif collection:
-                            skip = False
-                            for value in collection:
-
-                                value_ext = get_output_ext(value)
-                                if output_ext is not None and output_ext != value_ext:
-                                    skip = True
-                                    break
-                                output_ext = value_ext
-                            if skip:
-                                if 'demucs' not in model_name.lower():
-                                    print(f"Skipping {model_name} - Output schema not supported")
-                                    continue
-                        else:
-                            output_ext = get_output_ext(default_output)
-
-                        media_type = get_media_type_from_ext(output_ext)
-                        if media_type is None:
-                            if isinstance(default_output, str):
-                                media_type = 'text'
-                            elif isinstance(default_output, list) and all(isinstance(item, str) for item in default_output):
-                                media_type = 'text'
-                            else:
-                                # only first 100 characters
-                                default_output_str = str(default_output).replace('\n', '')[:200]
-                                print(f"Skipping {model_name} - Unknown output type `{default_output_str}`")
-                                continue
-
-                        mode = media_type.upper()
-                        
-                    # # Detect STT models: non-URI output with audio input
-                    # if mode == 'CHAT' and output_schema_format != 'uri':
-                    #     input_props = schemas.get('Input', {}).get('properties', {})
-                    #     if 'audio' in input_props:
-                    #         mode = 'TEXT'
-
-                    cover_image = model.get('cover_image_url', '')
-
-                    self._component_schemas = schemas
-
-                    input_schema = []
-                    output_schema = {}
-
-                    for schema_name, schema_data in schemas.items():
-                        if schema_name == 'Input':
-                            properties = schema_data.get('properties', {})
-                            required_fields = schema_data.get('required', [])
-                            input_schema = self.convert_all_openapi_properties(properties, required_fields=required_fields)
-
-                        elif schema_name == 'Output':
-                            output_schema = schema_data
-
-                    if not input_schema:
-                        print(f"Skipping {model_name} - No input schema")
-                        continue
-
-                    metadata = {
-                        'description': description,
-                        'run_count': model.get('run_count', 0),
-                        'cover_image_url': cover_image,
-                        'input_schema': input_schema,
-                        'output_schema': output_schema,
-                    }
-
-                    display_name = model.get('name', model_name)
-
-                    version_id = latest_version.get('id', '')
-                    versioned_name = f"{model_name}:{version_id}" if version_id else model_name
-
-                    all_models[
-                        ('name', display_name),
-                        ('kind', mode),
-                        ('api_id', api_id),
-                        ('metadata', json.dumps(metadata)),
-                        ('provider_plugin', 'replicate'),
-                    ] = {
-                        '_model_name': versioned_name,
-                    }
-
-                next_url = data.get('next')
+                        next_url = data.get('next')
 
             reset_table(
                 table_name='models',
                 item_configs=all_models,
                 delete_existing=False,
+                match_on=('name', 'api_id'),
             )
 
         except Exception as e:
@@ -400,6 +309,139 @@ class ReplicateProvider(Provider):
                 message=f"An error occurred while syncing Replicate models: {e}"
             )
             return
+
+    def _build_model_entry(self, model, api_id, default_kind=None):
+        """Convert a Replicate API model dict into a models-table entry.
+
+        Returns (key_tuple, config) for reset_table, or None to skip.
+        """
+        def get_output_ext(value):
+            if isinstance(value, str) and value.startswith('http'):
+                return os.path.splitext(value)[1].lower()
+            else:
+                return None
+
+        owner = model.get('owner')
+        name = model.get('name')
+        model_name = f"{owner}/{name}"
+        description = model.get('description', '') or ''
+
+        latest_version = model.get('latest_version')
+        if not latest_version:
+            print(f"Skipping {model_name} - No latest version")
+            return None
+
+        openapi_schema = latest_version.get('openapi_schema')
+        if not openapi_schema:
+            print(f"Skipping {model_name} - No openapi schema")
+            return None
+
+        components = openapi_schema.get('components', {})
+        schemas = components.get('schemas', {})
+
+        mode = 'CHAT'
+        default_output = (model.get('default_example') or {}).get('output', None)
+
+        if default_output is None:
+            if default_kind is None:
+                print(f"Skipping {model_name} - No default output")
+                return None
+            mode = default_kind
+
+        if default_output:
+            # Unwrap single-entry dict wrappers
+            # e.g. {"output": {"bass": "https://...", ...}} → {"bass": "https://...", ...}
+            while isinstance(default_output, dict) and len(default_output) == 1:
+                default_output = next(iter(default_output.values()))
+
+            collection = None
+            if isinstance(default_output, dict):
+                collection = list(default_output.values())
+            elif isinstance(default_output, list):
+                collection = default_output
+
+            output_ext = None
+            skip = False
+            if 'demucs' in model_name.lower():
+                output_ext = ".mp3"  # todo hack
+            elif collection:
+                for value in collection:
+                    value_ext = get_output_ext(value)
+                    if output_ext is not None and output_ext != value_ext:
+                        skip = True
+                        break
+                    output_ext = value_ext
+            else:
+                output_ext = get_output_ext(default_output)
+
+            media_type = None if skip else get_media_type_from_ext(output_ext)
+            if media_type is None and not skip:
+                if isinstance(default_output, str):
+                    media_type = 'text'
+                elif isinstance(default_output, list) and all(isinstance(item, str) for item in default_output):
+                    media_type = 'text'
+
+            if media_type is None:
+                if default_kind is None:
+                    if skip:
+                        print(f"Skipping {model_name} - Output schema not supported")
+                    else:
+                        default_output_str = str(default_output).replace('\n', '')[:200]
+                        print(f"Skipping {model_name} - Unknown output type `{default_output_str}`")
+                    return None
+                mode = default_kind
+            else:
+                mode = media_type.upper()
+
+        cover_image = model.get('cover_image_url', '')
+
+        self._component_schemas = schemas
+
+        input_schema = []
+        output_schema = {}
+
+        for schema_name, schema_data in schemas.items():
+            if schema_name == 'Input':
+                properties = schema_data.get('properties', {})
+                required_fields = schema_data.get('required', [])
+                input_schema = self.convert_all_openapi_properties(properties, required_fields=required_fields)
+
+            elif schema_name == 'Output':
+                output_schema = schema_data
+
+        # Duration fields where -1 means "auto" (e.g. Seedance):
+        # default to auto instead of a toggleable explicit length,
+        # since omitting the field falls back to the API's 5s default.
+        for prop in input_schema:
+            if prop.get('key') == 'duration' and prop.get('minimum') == -1:
+                prop['default'] = -1
+                prop['has_toggle'] = False
+
+        if not input_schema:
+            print(f"Skipping {model_name} - No input schema")
+            return None
+
+        metadata = {
+            'description': description,
+            'run_count': model.get('run_count', 0),
+            'cover_image_url': cover_image,
+            'input_schema': input_schema,
+            'output_schema': output_schema,
+        }
+
+        display_name = model.get('name', model_name)
+
+        version_id = latest_version.get('id', '')
+        versioned_name = f"{model_name}:{version_id}" if version_id else model_name
+
+        key = (
+            ('name', display_name),
+            ('kind', mode),
+            ('api_id', api_id),
+            ('metadata', json.dumps(metadata)),
+            ('provider_plugin', 'replicate'),
+        )
+        return key, {'_model_name': versioned_name}
 
     def resolve_schema(self, schema, schemas=None):
         """Resolve complex JSON schemas into a single type definition.
@@ -462,6 +504,10 @@ class ReplicateProvider(Provider):
             return merged_schema, False
 
         return schema, False
+
+    def media_probe_headers(self):
+        """Replicate file URLs require auth even for accessibility checks."""
+        return {'Authorization': f'Bearer {self._get_api_key()}'}
 
     async def upload_file(self, file_path):
         """Upload a local file to Replicate and return the URL."""

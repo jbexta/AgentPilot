@@ -16,9 +16,7 @@ config:
       data: |
         # GUI Architecture
 
-        The codebase implements a three-tier abstraction system for building
-        hierarchical UIs, where complexity is progressively abstracted into
-        reusable components:
+        The codebase implements a three-tier abstraction system for building hierarchical UIs, where complexity is progressively abstracted into reusable components:
 
         **The Hierarchy:**
 
@@ -74,4 +72,5 @@ config:
     show_nested_bubbles: false
     mini_view: true
   params: []
+kind: PROJECT:1
 parent_uuid: 673d84a8-fd6b-4f41-b585-87fd53026401

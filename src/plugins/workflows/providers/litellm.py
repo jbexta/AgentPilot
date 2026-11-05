@@ -6,8 +6,6 @@ from typing import List, Dict, Any, Optional
 
 from PySide6.QtWidgets import QMessageBox
 import instructor
-import litellm
-from litellm import acompletion, completion
 from pydantic import create_model
 
 from gui import system
@@ -15,8 +13,13 @@ from utils.reset import reset_table
 from utils import sql
 from utils.helpers import display_message, network_connected, convert_model_json_to_obj, convert_to_safe_case
 from plugins.workflows.managers.providers import Provider
+from plugins.workflows.managers.models import LIVE_MODELS
 
-litellm.log_level = 'ERROR'
+LIVE_VOICES = [
+    'alloy', 'ash', 'ballad', 'beacon', 'bossa', 'cedar', 'cinder', 'coral',
+    'delta', 'echo', 'gleam', 'marin', 'meridian', 'quartz', 'ripple', 'sage',
+    'shimmer', 'stone', 'tempo', 'verse', 'vesper', 'willow',
+]
 
 
 class LitellmProvider(Provider):
@@ -35,50 +38,6 @@ class LitellmProvider(Provider):
         # self.visible_tabs = ['Chat', 'Video']
         os.environ['OR_SITE_URL'] = 'https://agentpilot.ai'
         os.environ['OR_APP_NAME'] = 'AgentPilot'
-
-        realtime_model_id = sql.get_scalar("""
-            SELECT id 
-            FROM models 
-            WHERE COALESCE(json_extract(config, '$._model_name'), json_extract(config, '$.model_name')) LIKE 'gpt-4o-realtime%'
-                AND kind = 'CHAT'
-        """)
-
-        if realtime_model_id:
-            self.schema_overrides = {
-                # 'gpt-4o-realtime-preview-2024-10-01': [
-                int(realtime_model_id): [
-                    # {
-                    #     'text': 'Model name',
-                    #     'type': str,
-                    #     'label_width': 125,
-                    #     'width': 265,
-                    #     'tooltip': 'The name of the model to send to the API',
-                    #     'default': '',
-                    # },
-                    {
-                        'text': 'Voice',
-                        'type': ('Alloy','Ash','Ballad','Coral','Echo','Sage','Shimmer','Verse',),
-                        'label_width': 125,
-                        'default': 'Alloy',
-                    },
-                    {
-                        'text': 'Turn detection',
-                        'type': bool,
-                        'label_width': 125,
-                        'default': True,
-                    },
-                    {
-                        'text': 'Temperature',
-                        'type': float,
-                        'has_toggle': True,
-                        'label_width': 145,
-                        'minimum': 0.0,
-                        'maximum': 1.0,
-                        'step': 0.05,
-                        'default': 0.6,
-                    },
-                ],
-            }
 
     def get_model_parameters(self, model_obj, incl_api_data=True):
         provider, kind, model_name = model_obj['provider'], model_obj['kind'], model_obj['_model_name']
@@ -121,13 +80,16 @@ class LitellmProvider(Provider):
                     )
                     if not has_computer_tool:
                         kwargs['tool_choice'] = "auto"
+                if sql.get_db_path().endswith('test_data.db'):
+                    kwargs['mock_response'] = 'Dummy test response.'
 
                 if next(iter(messages), {}).get('role') != 'user':
                     pass
+                from litellm import acompletion
                 return await acompletion(**kwargs)
                 
             except Exception as e:
-                if not network_connected():
+                if not await asyncio.to_thread(network_connected):
                     ex = ConnectionError('No network connection.')
                     break
                 if 'Your organization must be verified to stream this model.' in str(e):
@@ -171,6 +133,7 @@ class LitellmProvider(Provider):
         model_obj['model_params'] = {**model_obj.get('model_params', {}), **model_s_params}
         model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in self.ACCEPTED_KEYS_WITH_API}
 
+        from litellm import completion
         client = instructor.from_litellm(completion)
 
         model_name = model_obj['_model_name']
@@ -194,6 +157,7 @@ class LitellmProvider(Provider):
 
             mode_map = {
                 'chat': 'CHAT',
+                'realtime': 'CHAT',
                 # 'video_generation': 'VIDEO',
                 'audio_transcription': 'TRANSCRIPTION',
                 'embedding': 'EMBEDDING',
@@ -231,6 +195,7 @@ class LitellmProvider(Provider):
                     for api_name, _ in apis.items()
                 },
                 delete_existing=False,
+                case_insensitive=True,
             )
 
             # Define generic chat model input schema
@@ -305,6 +270,35 @@ class LitellmProvider(Provider):
                 },
             ]
 
+            live_input_schema = [
+                {
+                    'text': 'Voice',
+                    'type': LIVE_VOICES,
+                    'label_width': 125,
+                    'default': 'marin',
+                },
+                {
+                    'text': 'Delegation',
+                    'type': ['Client', 'Responses'],
+                    'label_width': 125,
+                    'default': 'Client',
+                    'tooltip': 'Who does the reasoning. Client runs the backend model in the app '
+                               'with the agent\'s messages. Responses lets OpenAI run the backend '
+                               'model server-side.',
+                },
+                {
+                    'text': 'Backend model',
+                    'type': 'model',
+                    'model_kind': 'CHAT',
+                    'popup_params': True,
+                    'label_width': 125,
+                    'width': 200,
+                    'default': '',
+                    'tooltip': 'The text model that handles delegated reasoning. '
+                               'Responses delegation requires an OpenAI model.',
+                },
+            ]
+
             # Map model kinds to their input schemas
             kind_input_schemas = {
                 'CHAT': chat_input_schema,
@@ -320,6 +314,8 @@ class LitellmProvider(Provider):
                             model_name = model_name[len(f'{api_name}/'):]
                         
                         input_schema = kind_input_schemas.get(mode)
+                        if model_name in LIVE_MODELS:
+                            input_schema = live_input_schema
                         if input_schema:
                             model_metadata['input_schema'] = input_schema
 
@@ -342,6 +338,7 @@ class LitellmProvider(Provider):
                 table_name='models',
                 item_configs=api_models,
                 delete_existing=False,
+                match_on=('name', 'api_id'),
             )
 
         except Exception as e:

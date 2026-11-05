@@ -26,31 +26,33 @@ The types of modules (Controllers) built in to the app are listed below:
 
 - **Controllers**:  _No description available._ 
 
+- **Actions**: Undo-able user actions 
+
 - **Connectors**: Database connection modules 
 
 - **Daemons**: Background tasks or periodic jobs 
 
 - **Managers**: System-level management modules 
 
+- **Utils**: Shared helper functions 
+
 
 ### GUI module types:
 
 - **Fields**:  Form field components 
 
+- **Gui_utils**:  Shared GUI building blocks 
+
 - **Highlighters**:  Syntax highlighting modules 
 
 - **Pages**:  UI page modules for the application 
 
-- **Studios**:  Studio modules 
-
 - **Widgets**:  Reusable UI widget components 
 
 
-### GUI Architecture
+## GUI Architecture
 
-The codebase implements a three-tier abstraction system for building
-hierarchical UIs, where complexity is progressively abstracted into
-reusable components:
+The codebase implements a three-tier abstraction system for building hierarchical UIs, where complexity is progressively abstracted into reusable components:
 
 **The Hierarchy:**
 
@@ -69,7 +71,7 @@ All UI logic lives in reusable Widgets and Fields. This means:
 - Widgets are testable in isolation
 - Consistent UX across the app
 
-#### Pages
+### Pages
 
 Pages are special widgets with a navigation button added to the sidebar or settings page for users to navigate to. They are typically thin widget definitions, inheritting from any ConfigWidget derived class.
 
@@ -103,7 +105,7 @@ The Page does almost nothing - it just:
 3. Specifies WorkflowSettings as the config widget
 4. Optionally overrides methods like on_edited()
 
-##### Nested Widget Classes
+#### Nested Widget Classes
 
 Pages define widget subclasses inline to configure them:
 
@@ -118,54 +120,9 @@ class Page_Entities(ConfigDBTree):
 
 This keeps related configurations together while maintaining separation.
 
-**All page modules:**
+**All page modules:** Daemons, Settings, Tttt, System, Icons, Modules, Display, Product_search, Projects, Chat, Embroidery, Telephony, Jobs, Skills, Agents, Open_food, Finance, Tasks, Models, Videos, Companies_house, Environments, Claude, Blocks, Slopify, Contexts, Contacts, Voices, Tools, Plans, Company_search, Files
 
-- **Channels**
-
-- **Finance**
-
-- **Blocks**
-
-- **System**
-
-- **Youtube**
-
-- **Display**
-
-- **Tasks**
-
-- **Job_hunter**
-
-- **Files**
-
-- **Settings**
-
-- **Tools**
-
-- **Chat**
-
-- **Slopify**
-
-- **Contexts**
-
-- **Environments**
-
-- **Images**
-
-- **Models**
-
-- **Videos**
-
-- **Agents**
-
-- **Modules**
-
-- **Todo**
-
-- **Projects**
-
-
-#### Widgets
+### Widgets
 
 Widgets are reusable configurable components that have a specific functionality.
 They can orchestrate multiple fields or other widgets
@@ -220,99 +177,43 @@ a) Down from root to all leaf widgets:
 b) Up to root from any leaf widget:
 - `update_config()`
 
-Any widget can set the boolean attribute `self.propagate_config` which allows or prevents propagation of `load_config` and `update_config`.
-This is True by default for all widgets, but some widgets such as `ConfigDBTree` and `ConfigTable` have it set to False by default.
+Any widget can set the boolean attribute `self.propagate_config`, which allows or prevents propagation of `load_config` and `update_config`.
+It is **off by default**. Each widget takes its parent's value when it is constructed, and `update_config` checks the flag at every hop. A subtree that must save sets `self.propagate_config = True` in its root's `__init__`, **before** it builds any child widgets (see `MediaSettings.__init__`). Setting it on a leaf does nothing. If it's missing anywhere in the chain, `save_config` never runs.
 
-**All widget modules:**
+#### In-app tools (`@llm_tool`)
 
-- **Config_fields**
+Any widget or page method can be exposed to agents as a tool that controls the UI, by decorating it with `@llm_tool` from `utils.helpers`:
 
-- **Code_settings**
+```python
+@llm_tool(
+    name='add',
+    description='Add a new item to the tree',
+    params={'name': 'Name of the new item'},
+)
+def add_item(self, name: str = None):
+    ...
+```
 
-- **Agent_settings**
+- `name`: tool name, defaults to the method name. It is prefixed with the snake-cased defining class, e.g. `config_db_tree_add`.
+- `description`: defaults to the method docstring.
+- `params`: maps exposed parameter names to descriptions. When omitted, every signature parameter is exposed. `params={}` exposes none.
+- `confirm=True`: the user must approve each call before it runs (honoured by Claude Code agents).
+- Annotations `str`, `int`, `float` and `bool` map to JSON schema types, anything else is a string. Parameters without a default are required.
+- The return value is sent back to the agent as the tool output (`None` -> `Done`). Raise an exception to return an error.
 
-- **Config_widget**
+Tools are discovered automatically from every loaded class, listed on the Tools page under the `Application/<module>` folder, and selected in an agent's tool list like workflow tools (selecting a folder selects all tools in it).
 
-- **Config_db_tree**
+**Widget references**
 
-- **Generate_widget**
+Because a widget class can be on screen many times, a non-root tool takes an extra required `widget` argument, e.g. `w3`. The agent gets these references from `view_ui`, which walks the visible UI with `get_agent_visualisation(refs)` and prints a `Tools [wN]:` block for each widget that has tools. A call fails if the referenced widget is no longer in view, so the agent calls `view_ui` again.
 
-- **Video_settings**
+- Mark a class with `_ap_llm_tool_root = True` to make the tools it defines unprefixed and called without a `widget` argument. `MainPages` does this for `view_ui` and `restart_app`. Inherited tools are unaffected, so `switch_page` (from `ConfigPages`) is still `config_pages_switch_page` and takes a `widget`.
+- Override `agent_visualisation()` to describe a widget's state to the agent (see `VideoStudio`). Override `get_agent_visualisation(refs)` to control which children are walked (see `FileTree`).
+- A tool taking a `refs` parameter receives the caller's reference list, cleared, to number widgets itself (only `view_ui` needs this).
 
-- **Text_settings**
+**All widget modules:** Config_db_tree, Config_json_db_tree, Config_table, Config_widget, Config_side_tabs, Config_fields, Config_tabs, Filter_builder, Config_json_tree, Config_pages, Config_tree, Config_collection, Config_joined, Config_ext_tree, Config_voice_tree, Wait_settings, File_tree_deploy, Prompt_settings, Generate_widget, Overlay, Agent_settings, Computer_use_settings, Chat_widget, Github_account, Vcs_panel, Audio_settings, Input_settings, Text_settings, Fund_map, Claude_context, User_settings, Git_diff_settings, Multi_preview, Notif_settings, Video_settings, File_tree, Deploy_panel, Media_settings, Live_agent_settings, Git_checkpoint_settings, Workflow_settings, Code_settings, Contact_settings, Workflow_popup, Message_collection, Set_variable_settings, Query_settings, Image_settings, Cc_user_settings, Probability_settings, File_tree_vcs, Claude_code_settings
 
-- **Notif_settings**
-
-- **Query_settings**
-
-- **Config_ext_tree**
-
-- **Collections_widget**
-
-- **Image_settings**
-
-- **Control_panel**
-
-- **Claude_code_settings**
-
-- **User_settings**
-
-- **Message_collection**
-
-- **Config_tabs**
-
-- **Population_view**
-
-- **Probability_settings**
-
-- **Config_side_tabs**
-
-- **File_tree**
-
-- **Config_table**
-
-- **Workflow_settings**
-
-- **Config_tree**
-
-- **Prompt_settings**
-
-- **Config_json_tree**
-
-- **Contact_settings**
-
-- **Config_voice_tree**
-
-- **Input_settings**
-
-- **Overlay**
-
-- **Config_json_db_tree**
-
-- **Multi_preview**
-
-- **Audio_settings**
-
-- **Config_joined**
-
-- **Chat_widget**
-
-- **Fitness_chart**
-
-- **Config_collection**
-
-- **Wait_settings**
-
-- **Fund_map**
-
-- **Config_pages**
-
-- **Media_settings**
-
-- **Computer_use_settings**
-
-
-#### Fields
+### Fields
 
 Fields are atomic, reusable input field, typically used from a ConfigFields or ConfigTree derived widget.
 
@@ -325,58 +226,11 @@ pickers, etc.)
 - Self-contained with their own validation and styling
 - Have an option_schema defining how they themselves can be configured
 
-**All field modules:**
-
-- **Model**
-
-- **Image**
-
-- **Combo**
-
-- **Project_type_menu**
-
-- **List**
-
-- **Color_picker**
-
-- **Member_type_menu**
-
-- **Input_target**
-
-- **Text**
-
-- **Button**
-
-- **Entity**
-
-- **Media_upload**
-
-- **Boolean**
-
-- **Integer**
-
-- **Input_source**
-
-- **Float**
-
-- **Venv**
-
-- **Font**
-
-- **Module**
-
-- **Button_toggle**
-
-- **Condition_popup_button**
-
-- **Popup_button**
-
-- **File_picker**
-
+**All field modules:** Model, Font, Module, Preset_menu, Color_picker, File_picker, Button, Button_toggle, Input_source, Popup_button, Entity, Float, Text, Combo, List, Venv, Input_target, Member_type_menu, Project_type_menu, Image, Boolean, Media_upload, Integer, Condition_popup_button
 
 Common field kwargs (kwargs that can be used with **any** field module):
 
-#### Schema-Driven UI
+### Schema-Driven UI
 
 Some widgets have a `schema` attribute, which contains a list of dictionaries.
 Fields and widgets are defined by schema dictionaries:
@@ -397,19 +251,42 @@ The system automatically:
 - Binds it to the config key
 - Handles value serialization
 
-### Plugins
-An **AgentPilot plugin** is a collection of modules bundled together and placed in the `src/plugins` directory.
+## Database and Persistence
+
+- SQLite database (`data.db`) stores contexts, messages, configurations
+- Message history with branching support
+- Workflow state persistence and resumption
+
+### Baking
+
+Baking saves an item from the database into a file in the source code, so it ships with the app. Right-click an item and choose Bake. With auto-bake on, a baked item is re-baked every time it's saved in the app.
+
+**Items** (blocks, agents, skills, tasks, …) are saved as YAML files in `src/utils/baked/`. The database copy is the real one, and the YAML is only loaded back when the app is reset. So edit items in the app, not the YAML, or your change will be overwritten.
+
+**Modules** are saved as `.py` files in the source code. Here the file is the real one, and it's loaded into the database on every startup. So edit the `.py` file directly. Modules that aren't baked only exist in the database.
+
+Baking isn't possible in the built app.
+
+Block Maps are different: they write a block's output to a file, such as `docs/*.md` or `CLAUDE.md`.
+
+## Plugins
+An AgentPilot plugin is a collection of modules bundled together.
 
 By organizing related modules into a single plugin, all modules related to a feature or integration are kept together, making development and maintenance easier.
 
 The application automatically discovers and loads plugins from the `src/plugins` directory at startup. Each module inside a plugin is registered and made available in the app.
 
-#### Plugin Structure
+### Plugin Structure
 
-To create a plugin:
+Plugins are stored in a folder under `src/plugins`.
+A plugin called `my_plugin` would be stored under `src/plugins/my_plugin`
 
-1. **Create a directory for your plugin under `src/plugins`**
-   For example, if your plugin is called `my_plugin`, create the directory `src/plugins/my_plugin` with the following structure:
+Modules are organized by type, mirroring the core codebase structure
+Each module type (e.g., managers, providers, widgets, etc.) has its own folder inside the plugin directory.
+
+These module folders can optionally be grouped into `core` and `gui` folders like the main codebase. Useful if the plugin has many different types of modules.
+
+Example structure:
 ```
 src/
     plugins/
@@ -421,46 +298,120 @@ src/
             widgets/
                 __init__.py
                 my_widget_module.py
+            managers/
+                __init__.py
+                my_manager_module.py
             [any other type of module]/
                 [my_other_module.py]
-   ```
+```
+## Workflow Engine Overview
 
-2. **Organize your modules by type, mirroring the core codebase structure**
-   Each module type (e.g., managers, providers, widgets, etc.) should have its own folder inside your plugin directory.
-   These module folders can optionally be grouped into `core` and `gui` folders like the main codebase. Only do this if the plugin has many different types of modules.
-   Place your module files (Python files containing classes that inherit from the appropriate base class, such as `BaseManager`, `Provider`, etc.) in the corresponding folder.
+The Workflow Engine provides a graph-based execution environment for designing infinitely nestable, AI-driven workflows.
+The underlying engine handles state management, dependency resolution, message persistence, and asynchronous execution—all while supporting real-time interaction and branching contexts.
 
-3. **(Optional) Add extra source code**
-   If your plugin needs additional code, you can add other files inside your plugin directory without needing them to be declared as modules.
+Built-in member types:
+- **Conversation:** User, Agent (an LLM), Live Agent (a live voice conversation), Claude Code, Contact.
+- **Blocks:** Text, Prompt (a single LLM call), Code.
+- **Flow:** Iterator, Probability (continues or stops at random).
+- **Media:** Image, Audio, Video.
+- **System:** Query (SQL), Set Variable, Wait, Notification.
+- **Workflow:** a nested workflow.
 
-4. **Ensure each folder has an `__init__.py` file**
-   This makes sure Python recognizes it as a standard package.
-{ workflows }
+Some Text fields - such as System Message's or a Text member- can be a template.
 
-## Database and Persistence
+- `{{ my_block }}` — inserts a block's output. Dashes and spaces in block names become underscores.
+- `{{ my_block(topic='foo') }}` — runs a block with parameters. Always write them as `name='value'`.
+- `{{ assistant_2 }}` — the output of another member in the workflow, named after the member's name and id.
+- `{{ topic }}` — a param of the current workflow can also be used in the template.
 
-- SQLite database (`data.db`) stores contexts, messages, configurations
-- Message history with branching support
-- Workflow state persistence and resumption
+Put a heading before a block, like `## {{ my_block }}`, to nest the block's own headings under it.
 
-## Important Implementation Details
 
-### Module Loading
-- **Dynamic module loading**: `ModuleManager` handles runtime loading/unloading
-- **Multi-type module support**: 12+ module types with automatic discovery
-- **Configuration hashing**: Change detection for module updates
-- **Type controllers**: `ModulesController` manages each module type
-- **Plugin organization**: Plugins contain collections of related modules
-- Modules can be edited while application is running (if enabled)
-- Plugin system allows extending functionality without core changes
+### Workflow Member (`src/core/members/workflow.py`)
 
-### Configuration Management
-- Configurations are JSON-based, stored in database
-- Hierarchical config system supports complex nested structures
-- UI automatically generates configuration interfaces from schemas
+The `Workflow` class is itself a `Member`. This implements the **Composite Pattern**, meaning a Workflow can contain other Members, including other Workflows (Nested Workflows).
 
-### File Organization
-- `src/core/`: Core system logic and managers
-- `src/gui/`: User interface components
-- `src/plugins/`: Modular plugin implementations
-- `src/utils/`: Shared utilities and helpers
+#### Key Responsibilities:
+1.  **Context Management:**
+    *   Manages a specific `context_id` in the SQLite database.
+    *   Initializes the `MessageHistory` to handle conversation retrieval.
+2.  **Member Orchestration:**
+    *   Dynamically instantiates child members based on the configuration (`load_members`).
+    *   maintains a registry `self.members` mapping IDs to instances.
+3.  **Recursive Input Resolution:**
+
+#### Configuration & State
+The workflow state is persisted in the `contexts` table. When loaded, it merges the stored JSON configuration with runtime settings:
+*   **`autorun`**: Whether the workflow executes immediately upon receiving input.
+*   **`members`**: A list of member configurations and their X/Y coordinates.
+*   **`inputs`**: Definitions of connections (edges) between members.
+
+### Message System (`src/utils/messages.py`)
+
+The application uses a database-backed message history that supports branching conversations.
+
+#### `MessageHistory`
+This class abstracts the complexity of SQL recursive queries to present a given branch of the chat history.
+
+*   **Branching:** It uses Recursive Common Table Expressions (CTEs) to traverse the `contexts` table (`parent_id` relationships) to construct the conversation thread leading to the current `leaf_id`.
+*   **Context Filtering:**
+    *   `get_llm_messages(calling_member_id)`: Prepares messages specifically for AI ingestion. It handles:
+        *   Role filtering (User, Assistant, System, Tool).
+        *   JSON parsing for Tool Calls and Results.
+        *   Base64 image encoding for Vision models.
+        *   Injecting "Preload" data (system prompts).
+*   **Structure Mapping:**
+    *   If a connection maps a specific JSON key from a source member (e.g., `{ "topic": "coding" }`), `MessageHistory` extracts that specific value and presents it as a message to the target member.
+
+#### `Message` Object
+Represents a discrete unit of communication. It tracks:
+*   `role`: (user, assistant, system, tool, etc.)
+*   `content`: The text payload.
+*   `alt_turn`: An integer flag used to group messages into "turns" (execution cycles).
+
+### Execution Engine (`src/core/behaviors/default.py`)
+
+The execution logic is decoupled from the data structure and resides in `DefaultBehavior`. It implements a topological execution flow using `asyncio`.
+
+#### The Execution Loop (`receive`)
+The engine runs a continuous loop until a stop condition is met (e.g., user input required, final result produced).
+
+1.  **Dependency Resolution (`get_async_members`):**
+    *   Iterates through all members in the workflow.
+    *   Checks if a member is "runnable" by verifying if all its input sources have produced a `turn_output`.
+    *   **Concurrency:** If multiple members are ready simultaneously, they are executed in parallel using `asyncio.gather`.
+
+2.  **Looping Logic:**
+    *   The engine detects "Loopers" (connections marked to allow circular feedback).
+    *   If a looper triggers, the engine resets the `turn_output` and `last_output` of specific members, effectively resetting their state to allow them to run again within the same turn.
+
+3.  **Termination:**
+    *   The loop breaks when no members are runnable.
+    *   It checks `next_expected_is_last_member()` to determine if the final output has been generated.
+
+### Visual Editor (`src/gui/widgets/workflow_settings.py`)
+
+The Workflow Editor is a node-based graphical interface built on **Qt Graphics View Framework**.
+
+#### Architecture
+*   **`WorkflowSettings` (ConfigWidget):** The main container. It serializes the visual state back into the JSON configuration required by the backend.
+*   **`CustomGraphicsView`:** Handles zooming, panning, and interaction events. Supports a "Mini View" (read-only overview) and an editable canvas.
+
+#### Components
+1.  **`DraggableMember` (Nodes):**
+    *   Represents an Agent, Block, or Tool.
+    *   Contains a `MemberProxy` which renders the specific configuration widget for that member (e.g., Model selection, Temperature).
+    *   Handles resizing and visual selection states.
+2.  **`ConnectionLine` (Edges):**
+    *   Draws Bezier curves between nodes.
+    *   **Circular Detection:** Changes visual style and logic if a line creates a loop (`looper`).
+    *   **Dynamic Pathing:** Automatically adjusts curvature based on the relative positions of nodes (left/right logic).
+3.  **`WorkflowButtons` (Toolbar):**
+    *   Provides Copy/Paste functionality (via JSON clipboard serialization).
+    *   Allows "Exploding" a nested workflow (breaking a sub-workflow into its constituent nodes on the current canvas).
+    *   Manages "Group" functionality to collapse multiple nodes into a new sub-workflow.
+
+#### Visual Abstraction
+The editor implements a "Compact Mode" logic:
+*   If a workflow contains only 1 Member (or User + Agent), it simplifies the view to hide the node graph, presenting it as a single member.
+*   As soon as a third member or complex connection is added, it toggles to the full Graph View.

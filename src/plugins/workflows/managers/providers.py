@@ -168,6 +168,10 @@ class Provider:
 
             if required_fields is not None:
                 has_toggle = property_name not in required_fields
+                # A checkbox with a known default already expresses both of its
+                # states — a presence toggle on top of it is redundant.
+                if new_property.get('type') == 'boolean' and new_property.get('default') is not None:
+                    has_toggle = False
                 new_property['has_toggle'] = has_toggle
 
             if new_property.get('stretch_x') and new_property.get('stretch_y'):
@@ -284,14 +288,17 @@ class Provider:
                     new_property['wrap_text'] = True
 
         elif property_type == 'list':
-            of_type = property_data.get(
-                'items', {}
-            ).get('type', 'string')
+            items = property_data.get('items', {})
+            of_type = items.get('type', 'string')
+            if of_type == 'string' and items.get('format') == 'uri':
+                of_type = 'media_upload'
             if ' urls' in property_data.get('title', '').lower():
                 of_type = 'media_upload'
             new_property['of_type'] = self.OPENAPI_TYPE_MAP.get(
                 of_type, 'text'
             )
+            if new_property['of_type'] == 'media_upload':
+                new_property['label_position'] = 'top'
 
         elif property_type in ('integer', 'float'):
             if property_type == 'integer':

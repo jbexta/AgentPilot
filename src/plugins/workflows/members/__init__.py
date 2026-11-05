@@ -143,16 +143,22 @@ class Member:
         #         raise NotImplementedError('Loops are not implemented yet. Coming soon.')
 
         if self.receivable_function:
+            run_manager = None
+            if self.workflow is not None and self.workflow._parent_workflow is None:
+                from plugins.workflows.utils.runs import get_run_manager
+                run_manager = get_run_manager()
             async for key, chunk in self.receivable_function():
                 if self.workflow:
                     if self.workflow.stop_requested:
-                        self.workflow.stop_requested = False
+                        # self.workflow.stop_requested = False
                         break
                     yield key, chunk
-                    if self.workflow.chat_widget:
-                        self.workflow.chat_widget.new_sentence(key, self.full_member_id(), chunk)
+                    if run_manager:
+                        run_manager.on_chunk(self.workflow.context_id, key, self.full_member_id(), chunk)
                 else:
                     yield key, chunk
+            if run_manager:
+                run_manager.clear_tail(self.workflow.context_id, self.full_member_id())
 
                 # if self.workflow.chat_widget:
                 #     self.workflow.chat_widget.new_sentence(key, self.full_member_id(), chunk)
@@ -214,8 +220,9 @@ class LlmMember(Member):
         self.tools_config_key: str = 'tools.data'
 
         self.tools_table = {}
+        self.method_tools = []
+        self.ui_refs = []
         # self.load()
-        self.realtime_client = None
         self.receivable_function = self.receive
 
     # class MemberRealtimeClient:
@@ -421,22 +428,13 @@ class LlmMember(Member):
     def load(self):
         self.load_tools()
 
-        model_json = self.config.get(self.model_config_key, gui_system.manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
-        model_obj = convert_model_json_to_obj(model_json)
-
-        if model_obj['_model_name'].startswith('gpt-4o-realtime'):
-            pass  # todo
-            # # Initialize the realtime client
-            # if not self.realtime_client:
-            #     self.realtime_client = RealtimeAIClientWrapper(self)
-            # self.realtime_client.load(model_obj)
-
     def load_tools(self):
         agent_tools_ids = self.config.get(self.tools_config_key, [])
         # agent_tools_ids = [tool['id'] for tool in tools_in_config]
         if len(agent_tools_ids) == 0:
             return
 
+        agent_tools_ids, self.method_tools = gui_system.manager.tools.resolve_selection(agent_tools_ids)
         self.tools_table = sql.get_results(f"""
             SELECT
                 uuid,
@@ -476,13 +474,10 @@ class LlmMember(Member):
                 )
                 await self._computer_use_browser.launch()
 
-        messages = await self.get_messages()
-        system_msg = await self.system_message()
+        while True:
+            messages = await self.get_messages()
+            system_msg = await self.system_message()
 
-        if model_obj['_model_name'].startswith('gpt-4o-realtime'):  # temp todo
-            # raise NotImplementedError('Realtime models are not implemented yet.')
-            stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages, system_msg=system_msg)
-        else:
             if system_msg != '':
                 messages.insert(0, {'role': 'system', 'content': system_msg})
             if len(structured_data) > 0:
@@ -490,51 +485,109 @@ class LlmMember(Member):
             else:
                 stream = self.stream(model=model_obj, messages=messages)
 
-        role_responses = {}
-        async for key, chunk in stream:
-            if key not in role_responses:
-                role_responses[key] = ''
-            if key == 'tools':
-                tool_list = chunk
-                role_responses['tools'] = tool_list
-            else:
-                chunk = chunk or ''
-                role_responses[key] += chunk
-                yield key, chunk
+            role_responses = {}
+            async for key, chunk in stream:
+                if key not in role_responses:
+                    role_responses[key] = ''
+                if key == 'tools':
+                    tool_list = chunk
+                    role_responses['tools'] = tool_list
+                else:
+                    chunk = chunk or ''
+                    role_responses[key] += chunk
+                    yield key, chunk
 
-        if 'api_key' in model_obj['model_params']:
-            model_obj['model_params'].pop('api_key')
-        logging_obj = {
-            'id': 0,
-            'context_id': self.workflow.context_id,
-            'member_id': self.full_member_id(),
-            'model': model_obj,
-            'messages': messages,
-            'role_responses': role_responses,
-        }
+            if 'api_key' in model_obj['model_params']:
+                model_obj['model_params'].pop('api_key')
+            logging_obj = {
+                'id': 0,
+                'context_id': self.workflow.context_id,
+                'member_id': self.full_member_id(),
+                'model': model_obj,
+                'messages': messages,
+                'role_responses': role_responses,
+            }
 
-        for key, response in role_responses.items():
-            if key == 'tools':
-                all_tools = response
-                for tool in all_tools:
-                    tool_args_json = tool['function']['arguments']
-                    # tool_name = tool_name.replace('_', ' ').capitalize()
-                    first_matching_name = next((k for k, v in gui_system.manager.tools.items()
-                                              if convert_to_safe_case(k) == tool['function']['name']),
-                                             None)  # todo add duplicate check, or
-                    first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
-                                                       (first_matching_name,))
-                    msg_content = json.dumps({  #!toolcall!#
-                        'tool_uuid': first_matching_id,
-                        'tool_call_id': tool['id'], # str(uuid.uuid4()),  #
-                        'name': tool['function']['name'],
-                        'args': tool_args_json,
-                        'text': tool['function']['name'].replace('_', ' ').capitalize(),
-                    })
-                    self.workflow.save_message('tool', msg_content, self.full_member_id(), logging_obj)
-            else:
-                if response != '':
+            for key, response in role_responses.items():
+                if key != 'tools' and response != '':
                     self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
+
+            tool_calls = role_responses.get('tools', [])
+            if not tool_calls:
+                return
+            await self.run_tool_calls(tool_calls, logging_obj)
+            if self.workflow.stop_requested:
+                return
+
+    async def run_tool_calls(self, tool_calls, logging_obj):
+        """Save each tool call with its result, in order. Once a stop is
+        requested the remaining calls get a cancelled result, so every call
+        in the history keeps a matching result."""
+        for tool in tool_calls:
+            tool_args_json = tool['function']['arguments']
+            # tool_name = tool_name.replace('_', ' ').capitalize()
+            method_tool = next((t for t in self.method_tools
+                                if t['name'] == tool['function']['name']), None)
+            if method_tool:
+                tool_ref = {'method': method_tool['id']}
+            else:
+                first_matching_name = next((k for k, v in gui_system.manager.tools.items()
+                                          if convert_to_safe_case(k) == tool['function']['name']),
+                                         None)  # todo add duplicate check, or
+                first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
+                                                   (first_matching_name,))
+                tool_ref = {'tool_uuid': first_matching_id}
+            msg_content = json.dumps({  #!toolcall!#
+                **tool_ref,
+                'tool_call_id': tool['id'], # str(uuid.uuid4()),  #
+                'name': tool['function']['name'],
+                'args': tool_args_json,
+                'text': tool['function']['name'].replace('_', ' ').capitalize(),
+            })
+            self.workflow.save_message('tool', msg_content, self.full_member_id(), logging_obj)
+            self.refresh_display()
+
+            if self.workflow.stop_requested:
+                result = {'output': 'Cancelled by the user', 'status': 'error'}
+            else:
+                result = await self.run_tool_call(tool, method_tool, tool_ref.get('tool_uuid'))
+            result['tool_call_id'] = tool['id']
+            self.workflow.save_message('result', json.dumps(result), self.full_member_id())
+            self.refresh_display()
+
+    async def run_tool_call(self, tool, method_tool, tool_uuid):
+        """Run a tool call, first awaiting the user's approval if the tool
+        requires confirmation. Returns the result dict."""
+        tools_manager = gui_system.manager.tools
+        if not method_tool and not tool_uuid:
+            return {'output': f"Unknown tool {tool['function']['name']!r}", 'status': 'error'}
+        try:
+            args = json.loads(tool['function']['arguments'] or '{}')
+        except json.JSONDecodeError as e:
+            return {'output': f'Invalid tool arguments: {e}', 'status': 'error'}
+
+        if method_tool:
+            needs_confirm = method_tool.get('confirm')
+        else:
+            needs_confirm = tools_manager.get(tools_manager.tool_id_names.get(tool_uuid), {}).get('options', {}).get('confirm')
+        if needs_confirm:
+            from plugins.workflows.utils.runs import get_run_manager
+            approval = get_run_manager().request_confirm(
+                self.workflow.context_id, tool['id'], label=tool['function']['name'],
+            )
+            if approval is None:
+                return {'output': 'This tool requires user approval, which is unavailable in this run', 'status': 'error'}
+            if not await approval:
+                return {'output': 'The user rejected this tool call', 'status': 'error'}
+
+        if method_tool:
+            return json.loads(await tools_manager.call_method_tool(method_tool, args, self.ui_refs))
+        return json.loads(await tools_manager.compute_tool_async(tool_uuid, args))
+
+    def refresh_display(self):
+        chat_widget = self.workflow.chat_widget
+        if chat_widget:
+            chat_widget.message_collection.refresh(block_autorun=True)
 
     async def stream(self, model, messages):
         tools = self.get_function_call_tools()
@@ -801,6 +854,16 @@ class LlmMember(Member):
             #         }
             #     }
             # )
+
+        for method_tool in self.method_tools:
+            formatted_tools.append({
+                'type': 'function',
+                'function': {
+                    'name': method_tool['name'],
+                    'description': method_tool['description'],
+                    'parameters': gui_system.manager.tools.method_tool_schema(method_tool),
+                }
+            })
 
         if self.config.get('computer_use.enabled', False):
             screen_width = self._computer_use_browser.target_w
@@ -1148,7 +1211,7 @@ class MediaMember(Member):
                     if config.get('wait_until_finished', False) \
                             and msg_json and 'request_id' in msg_json:
                         import asyncio
-                        from utils.helpers import download_url_to_file
+                        from plugins.workflows.utils.download import download_url_to_file
                         request_id = msg_json['request_id']
                         model_name = msg_json['model_name']
                         provider_name = msg_json['provider']

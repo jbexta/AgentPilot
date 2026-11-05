@@ -7,23 +7,39 @@ config:
   description: ''
   members:
   - id: '1'
-    linked_id: blocks.137
+    linked_id: null
     loc_x: 100
     loc_y: 80
     width: 450.0
     height: 350.0
     config:
-      data: |
+      data: |-
         # Workflow Engine Overview
 
-        The Workflow Engine provides a graph-based execution environment for designing infinitely nestable, AI-driven workflows. It provides a robust suite of modules that allow users to design complex, infinitely nestable graph workflows.
-
+        The Workflow Engine provides a graph-based execution environment for designing infinitely nestable, AI-driven workflows.
         The underlying engine handles state management, dependency resolution, message persistence, and asynchronous execution—all while supporting real-time interaction and branching contexts.
 
+        Built-in member types:
+        - **Conversation:** User, Agent (an LLM), Live Agent (a live voice conversation), Claude Code, Contact.
+        - **Blocks:** Text, Prompt (a single LLM call), Code.
+        - **Flow:** Iterator, Probability (continues or stops at random).
+        - **Media:** Image, Audio, Video.
+        - **System:** Query (SQL), Set Variable, Wait, Notification.
+        - **Workflow:** a nested workflow.
 
-        ## 1. Core Architecture (`src/core/members/workflow.py`)
+        Some Text fields - such as System Message's or a Text member- can be a template.
+        {% raw %}
+        - `{{ my_block }}` — inserts a block's output. Dashes and spaces in block names become underscores.
+        - `{{ my_block(topic='foo') }}` — runs a block with parameters. Always write them as `name='value'`.
+        - `{{ assistant_2 }}` — the output of another member in the workflow, named after the member's name and id.
+        - `{{ topic }}` — a param of the current workflow can also be used in the template.
 
-        The `Workflow` class is a specialized type of `Member`. This implements the **Composite Pattern**, meaning a Workflow can contain other Members, including other Workflows (Nested Workflows).
+        Put a heading before a block, like `## {{ my_block }}`, to nest the block's own headings under it.
+        {% endraw %}
+
+        ## Workflow Member (`src/core/members/workflow.py`)
+
+        The `Workflow` class is itself a `Member`. This implements the **Composite Pattern**, meaning a Workflow can contain other Members, including other Workflows (Nested Workflows).
 
         ### Key Responsibilities:
         1.  **Context Management:**
@@ -40,14 +56,12 @@ config:
         *   **`members`**: A list of member configurations and their X/Y coordinates.
         *   **`inputs`**: Definitions of connections (edges) between members.
 
-        ---
+        ## Message System (`src/utils/messages.py`)
 
-        ## 2. Message System (`src/utils/messages.py`)
-
-        The application uses a sophisticated, database-backed message history system that supports branching conversations.
+        The application uses a database-backed message history that supports branching conversations.
 
         ### `MessageHistory`
-        This class abstracts the complexity of SQL recursive queries to present a linear or branched chat history.
+        This class abstracts the complexity of SQL recursive queries to present a given branch of the chat history.
 
         *   **Branching:** It uses Recursive Common Table Expressions (CTEs) to traverse the `contexts` table (`parent_id` relationships) to construct the conversation thread leading to the current `leaf_id`.
         *   **Context Filtering:**
@@ -65,9 +79,7 @@ config:
         *   `content`: The text payload.
         *   `alt_turn`: An integer flag used to group messages into "turns" (execution cycles).
 
-        ---
-
-        ## 3. Execution Engine (`src/core/behaviors/default.py`)
+        ## Execution Engine (`src/core/behaviors/default.py`)
 
         The execution logic is decoupled from the data structure and resides in `DefaultBehavior`. It implements a topological execution flow using `asyncio`.
 
@@ -87,9 +99,7 @@ config:
             *   The loop breaks when no members are runnable.
             *   It checks `next_expected_is_last_member()` to determine if the final output has been generated.
 
-        ---
-
-        ## 4. Visual Editor (`src/gui/widgets/workflow_settings.py`)
+        ## Visual Editor (`src/gui/widgets/workflow_settings.py`)
 
         The Workflow Editor is a node-based graphical interface built on **Qt Graphics View Framework**.
 
@@ -115,27 +125,6 @@ config:
         The editor implements a "Compact Mode" logic:
         *   If a workflow contains only 1 Member (or User + Agent), it simplifies the view to hide the node graph, presenting it as a single member.
         *   As soon as a third member or complex connection is added, it toggles to the full Graph View.
-
-        ---
-
-        ## 5. Data Flow Summary
-
-        1.  **Design Time:** User drags nodes in `WorkflowSettings`. The `get_config()` method serializes positions, connections, and member settings into a JSON object.
-        2.  **Runtime Loading:** `Workflow` initializes. It queries SQLite for the JSON config and instantiates `Member` Python objects.
-        3.  **Trigger:** A user sends a message via `chat_widget`.
-        4.  **Processing:**
-            *   `DefaultBehavior` analyzes the graph.
-            *   It identifies that Member A (e.g., User) has output.
-            *   It sees Member B requires Member A.
-            *   It executes Member B.
-            *   `MessageHistory` records the output to SQLite.
-        5.  **Feedback:** The GUI listens for database updates and refreshes the chat bubble stream in real-time.
-
-
-        # Members
-        {% for name, module_data in system.modules.type_controllers['members'].items() %}
-        - **{{ name | capitalize }}**
-        {% endfor %}
       _format_block_keys:
       - data
       _TYPE: text
@@ -147,4 +136,5 @@ config:
     show_nested_bubbles: false
     mini_view: true
   params: []
+kind: PROJECT:1
 parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a

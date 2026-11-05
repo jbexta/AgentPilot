@@ -2,8 +2,10 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from gui.util import TreeButtons, get_field_widget
+from gui.gui_utils.helpers import get_field_widget
+from gui.gui_utils.tree_buttons import TreeButtons
 from utils.helpers import block_signals, convert_to_safe_case
+from gui import system
 from utils import sql
 
 from gui.widgets.config_widget import ConfigWidget
@@ -12,7 +14,8 @@ from gui.widgets.config_widget import ConfigWidget
 class ConfigJsonDBTree(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)  # , **kwargs)
-        from gui.util import BaseTreeWidget, colorize_pixmap
+        from gui.gui_utils.helpers import colorize_pixmap
+        from gui.gui_utils.base_tree_widget import BaseTreeWidget
         self.table_name = kwargs.get('table_name', None)
         self.item_icon_path = kwargs.get('item_icon_path', None)
         self.key_field = kwargs.get('key_field', 'id')
@@ -64,6 +67,10 @@ class ConfigJsonDBTree(ConfigWidget):
             if not self.show_fields:
                 return
 
+            entry_ids = []
+            if self.table_name == 'tools':
+                entry_ids = [i for i in id_list if i.startswith(('method:', 'folder:'))]
+                id_list = [i for i in id_list if i not in entry_ids]
             if self.key_field == 'id':
                 id_list = [int(i) for i in id_list]
             results = sql.get_results(f"""
@@ -74,6 +81,9 @@ class ConfigJsonDBTree(ConfigWidget):
             """, id_list)
             for row_tuple in results:
                 self.add_new_entry(row_tuple, self.item_icon)
+            for entry_id in entry_ids:
+                name = system.manager.tools.entry_name(entry_id) or entry_id
+                self.add_new_entry((name, entry_id), self.item_icon)
 
     def add_new_entry(self, row_tuple, icon=None):
         # pass
@@ -137,7 +147,7 @@ class ConfigJsonDBTree(ConfigWidget):
         else:
             raise NotImplementedError(f'DB table not supported: {self.table_name}')
 
-        from gui.util import TreeDialog
+        from gui.gui_utils.tree_dialog import TreeDialog
         list_dialog = TreeDialog(
             parent=self,
             title=f'Choose {list_type.capitalize()}',
@@ -148,7 +158,13 @@ class ConfigJsonDBTree(ConfigWidget):
         list_dialog.open()
 
     def add_item_callback(self, item):
-        item = item.data(0, Qt.UserRole)
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            item = {'name': item.text(0), 'id': f'folder:{item.text(1)}'}
+        elif tag == 'kind_folder':
+            item = {'name': item.text(0), 'id': f'folder:{item.data(1, Qt.UserRole)}'}
+        else:
+            item = tag
         item_id = item['id']  # is always last column
         item_exists = any([item_id == self.tree.topLevelItem(i).text(len(self.schema) - 1)
                            for i in range(self.tree.topLevelItemCount())])

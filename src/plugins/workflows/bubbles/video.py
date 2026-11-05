@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QLabel, QSizePolicy
 
 from gui.media_previews.video import VideoPreview
-from gui.util import CVBoxLayout
+from gui.gui_utils.layouts import CVBoxLayout
 from utils.helpers import get_json_value
 from utils import sql
 from gui import system
@@ -42,6 +42,7 @@ class VideoBubble(QWidget):
         # role_config = system.manager.roles.get(self.role, {})
         # bg_color = role_config.get('bubble_bg_color', '#252427')
         # text_color = role_config.get('bubble_text_color', '#999999')
+        self.bubble_text_color = system.manager.config.get('display.text_color', '#ffcacdd5')
         self.setStyleSheet(
             f"background-color: {self.bubble_bg_color}; "
             f"color: {self.bubble_text_color};"

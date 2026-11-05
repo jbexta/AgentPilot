@@ -61,6 +61,13 @@ def execute(query, params=None, connector=None):
     return connector.execute(query, params)
 
 
+def execute_many(statements, connector=None):
+    if connector is None:
+        from core.connectors.sqlite import SqliteConnector
+        connector = SqliteConnector(db_path=get_db_path())
+    return connector.execute_many(statements)
+
+
 def get_results(query, params=None, return_type='rows', incl_column_names=False, connector=None):
     if connector is None:
         from core.connectors.sqlite import SqliteConnector
@@ -78,6 +85,9 @@ def get_scalar(query, params=None, return_type='single', load_json=False, connec
 def check_database_upgrade():
     from utils.sql_upgrade import upgrade_script
     db_path = get_db_path()
+    blank_db_path = os.path.join(os.path.dirname(db_path), 'blank.db')
+    if not os.path.isfile(db_path) and os.path.isfile(blank_db_path):
+        os.rename(blank_db_path, db_path)
     if not os.path.isfile(db_path):
         raise Exception(f'No database found in {db_path}. Please make sure `data.db` is located in the same directory as this executable.')
 

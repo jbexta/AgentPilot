@@ -1,0 +1,5 @@
+[plugin]
+name = "tasks"
+version = "0.1.0"
+description = "Task scheduler: tasks page, manager, scheduling daemon and time expressions."
+requires = ["workflows"]

@@ -8,10 +8,10 @@ from PySide6.QtWidgets import QMessageBox
 
 from gui import system
 from utils import sql
-from utils.helpers import display_message_box, get_id_from_folder_path, hash_config
+from utils.helpers import display_message_box, get_id_from_folder_path, get_module_type_folder_id, hash_config
 
 
-def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, reset_models_=True):  # todo temp preserve_audio_msgs
+def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, reset_models_=True, reset_tos=True):  # todo temp preserve_audio_msgs
     if not force:
         retval = display_message_box(
             icon=QMessageBox.Warning,
@@ -34,15 +34,75 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
     # if threadpool:
     #     threadpool.waitForDone(5000)  # Wait up to 5 seconds for threads to finish
 
-    backup_filepath = db_path + '.backup'
-    counter = 1
-    while os.path.isfile(backup_filepath):
-        backup_filepath = db_path + f'.backup{counter}'
-        counter += 1
+    # Disposable dummy DBs (demo/test) only ever go through the force
+    # path; they are throwaway copies, so skip the costly backup there.
+    if not force:
+        backup_filepath = db_path + '.backup'
+        counter = 1
+        while os.path.isfile(backup_filepath):
+            backup_filepath = db_path + f'.backup{counter}'
+            counter += 1
 
-    shutil.copyfile(db_path, backup_filepath)
+        shutil.copyfile(db_path, backup_filepath)
 
-    reset_table(table_name='pypi_packages')
+    audio_msgs = None
+    if preserve_audio_msgs:
+        audio_msgs = sql.get_results("""
+            SELECT msg, log
+            FROM contexts_messages
+            WHERE role = 'audio'
+        """, return_type='rows')
+
+    keep_tables = [
+        'addons',
+        'apis',
+        'blocks',
+        'contexts',
+        'contexts_messages',
+        'entities',
+        'environments',
+        'folders',
+        'logs',
+        'models',
+        'modules',
+        'plans',
+        'projects',
+        'project_concepts',
+        'pypi_packages',
+        'roles',
+        'settings',
+        'skills',
+        'slopify_artists',
+        'slopify_tracks',
+        'slopify_pending',
+        'slopify_artist_songs',
+        'slopify_playlists',
+        'slopify_playlist_tracks',
+        'tasks',
+        'themes',
+        'todo',
+        'tools',
+        'tasks',
+        'vectordbs',
+        'voices',
+    ]
+    preserved_tables = ['sqlite_sequence', 'settings']
+    if not reset_models_:
+        preserved_tables += ['apis', 'models']
+    all_tables = sql.get_results("SELECT name FROM sqlite_master WHERE type='table'", return_type='list')
+    for table in all_tables:
+        if table in preserved_tables:
+            continue
+        if table in keep_tables:
+            sql.execute(f"DELETE FROM {table}")
+        else:
+            sql.execute(f"DROP TABLE {table}")
+
+    sql.execute("""
+        DELETE FROM settings
+        WHERE `field` NOT IN ('app_version', 'app_config', 'accepted_tos', 'my_uuid', 'pinned_pages', 'enhancement_blocks',
+                              'window_size', 'page_path', 'page_editor')
+    """)
 
     # ############################# FOLDERS ############################### #
     reset_folders()
@@ -50,12 +110,6 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
     if reset_models_:
         reset_models(preserve_keys=False)
 
-    reset_table(table_name='addons')
-    reset_table(table_name='blocks')
-    reset_table(table_name='entities')
-    reset_table(table_name='tools')
-    reset_table(table_name='modules')
-    reset_table(table_name='vectordbs')
     reset_table(
         table_name='environments',
         item_configs={
@@ -258,7 +312,6 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
             },
             "provider": "fal"
         },
-        "system.auto_title": True,
         "system.auto_title_model": {
             "_model_name": "claude-sonnet-4-6",
             "kind": "CHAT",
@@ -271,34 +324,23 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
         "system.auto_title_prompt": "Write only a brief and concise title for a chat that begins with the following message:\n\n```{user_msg}```",
         "system.dev_mode": False,
         "system.language": "English",
-        "system.telemetry": True,
         "system.voice_input_method": "None"
     }
 
     sql.execute("UPDATE settings SET value = '' WHERE `field` = 'my_uuid'")
     # tos_val = 1 if accept_tos else 0
     # sql.execute("UPDATE settings SET value = ? WHERE `field` = 'accepted_tos'", (str(tos_val),))
-    sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
+    if reset_tos:
+        sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
     sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
     sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['blocks', 'tools']),))
+    sql.execute("UPDATE settings SET value = '{}' WHERE `field` IN ('window_size', 'page_path')")
+    sql.execute("UPDATE settings SET value = 'null' WHERE `field` = 'page_editor'")
     sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'enhancement_blocks'",
                 (json.dumps({
                     'main_input': ['2637891c-69ba-4f41-bc54-c4c26f32bc66']
                 }),))
 
-    audio_msgs = None
-    if preserve_audio_msgs:
-        audio_msgs = sql.get_results("""
-            SELECT msg, log
-            FROM contexts_messages 
-            WHERE role = 'audio'
-        """, return_type='rows')
-
-    sql.execute('DELETE FROM contexts_messages')
-    reset_table(table_name='contexts')
-    sql.execute('DELETE FROM logs')
-    sql.execute('DELETE FROM folders WHERE locked != 1')
-    sql.execute('DELETE FROM pypi_packages')
     if audio_msgs:
         values_list = []
         placeholders = []
@@ -313,43 +355,6 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
             """
             sql.execute(query, values_list)
 
-    keep_tables = [
-        'addons',
-        'apis',
-        'blocks',
-        'contexts',
-        'contexts_messages',
-        'entities',
-        'environments',
-        'folders',
-        'logs',
-        'models',
-        'modules',
-        'projects',
-        'project_concepts',
-        'pypi_packages',
-        'roles',
-        'settings',
-        'slopify_artists',
-        'slopify_tracks',
-        'slopify_pending',
-        'slopify_artist_songs',
-        'slopify_playlists',
-        'slopify_playlist_tracks',
-        'tasks',
-        'themes',
-        'todo',
-        'tools',
-        'tasks',
-        'vectordbs',
-    ]
-    all_tables = sql.get_results("SELECT name FROM sqlite_master WHERE type='table'", return_type='list')
-    for table in all_tables:
-        if table == 'sqlite_sequence':
-            continue
-        if table not in keep_tables:
-            sql.execute(f"DROP TABLE {table}")
-
     if bootstrap:
         bootstrap_app()
 
@@ -359,9 +364,27 @@ def reset_application(force=False, preserve_audio_msgs=False, bootstrap=True, re
         display_message_box(
             icon=QMessageBox.Information,
             title="Reset complete",
-            text="The app has been reset. Please restart the app to apply the changes."
+            text="The app has been reset, and will now restart to apply the changes."
         )
-        sys.exit(0)
+        from utils.process import restart_app
+        restart_app()
+
+
+def create_blank_db():
+    db_dir = os.path.dirname(sql.get_db_path())
+    blanking_path = os.path.join(db_dir, 'blanking.db')
+    shutil.copyfile(sql.get_db_path(), blanking_path)
+    with sql.write_to_file(blanking_path):
+        reset_application(force=True)
+    os.replace(blanking_path, os.path.join(db_dir, 'blank.db'))
+
+    display_message_box(
+        icon=QMessageBox.Information,
+        title="Blank database created",
+        text="blank.db has been created, the app will now restart."
+    )
+    from utils.process import restart_app
+    restart_app()
 
 
 # BAKED_DOC_PATHS = {
@@ -383,8 +406,8 @@ async def bake_block_maps(mappings, base_dir=''):
 
     Parameters
     ----------
-    mappings : dict
-        A dict of {block_name: file_path}.
+    mappings : list
+        A list of (block_name, file_path) pairs.
     base_dir : str, optional
         Base directory to prepend to each file path.
 
@@ -396,11 +419,11 @@ async def bake_block_maps(mappings, base_dir=''):
     blocks = system.manager.blocks
     blocks.load()
     errors = []
-    for raw_name, file_path in mappings.items():
+    for raw_name, file_path in mappings:
         block_name = raw_name.rsplit(':', 2)[0]
         try:
             if base_dir:
-                file_path = os.path.join(base_dir, file_path)
+                file_path = os.path.join(base_dir, file_path.lstrip('/\\'))
             output = await blocks.compute_block_async(block_name)
             os.makedirs(os.path.dirname(file_path) or '.', exist_ok=True)
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -434,11 +457,11 @@ def run_bake_block_maps(config, button, finished_callback=None):
     from utils.helpers import display_message
 
     block_maps_data = config.get('block_maps.data', [])
-    mappings = {
-        row['block']: row['path']
+    mappings = [
+        (row['block'], row['path'])
         for row in block_maps_data
         if row.get('block') and row.get('path')
-    }
+    ]
     if not mappings:
         display_message('No block maps to bake.')
         return
@@ -477,29 +500,25 @@ def run_bake_block_maps(config, button, finished_callback=None):
 def bootstrap_app():
     bootstrap_entities()
     bootstrap_modules()
+    delete_stale_modules()
     # pass
 
 
 def bootstrap_entities():
-    from pathlib import Path
-    
-    # Get the baked directory path
-    baked_dir = Path(__file__).parent / 'baked'
-    
-    if not baked_dir.exists():
-        print(f"Baked directory not found: {baked_dir}")
-        return
-    
-    # Iterate through each folder (table name) in the baked directory
-    for table_folder in baked_dir.iterdir():
-        if not table_folder.is_dir():
-            continue
-            
-        table_name = table_folder.name
+    from utils.filesystem import get_baked_dirs
+
+    table_names = {
+        table_folder.name
+        for baked_dir in get_baked_dirs() if baked_dir.is_dir()
+        for table_folder in baked_dir.iterdir() if table_folder.is_dir()
+    }
+    for table_name in table_names:
         manager_name = 'agents' if table_name == 'entities' else table_name
 
         mgr = getattr(system.manager, manager_name, None)
-        if not mgr:
+        # Managers are BaseManager (a dict subclass); an empty manager is falsy
+        # but still a valid manager to call ``add`` on, so check ``is None``.
+        if mgr is None:
             print(f"Manager for {table_name} not found")
             continue
 
@@ -514,6 +533,9 @@ def bootstrap_entities():
                 'config': item_config['config'],
                 'baked': 1,
             }
+            kind = item_config.get('kind', None)
+            if kind:
+                kwargs['kind'] = kind
             folder_path = item_config.get('folder_path', None)
             folder_id = get_id_from_folder_path(folder_path, mgr.folder_key)
             if folder_id:
@@ -607,7 +629,19 @@ def bootstrap_modules():
             )
 
 
-def reset_table(table_name, item_configs=None, folder_type=None, folder_items=None, delete_existing=True):
+def delete_stale_modules():
+    stale = {tuple(row[:2]): row[2] for row in sql.get_results("SELECT folder_id, name, id FROM modules WHERE baked = 1")}
+    for module_type in system.manager.modules.type_controllers:
+        if module_type is None:
+            continue
+        folder_id = get_module_type_folder_id(module_type.replace('_', ' ').title())
+        for module_name, baked in system.manager.modules.get_modules_in_folder(module_type, fetch_keys=('name', 'baked')):
+            if baked:
+                stale.pop((folder_id, module_name), None)
+    sql.execute(f"DELETE FROM modules WHERE id IN ({','.join('?' * len(stale))})", tuple(stale.values()))
+
+
+def reset_table(table_name, item_configs=None, folder_type=None, folder_items=None, delete_existing=True, case_insensitive=False, match_on=('name',)):
     if delete_existing:
         sql.execute(f'DELETE FROM {table_name}')
 
@@ -626,6 +660,29 @@ def reset_table(table_name, item_configs=None, folder_type=None, folder_items=No
             print(folder_id)
             folders_ids[folder] = folder_id
 
+    # Fetch existing name->id once instead of a COUNT query per row, and collect all
+    # writes into a single transaction (via execute_many) so bulk resets don't open
+    # thousands of connections and freeze the app. Updates match on the primary key
+    # `id` (indexed) rather than `name` (unindexed) to avoid a full table scan per
+    # row — otherwise a reset of thousands of rows is O(rows * table_size).
+    # When case_insensitive, match/dedup on the lowercased name so e.g. litellm's
+    # 'Openai' updates the curated 'OpenAI' row instead of inserting a duplicate.
+    # match_on sets which fields identify a row — model syncs pass ('name', 'api_id')
+    # because different APIs expose identically-named models (e.g. 'seedance-2.0' on
+    # both Replicate and ModelArk), and matching on name alone would let one
+    # provider's sync overwrite another provider's row.
+    norm = str.lower if case_insensitive else (lambda s: s)
+    # Tables without an `id` column (e.g. themes) map to None and are
+    # updated by their match_on fields instead.
+    has_id = any(col[1] == 'id' for col in sql.get_results(f'PRAGMA table_info({table_name})'))
+    match_cols = ', '.join(f'`{f}`' for f in match_on)
+    id_col = 'id' if has_id else 'NULL'
+    existing_ids = {
+        tuple(norm(v) if f == 'name' else v for f, v in zip(match_on, row[:-1])): row[-1]
+        for row in sql.get_results(f'SELECT {match_cols}, {id_col} FROM {table_name}')
+    }
+    inserted_keys = set()
+    statements = []
     for key, conf in item_configs.items():
         # name = key.get('name') if isinstance(key, tuple) else key
         name = key
@@ -645,25 +702,32 @@ def reset_table(table_name, item_configs=None, folder_type=None, folder_items=No
         if folder_id:
             field_vals['folder_id'] = folder_id
 
-        ex_cnt = sql.get_scalar(f'SELECT COUNT(*) FROM {table_name} WHERE `name` = ?', (name,))
-        if ex_cnt > 0:
+        set_fields = [field for field in field_vals.keys() if field != 'name']
+        set_values = [field_vals[field] for field in set_fields]
+        match_key = tuple(norm(field_vals.get(f)) if f == 'name' else field_vals.get(f) for f in match_on)
+        if existing_ids.get(match_key) is not None:
             # todo clean
-            set_fields = [field for field in field_vals.keys() if field != 'name']
-            set_values = [field_vals[field] for field in set_fields]
-            sql.execute(f"UPDATE `{table_name}` SET {' = ?, '.join(set_fields)} = ? WHERE `name` = ?", set_values + [name])
-            pass
+            statements.append((f"UPDATE `{table_name}` SET {' = ?, '.join(set_fields)} = ? WHERE id = ?", set_values + [existing_ids[match_key]]))
+        elif match_key in existing_ids or match_key in inserted_keys:
+            # no id (table has no id column, or inserted earlier in this same
+            # batch), so fall back to matching by the match_on fields.
+            where = ' AND '.join(
+                'LOWER(`name`) = ?' if f == 'name' and case_insensitive else f'`{f}` = ?'
+                for f in match_on
+            )
+            statements.append((f"UPDATE `{table_name}` SET {' = ?, '.join(set_fields)} = ? WHERE {where}", set_values + list(match_key)))
         else:
-            sql.execute(
+            statements.append((
                 f"INSERT INTO `{table_name}` ({', '.join(field_vals.keys())}) VALUES ({', '.join(['?'] * len(field_vals))})",
-                tuple(field_vals.values()))
+                tuple(field_vals.values())))
+            inserted_keys.add(match_key)
+
+    if statements:
+        sql.execute_many(statements)
 
 
 def ensure_system_folders():
     sys_folders = {
-        'blocks': {
-            'Enhancement': ':/resources/icon-wand.png',
-            'Time expressions': ':/resources/icon-clock.png',
-        },
         'modules': {
             'Controllers': ':/resources/icon-settings-solid.png',
             'Managers': ':/resources/icon-settings-solid.png',
@@ -677,9 +741,10 @@ def ensure_system_folders():
             'Providers': ':/resources/icon-archive3.png',
             'Toolkits': ':/resources/icon-tool-small.png',
             'Daemons': ':/resources/icon-settings-solid.png',
-            'Primitives': ':/resources/icon-settings-solid.png',
             'Highlighters': ':/resources/icon-settings-solid.png',
             'Environments': ':/resources/icon-settings-solid.png',
+            'Utils': ':/resources/icon-settings-solid.png',
+            'Gui Utils': ':/resources/icon-widgets.png',
         },
     }
 
@@ -724,32 +789,61 @@ def reset_folders():
     ensure_system_folders()
 
 
-def reset_models(preserve_keys=True):  # , ask_dialog=True):
+async def scrape_models():
+    retval = display_message_box(
+        icon=QMessageBox.Warning,
+        title='Scrape new models',
+        text='This will take a while.',
+        buttons=QMessageBox.Ok | QMessageBox.Cancel,
+    )
+    if retval != QMessageBox.Ok:
+        return
+    # ws = system.manager.providers["litellm"]
+    # ws.sync_models()
+    for name, provider in system.manager.providers.items():
+        if hasattr(provider, 'sync_models'):
+            print(f"Syncing {name}")
+            result = provider.sync_models()
+            if inspect.isawaitable(result):
+                await result
+    apis = sql.get_results("SELECT name, provider_plugin, config, pinned FROM apis", return_type='rows')
+    rows = sql.get_results("SELECT a.name, m.name, m.kind, m.config, m.schema_plugin, m.ordr, m.pinned, "
+                           "json_extract(m.metadata,'$.input_schema'), m.provider_plugin "
+                           "FROM models m JOIN apis a ON m.api_id = a.id", return_type='rows')
+    models = [r[:7] + (json.loads(r[7]) if r[7] else None, r[8]) for r in rows]
+
+    # Collapse case-variant provider rows (e.g. litellm's 'Openai' vs curated 'OpenAI')
+    # so the shipped models.json carries one row per provider. Keep the curated casing
+    # — the variant that isn't plain Title Case — and re-point models to the survivor.
+    survivors = {}
+    for a in apis:
+        low = a[0].lower()
+        kept = survivors.get(low)
+        if kept is None or (a[0] != a[0].title() and kept[0] == kept[0].title()):
+            survivors[low] = a
+    canonical = {low: a[0] for low, a in survivors.items()}
+    apis = list(survivors.values())
+    models = [(canonical[m[0].lower()],) + tuple(m[1:]) for m in models]
+
+    with open(os.path.join(os.path.dirname(__file__), 'models.json'), 'w') as f:
+        json.dump({'apis': apis, 'models': models}, f, indent=2)
+
+
+def reset_models(preserve_keys=True):
+    api_key_vals = {}
     if preserve_keys:
         api_key_vals = sql.get_results("SELECT LOWER(name), api_key FROM apis WHERE api_key != ''", return_type='dict')
-    
-    # if not preserve_keys or len(api_key_vals) == 0:
-    
-    # # todo temporarily disabled model reset
-    # reset_table(
-    #     table_name='apis',
-    #     item_configs={},
-    # )
-    # reset_table(
-    #     table_name='models',
-    #     item_configs={},
-    # )
-    # # set autoincrement to 1
-    # sql.execute("UPDATE sqlite_sequence SET seq = 1 WHERE name = 'models'")
-    # sql.execute("UPDATE sqlite_sequence SET seq = 1 WHERE name = 'apis'")
 
-    for name, provider in system.manager.providers.items():
-        if 'replicate' not in name.lower():
-            continue
-        if not hasattr(provider, 'sync_models'):
-            continue
-        provider.sync_models()
-    
+    base = os.path.join(sys._MEIPASS, 'utils') if getattr(sys, 'frozen', False) else os.path.dirname(__file__)
+    with open(os.path.join(base, 'models.json')) as f:
+        data = json.load(f)
+
+    reset_table('apis', {(('name', a[0]), ('provider_plugin', a[1]), ('pinned', a[3])): json.loads(a[2] or '{}') for a in data['apis']}, delete_existing=False, case_insensitive=True)
+    # Case-insensitive api-name lookup so models referencing a case-variant provider
+    # name (e.g. 'Openai') still attach to the collapsed 'OpenAI' row rather than being dropped.
+    ids = sql.get_results("SELECT LOWER(name), id FROM apis", return_type='dict')
+    reset_table('models', {(('name', m[1]), ('kind', m[2]), ('api_id', ids[m[0].lower()]), ('schema_plugin', m[4]), ('ordr', m[5]), ('pinned', m[6]), ('metadata', json.dumps({'input_schema': m[7]} if m[7] else {})), ('provider_plugin', m[8])): json.loads(m[3] or '{}') for m in data['models'] if m[0].lower() in ids}, delete_existing=False)
+
     default_api_key_vals = {
         'anthropic': '$ANTHROPIC_API_KEY',
         'mistral': '$MISTRAL_API_KEY',
@@ -759,8 +853,10 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
         'gemini': '$GEMINI_API_KEY',
         'xai': '$XAI_API_KEY',
         'fal ai': '$FAL_API_KEY',
+        'replicate': '$REPLICATE_API_KEY',
         'wavespeed': '$WAVESPEED_API_KEY',
         'sonauto': '$SONAUTO_API_KEY',
+        'seedance': '$ARK_API_KEY',
     }
     for name, key in default_api_key_vals.items():
         if name not in api_key_vals:

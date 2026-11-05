@@ -1,0 +1,9 @@
+[plugin]
+name = "studio"
+version = "0.1.0"
+description = "Audio / video / image studio operations and effects."
+requires = ["workflows"]
+
+[dependencies]
+srt         = { version = "3.5.3",   import = "srt" }
+scenedetect = { version = "0.6.7.1", import = "scenedetect" }

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Optional, Dict, List, Any
 
@@ -8,9 +9,10 @@ from gui import system
 
 from utils import sql
 from utils.messages import MessageHistory
-from utils.helpers import merge_config_into_workflow_config, get_member_name_from_config, set_module_type, try_parse_json
+from utils.helpers import set_module_type, try_parse_json
+from plugins.workflows.utils.workflows import merge_config_into_workflow_config, get_member_name_from_config
 
-from gui.util import safe_single_shot
+from gui.gui_utils.helpers import safe_single_shot
 
 @set_module_type(module_type='Members', settings='workflow_settings')
 class Workflow(Member):
@@ -30,7 +32,6 @@ class Workflow(Member):
         self.params: Dict[str, Any] = kwargs.get('params', {}) or {}  # optional, usually only used for tool / block workflows
         self.tool_uuid: Optional[str] = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
-        self.chat_widget = kwargs.get('chat_widget', None)
         # Load base workflow
         if not self._parent_workflow:
             self._context_id: Optional[int] = kwargs.get('context_id', None)
@@ -38,7 +39,9 @@ class Workflow(Member):
             self._chat_title: str = kwargs.get('chat_title', '')
             self._leaf_id: int = self.context_id
             self._message_history = MessageHistory(self)
+            self._pending_chat_widget = kwargs.get('chat_widget', None)
             kind = kwargs.get('kind', 'CHAT')
+            self._kind = kind
             get_latest = kwargs.get('get_latest', False)
 
             if get_latest:
@@ -58,20 +61,18 @@ class Workflow(Member):
                 # Re-pull linked config from source entity
                 linked_id = config.get('linked_id')
                 if linked_id:
-                    from utils.helpers import resolve_linked_config
+                    from plugins.workflows.utils.workflows import resolve_linked_config
                     resolved = resolve_linked_config(linked_id)
                     if resolved is not None:
                         resolved['linked_id'] = linked_id
                         self.config = resolved
 
             else:
-                # # Create new context
+                # New context, the row is created by ensure_context() when first needed
                 kind_init_members = {'CHAT': 'agent'}  # todo
                 if not self.config:
                     init_member_config = {'_TYPE': kind_init_members.get(kind, 'text')}
                     self.config = init_member_config
-                sql.execute("INSERT INTO contexts (kind, config, name) VALUES (?, ?, ?)", (kind, json.dumps(self.config), self.chat_title))
-                self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,))
 
         self.config = merge_config_into_workflow_config(self.config)
         self.responding = False
@@ -83,6 +84,7 @@ class Workflow(Member):
         self.autorun = True
         # from core.behaviors import DefaultBehavior
         self.behaviour = None
+        self.live_clients = {}  # member_id: LiveClient, for members with live_client = True
 
         self._visited_linked_ids = set()
         if self._parent_workflow:
@@ -92,7 +94,22 @@ class Workflow(Member):
 
         self.load()
         self.receivable_function = self.behaviour.receive
-    
+
+    @property
+    def chat_widget(self):
+        """The widget currently displaying this workflow's context, if any.
+
+        Resolved through the run manager's display registry so a run keeps
+        streaming to whichever widget shows its context, and streams to nothing
+        while the context isn't displayed.
+        """
+        if self._parent_workflow is not None:
+            return None
+        if self._context_id is None:
+            return self._pending_chat_widget
+        from plugins.workflows.utils.runs import get_run_manager
+        return get_run_manager().get_display(self._context_id)
+
     @property
     def INPUTS(self):
         allowed_inputs = {}
@@ -177,6 +194,23 @@ class Workflow(Member):
     def message_history(self) -> MessageHistory:
         return self.get_from_root('_message_history')
 
+    @property
+    def params(self) -> Dict[str, Any]:
+        """The workflow's params, after the name and working dir of the
+        project its context is in."""
+        projects = getattr(system.manager, 'projects', None)
+        project = projects.get_context_project(self.context_id) if projects else None
+        name, config = project or ('', {})
+        return {
+            'cwd': config.get('working_dir', ''),
+            'project_name': name,
+            **self._params,
+        }
+
+    @params.setter
+    def params(self, value):
+        self._params = value
+
     @context_id.setter
     def context_id(self, value):
         self._context_id = value
@@ -196,6 +230,24 @@ class Workflow(Member):
     @message_history.setter
     def message_history(self, value):
         self._message_history = value
+
+    def ensure_context(self) -> int:
+        """Create the context row if it doesn't exist yet, and return its id."""
+        if self._parent_workflow:
+            return self._parent_workflow.ensure_context()
+        if self._context_id is not None:
+            return self._context_id
+
+        self.context_id = sql.execute(
+            "INSERT INTO contexts (kind, config, name) VALUES (?, ?, ?)",
+            (self._kind, json.dumps(self.config), self.chat_title))
+        self.leaf_id = self.context_id
+
+        widget = self._pending_chat_widget
+        if widget is not None and widget.workflow is self:
+            from plugins.workflows.utils.runs import get_run_manager
+            get_run_manager().register_display(self.context_id, widget)
+        return self.context_id
 
     def get_from_root(self, attr_name) -> Any:
         if hasattr(self, attr_name):
@@ -222,7 +274,7 @@ class Workflow(Member):
         if not self._parent_workflow:
             linked_id = self.config.get('linked_id')
             if linked_id:
-                from utils.helpers import resolve_linked_config
+                from plugins.workflows.utils.workflows import resolve_linked_config
                 resolved = resolve_linked_config(linked_id)
                 if resolved is not None:
                     resolved['linked_id'] = linked_id
@@ -237,7 +289,14 @@ class Workflow(Member):
         if self._parent_workflow is None:
             # Load base workflow
             self.message_history.load()
-            self.chat_title = sql.get_scalar("SELECT name FROM contexts WHERE id = ?", (self.context_id,))
+            if self.context_id is not None:
+                self.chat_title = sql.get_scalar("SELECT name FROM contexts WHERE id = ?", (self.context_id,))
+
+    @override
+    async def run(self):
+        self.ensure_context()
+        async for key, chunk in super().run():
+            yield key, chunk
 
     def load_members(self):
         # # Get members and inputs from the loaded json config
@@ -256,6 +315,8 @@ class Workflow(Member):
 
         members = sorted(members, key=lambda x: x['loc_x'])
 
+        if self.members:  # close any open live voice sessions before rebuilding members
+            self.close()
         self.members = {}  #!looper!#
         # self.boxes = []
         iterable = iter(members)
@@ -280,7 +341,7 @@ class Workflow(Member):
                     iterable = iter(members)
                     continue
                 self._visited_linked_ids.add(linked_id)
-                from utils.helpers import resolve_linked_config
+                from plugins.workflows.utils.workflows import resolve_linked_config
                 resolved = resolve_linked_config(linked_id)
                 if resolved is not None:
                     member_config = resolved
@@ -324,6 +385,9 @@ class Workflow(Member):
             member = member_class(**kwargs)
 
             member.load()
+            if getattr(member, 'live_client', False):
+                from plugins.workflows.live import LiveClient
+                self.live_clients[member_id] = LiveClient(member)
 
             # if member.receivable_function:
             #     if abs(loc_x - last_loc_x) < 10:  # 10px threshold
@@ -491,7 +555,39 @@ class Workflow(Member):
         if content == '':
             return None
 
+        self.ensure_context()
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
+
+    def update_message(self, msg_id, content):
+        """Passthrough to grow an existing message row in place (live streaming)."""
+        return self.message_history.update_message(msg_id, content)
+
+    def close(self):
+        """Stop this workflow's live voice clients.
+
+        Called when the workflow is being replaced/discarded (context switch,
+        reload, app close) so open websockets and audio devices don't leak.
+        """
+        for member in list(self.members.values()):
+            if isinstance(member, Workflow):
+                try:
+                    member.close()
+                except Exception:
+                    pass
+        clients = list(self.live_clients.values())
+        self.live_clients = {}
+        for client in clients:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None and loop.is_running():
+                asyncio.ensure_future(client.stop())
+            elif loop is not None:
+                try:
+                    loop.run_until_complete(client.stop())
+                except Exception:
+                    pass
 
     def deactivate_all_branches_with_msg(self, msg_id):
         sql.execute("""

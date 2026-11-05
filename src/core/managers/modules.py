@@ -13,12 +13,15 @@ from typing_extensions import override
 
 from utils import sql
 from utils.helpers import hash_config, set_module_type, get_metadata, get_module_type_folder_id, BaseManager
+
+TEST_HANG_DUMP_SECONDS = 300
 # import types
 
 
 @set_module_type(module_type="Managers")
 class ModuleManager(BaseManager):
     """Manages dynamic loading and unloading of modules."""
+    llm_crud = False
 
     def __init__(self, system):
         super().__init__(system, table_name="modules", store_data=False)
@@ -67,6 +70,11 @@ class ModuleManager(BaseManager):
         module_class = next((value for key, value in type_modules if key.lower() == module_name.lower()), default)
         return module_class
 
+    def get_module_object(self, module_type, module_name, default=None):
+        """Returns the module object of a function-based module (e.g. Utils),
+        which occupies the same registry slot as a class-based type's class."""
+        return self.get_module_class(module_type, module_name, default)
+
     @override
     def add(self, name, **kwargs):
         module_type = kwargs.pop('module_type', None)
@@ -88,7 +96,7 @@ class ModuleManager(BaseManager):
                 }
 
         # kwargs['locked'] = 1
-        module_type = module_type.replace('_', ' ').title()
+        module_type = module_type.replace('_', ' ').title() if module_type else None
         metadata = get_metadata(config)
         extra_metadata = kwargs.pop('extra_metadata', None)
         if extra_metadata:
@@ -167,7 +175,7 @@ class ModulesController(BaseManager):
             system,
             module_type=None,
             load_to_path='src.system.modules',
-            class_based=False,
+            class_based=True,
             inherit_from=None,
             description=None,
             long_description=None,
@@ -183,6 +191,61 @@ class ModulesController(BaseManager):
         self.long_description = long_description
         self.class_based = class_based
         self.inherit_from = inherit_from
+
+    def test_scaffold(self, main, module_name, module_cls):
+        """Per-module test hook. Override in subclasses; raise on failure."""
+        return None
+
+    def test_all(self, main, only=None):
+        """Run ``test_scaffold`` against every module of this type.
+
+        Controllers that don't override ``test_scaffold`` are skipped entirely
+        so we don't trigger noisy ``extract_module_class`` lookups for module
+        types we aren't testing yet.
+
+        ``only`` optionally restricts the run to the named modules (others are
+        skipped); ``None`` runs every module.
+        """
+        import faulthandler
+        import os
+        import sys
+        import traceback
+        if type(self).test_scaffold is ModulesController.test_scaffold:
+            return {}
+        results = {}
+        only_lower = {n.lower() for n in only} if only is not None else None
+        for name in self.get_modules(fetch_keys=('name',)):
+            if only_lower is not None and name.lower() not in only_lower:
+                continue
+            # Dumps every thread's stack if a test hangs.
+            faulthandler.dump_traceback_later(TEST_HANG_DUMP_SECONDS)
+            try:
+                cls = self.extract_module_object(name)
+                ret = self.test_scaffold(main, name, cls)
+                if ret == 'skip':
+                    results[name] = ('skip', None)
+                else:
+                    results[name] = ('pass', None)
+            except InterruptedError:  # user stopped the run
+                raise
+            except Exception as exc:
+                tb_str = traceback.format_exc()
+                exc_tb = sys.exc_info()[2]
+                frames = traceback.extract_tb(exc_tb)
+                last = frames[-1] if frames else None
+                ref = f"{os.path.basename(last.filename)}:{last.lineno}" if last else ""
+                msg_line = (str(exc).splitlines() or [""])[0]
+                summary = f"{type(exc).__name__}: {msg_line}"
+                if ref:
+                    summary = f"{summary} ({ref})"
+                results[name] = ('fail', {
+                    'type': type(exc).__name__,
+                    'summary': summary,
+                    'traceback': tb_str,
+                })
+            finally:
+                faulthandler.cancel_dump_traceback_later()
+        return results
 
     def load(self):
         """
@@ -224,7 +287,9 @@ class ModulesController(BaseManager):
         for row in rows:
             module_name = row[2]
 
-            module_path = self.get_module_path(module_name)
+            entry = self.get(module_name)
+            plugin_package = entry[10] if isinstance(entry, tuple) and len(entry) > 10 else None
+            module_path = f'{plugin_package}.{module_name}' if plugin_package else self.get_module_path(module_name)
             self.load_db_module(module_path, row)
 
     def load_db_module(self, module_path, row):
@@ -259,10 +324,11 @@ class ModulesController(BaseManager):
         # module.__name__ = module_path  # Ensure the module name is set correctly
 
         # Register the module
-        cls = self.extract_module_class(module_name, default=None)
+        cls = self.extract_module_object(module, default=None)
         kind_folder = None
         hash = metadata.get('hash')
-        self[module_name] = (db_id, uuid, module_name, config, cls, kind_folder, metadata, hash, 0, folder_path)
+        plugin_package = module_path.rsplit('.', 1)[0] if module_path.startswith('plugins.') else None
+        self[module_name] = (db_id, uuid, module_name, config, cls, kind_folder, metadata, hash, 0, folder_path, plugin_package)
 
     def _resolve_module_db_id(self, module_name):
         folder_id = (
@@ -294,6 +360,8 @@ class ModulesController(BaseManager):
         target = get_module_abs_path(db_id, module_name=module_name)
         if target is None:
             return None
+        if target.is_file() and target.read_text(encoding='utf-8') == source_code:
+            return target
         target.parent.mkdir(parents=True, exist_ok=True)
         with open(target, 'w', encoding='utf-8') as f:
             f.write(source_code)
@@ -357,30 +425,38 @@ class ModulesController(BaseManager):
             config = {'data': source_code, "name": module_name}
             metadata = get_metadata(config)
 
-            db_id = sql.get_scalar(
-                "SELECT id FROM modules WHERE name = ? AND folder_id = ?",
-                (module_name, folder_id)
-            )
+            # Upsert: disk source is always the source of truth for
+            # source-discovered modules, so they're marked ``baked`` (except
+            # when frozen, where ``baked=0`` holds edits to bundled modules).
+            # ``locked`` keeps its existing value (1 for a brand-new row);
+            # ``enabled`` is carried over from the previous DB state.
+            existing = sql.get_results(
+                "SELECT id, json_extract(config, '$.enabled') FROM modules WHERE name = ? AND folder_id = ?",
+                (module_name, folder_id),
+            ) or []
+            db_id = existing[0][0] if existing else None
+            if existing and existing[0][1] is not None:
+                config['enabled'] = bool(existing[0][1])
 
             if db_id is None:
-                metadata_json = json.dumps(metadata)
-                sql.execute("""
-                    INSERT INTO modules (name, config, folder_id, metadata, baked, locked)
-                    VALUES (?, ?, ?, ?, 1, 1)
-                """, (module_name, json.dumps(config), folder_id, metadata_json))
+                sql.execute(
+                    "INSERT INTO modules (name, config, folder_id, metadata, baked, locked) VALUES (?, ?, ?, ?, 1, 1)",
+                    (module_name, json.dumps(config), folder_id, json.dumps(metadata)),
+                )
                 db_id = sql.get_scalar(
                     "SELECT id FROM modules WHERE name = ? AND folder_id = ?",
-                    (module_name, folder_id)
+                    (module_name, folder_id),
                 )
-
-            # Preserve enabled state from DB config
-            if db_id is not None:
-                db_enabled = sql.get_scalar(
-                    "SELECT json_extract(config, '$.enabled') FROM modules WHERE id = ?",
-                    (db_id,)
+            elif getattr(sys, 'frozen', False):
+                sql.execute(
+                    "UPDATE modules SET config = ?, metadata = ? WHERE id = ?",
+                    (json.dumps(config), json.dumps(metadata), db_id),
                 )
-                if db_enabled is not None:
-                    config['enabled'] = bool(db_enabled)
+            else:
+                sql.execute(
+                    "UPDATE modules SET config = ?, metadata = ?, baked = 1 WHERE id = ?",
+                    (json.dumps(config), json.dumps(metadata), db_id),
+                )
 
             if cls:  # Ensure a class was indeed found and extracted
                 # In-memory-only 11th slot: the parent package dotted path
@@ -458,7 +534,7 @@ class ModulesController(BaseManager):
                     actual_module_object = importlib.import_module(inner_module_full_path)
 
                     # 2. Extract the class from the *actual* module object.
-                    cls = self.extract_module_class(actual_module_object, default=None)
+                    cls = self.extract_module_object(actual_module_object, default=None)
 
                     if cls:
                         kind_folder = None
@@ -555,7 +631,7 @@ class ModulesController(BaseManager):
                     'folder_path': module_item[9]
                 }
 
-            if module_item['class'] is None:
+            if module_item['class'] is None and self.class_based:
                 print(f"Module `{module_item['name']}` has no class defined.")
                 continue
 
@@ -584,6 +660,19 @@ class ModulesController(BaseManager):
         """
         base_path = self.load_to_path if self.load_to_path else 'src'
         return f"{base_path}.{module_name}"
+
+    def extract_module_object(self, module_or_name, default=None):
+        """What gets stored in the registry's ``class`` slot.
+
+        Class-based types store the module's class; function-based types
+        (``class_based=False``) store the module object itself, since there
+        is no class to extract.
+        """
+        if self.class_based:
+            return self.extract_module_class(module_or_name, default=default)
+        if isinstance(module_or_name, str):
+            return sys.modules.get(self.get_module_path(module_or_name), default)
+        return module_or_name or default
 
     def extract_module_class(self, module_or_name, default=None):
         """Extract the class from a module that matches the module_type."""

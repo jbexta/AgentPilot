@@ -2,7 +2,9 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QSizePolicy, QWidget, QPushButton, QHBoxLayout
 
-from gui.util import IconButton, LibraryDialog
+from gui.gui_utils.icon_button import IconButton
+from gui.gui_utils.library_dialog import LibraryDialog
+from utils import sql
 from utils.helpers import set_module_type
 
 
@@ -43,10 +45,7 @@ class EntityField(QWidget):
 
         self.label = QPushButton('Select entity...', self)
         self.label.setFlat(True)
-        self.label.setStyleSheet(
-            'QPushButton { background: transparent; border: none;'
-            ' text-align: left; padding: 0; }'
-        )
+        self.label.setObjectName('entityFieldLabel')
         self.label.setCursor(Qt.PointingHandCursor)
         self.label.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Preferred,
@@ -75,6 +74,12 @@ class EntityField(QWidget):
         """Set the value and update the display label."""
         self._value = str(value) if value else ''
         name = self._value.rsplit(':', 2)[0] if self._value else ''
+        if self._value.count(':') >= 2:
+            _, table, uuid = self._value.rsplit(':', 2)
+            name = sql.get_scalar(
+                f"SELECT name FROM `{table}` WHERE uuid = ?", (uuid,),
+            ) or name
+            self._value = f'{name}:{table}:{uuid}'
         self.label.setText(name if name else 'Select entity...')
 
     def browse_entity(self):

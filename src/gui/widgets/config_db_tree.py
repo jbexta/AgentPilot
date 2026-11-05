@@ -2,31 +2,20 @@ import json
 import os
 import sqlite3
 import sys
-import yaml
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QCursor
 from typing_extensions import override
 
-from utils.filesystem import get_application_path, get_all_baked_items
-from utils.helpers import display_message_box, merge_config_into_workflow_config, convert_to_safe_case, display_message
-from utils.helpers import BaseManager, set_module_type
+from utils.filesystem import get_all_baked_items
+from utils.helpers import display_message_box, convert_to_safe_case, display_message, get_text
+from plugins.workflows.utils.workflows import merge_config_into_workflow_config
+from utils.helpers import BaseManager, set_module_type, llm_tool, format_llm_tools
 
 from gui import system
-from gui.util import save_table_config
+from gui.gui_utils.helpers import save_table_config, bake_table_item
+from gui.gui_utils.custom_menu import CustomMenu
 from gui.widgets.config_tree import ConfigTree
-
-
-def str_presenter(dumper, data):
-    """Custom representer for multiline strings in YAML."""
-    if isinstance(data, str) and '\n' in data:
-        # Use literal style (|) for multiline strings
-        # YAML will automatically use |- when there are no trailing newlines
-        # and | when there are trailing newlines to preserve
-        # remove trailing spaces on each line
-        data = '\n'.join([line.rstrip() for line in data.split('\n')])
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
 
 @set_module_type('Widgets')
@@ -74,12 +63,6 @@ class ConfigDBTree(ConfigTree):
         {
             'text': 'Searchable',
             'key': 'w_searchable',
-            'type': bool,
-            'default': False,
-        },
-        {
-            'text': 'Versionable',
-            'key': 'w_versionable',
             'type': bool,
             'default': False,
         },
@@ -185,14 +168,20 @@ class ConfigDBTree(ConfigTree):
                 del_item_options=self.del_item_options,
                 store_data=False,
             )
+        self._editing_manager = False
+        self.manager.signals.changed.connect(self.on_manager_changed)
 
         self.init_select = kwargs.get('init_select', True)
         self.items_pinnable = kwargs.get('items_pinnable', True)
         self.items_bakeable = kwargs.get('items_bakeable', True)
 
+        self.notify_unread = kwargs.get('notify_unread', False)
+        if self.notify_unread:
+            from plugins.workflows.utils.runs import get_run_manager
+            get_run_manager().changed.connect(self.refresh_notify_badges)
+
         self.schema_overrides = {}
         # define_table(self.table_name)
-        self.current_version = None  # todo, should be here?
 
         # if self.show_tree_buttons:
         #     self.tree_buttons.btn_add.clicked.connect(self.add_item)
@@ -208,12 +197,38 @@ class ConfigDBTree(ConfigTree):
 
         # self.after_init()
 
+    def refresh_notify_badges(self):
+        from plugins.workflows.utils.runs import get_run_manager
+        self.tree._notify_ids = self.get_notify_ids(get_run_manager().attention_keys())
+        self.tree.viewport().update()
+
+    def get_notify_ids(self, unread_context_ids) -> set:
+        """Map unread context ids to this tree's row ids. Rows in `contexts` map
+        directly; other tables map through contexts linked to their uuid."""
+        from utils import sql
+        if not unread_context_ids:
+            return set()
+        if self.table_name == 'contexts':
+            return set(unread_context_ids)
+        placeholders = ','.join('?' * len(unread_context_ids))
+        rows = sql.get_results(f"""
+            SELECT DISTINCT t.id
+            FROM `{self.table_name}` t
+            JOIN contexts c ON instr(c.config, '{self.table_name}.' || t.uuid) > 0
+            WHERE c.id IN ({placeholders})""", tuple(unread_context_ids), return_type='list')
+        return set(rows)
+
     def after_init(self):
         from plugins.workflows.widgets.workflow_settings import WorkflowSettings
         if isinstance(self.config_widget, WorkflowSettings):
             default_item_icon = getattr(self, 'default_item_icon', '')
             self.config_widget.header_widget.widgets[0].schema[0]['default'] = default_item_icon
             self.config_widget.header_widget.build_schema()
+
+    def on_manager_changed(self):
+        if self._editing_manager:
+            return
+        self.load(silent_select_id=self.get_selected_item_id())
 
     @override
     def load(self, select_id=None, select_folder_id=None, silent_select_id=None, append=False):  # todo clean selects
@@ -240,6 +255,12 @@ class ConfigDBTree(ConfigTree):
                 self.query_params = {}
             self.query_params['kind'] = kind
 
+        if ':search' in self.query:
+            if not self.query_params:
+                self.query_params = {}
+            self.query_params['search'] = self.get_search_text()
+
+        prev_selected_id = self.get_selected_item_id()
         group_folders = False
         # if self.show_tree_buttons:
         #     if hasattr(self.tree_buttons, 'btn_group_folders'):
@@ -261,15 +282,11 @@ class ConfigDBTree(ConfigTree):
                 # Table might not have a baked column, ignore silently
                 pass
         
-        # # if callable(self.extra_data):
-        # #     extra_data = self.extra_data()
-        # #     data.extend(extra_data)
-        # if hasattr(self, 'extra_data'):
-        #     extra_data = self.extra_data()
-        #     data.extend(extra_data)
+        if hasattr(self, 'extra_data'):
+            data.extend(self.extra_data())
 
         self.tree.load(
-            data=data,
+            data=list(data),  # tree.load consumes the list
             append=append,
             select_id=select_id,
             select_folder_id=select_folder_id,
@@ -283,7 +300,18 @@ class ConfigDBTree(ConfigTree):
             default_item_icon=self.default_item_icon,
             baked_ids=baked_ids,
             support_item_nesting=self.support_item_nesting,
+            group_by_kind=self.group_by_kind,
+            kind_folder_key=self.kind_folder_key,
         )
+        if ':search' not in self.query and self.get_search_text():
+            self.filter_rows()
+
+        selected_id = self.get_selected_item_id()
+        if (not append and select_id is None and silent_select_id is None
+                and selected_id is not None
+                and str(selected_id) == str(prev_selected_id)):
+            self.on_item_selected()
+
         if len(data) == 0:
             return
 
@@ -391,7 +419,6 @@ class ConfigDBTree(ConfigTree):
 
     def on_item_selected(self):
         # return
-        self.current_version = None
 
         item_id = self.get_selected_item_id()
         folder_id = self.get_selected_folder_id()
@@ -450,7 +477,11 @@ class ConfigDBTree(ConfigTree):
         else:
             self.toggle_config_widget(None)
 
+        self.defer_update_page_map()
+
     def on_folder_toggled(self, item):
+        if item.data(0, Qt.UserRole) != 'folder':
+            return
         folder_id = int(item.text(1))  # self.get_selected_folder_id()
         if not folder_id:
             return
@@ -463,12 +494,7 @@ class ConfigDBTree(ConfigTree):
         """, (expanded, folder_id,))
 
     def filter_rows(self):
-        if not self.show_tree_buttons:
-            return
-
-        search_query = self.tree_buttons.search_box.text().lower()
-        if not self.tree_buttons.search_box.isVisible():
-            search_query = ''
+        search_query = self.get_search_text().lower()
 
         def filter_item(item, search_query):
             # Initially set the item as not matched
@@ -516,6 +542,41 @@ class ConfigDBTree(ConfigTree):
 
     def get_selected_item_id(self):
         return self.tree.get_selected_item_id()
+
+    @llm_tool(
+        name='select_item',
+        description='Select an item in the tree and open its config',
+        params={'item_id': 'Id of the item to select'},
+    )
+    def select_item(self, item_id: int):
+        self.select_tree_row(item_id, is_folder=False)
+
+    def select_tree_row(self, row_id, is_folder):
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            row = it.value()
+            if (row.data(0, Qt.UserRole) == 'folder') == is_folder and row.text(1) == str(row_id):
+                self.tree.setCurrentItem(row)
+                self.tree.scrollToItem(row)
+                return
+            it += 1
+        raise ValueError(f"{'Folder' if is_folder else 'Item'} {row_id} is not in the tree")
+
+    def agent_tools(self, refs):
+        manager_tools = [
+            tool for tool in system.manager.tools.get_manager_tools()
+            if getattr(system.manager, tool['manager']) is self.manager
+        ]
+        parts = [super().agent_tools(refs), format_llm_tools(self.manager, refs, manager_tools)]
+        return '\n'.join(p for p in parts if p)
+
+    def agent_item_suffix(self, item):
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'kind_folder':
+            return f' [kind={item.data(1, Qt.UserRole)}]'
+        if tag == 'folder':
+            return f' [F#{item.text(1)}]'
+        return f' [#{item.text(1)}]'
 
     def get_selected_folder_id(self):
         return self.tree.get_selected_folder_id()
@@ -566,20 +627,26 @@ class ConfigDBTree(ConfigTree):
         self.on_edited()
         self.tree.update_tooltips()
 
-    def add_item(self):
+    def get_new_item_values(self):
         add_opts = self.add_item_options
         if not add_opts:
-            return
+            return None
 
         dlg_title = add_opts['title']
         dlg_prompt = add_opts['prompt']
 
-        text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+        name, ok = get_text(self, dlg_title, dlg_prompt)
 
         if not ok:
+            return None
+        return {'name': name}
+
+    def add_item(self, *, parent_id=None):
+        values = self.get_new_item_values()
+        if values is None:
             return
 
-        from gui.util import find_ancestor_tree_item_id
+        from gui.gui_utils.helpers import find_ancestor_tree_item_id
 
         kwargs = {}
         if self.table_name == 'models':  # todo automatic relations
@@ -590,11 +657,20 @@ class ConfigDBTree(ConfigTree):
             kind = kind()
         if kind:
             kwargs['kind'] = kind
+        if parent_id is not None:
+            kwargs['parent_id'] = parent_id
+            has_kind_col = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE name = 'kind'") > 0
+            if has_kind_col:
+                kwargs['kind'] = self.db_connector.get_scalar(f"SELECT kind FROM `{self.table_name}` WHERE id = ?", (parent_id,))
         # elif self.table_name == 'workspace_concepts':
         #     workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
         #     kwargs['workspace_id'] = workspace_id
 
-        self.manager.add(name=text, **kwargs)
+        self._editing_manager = True
+        try:
+            self.manager.add(**values, **kwargs)
+        finally:
+            self._editing_manager = False
         last_insert_id = self.db_connector.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
         self.load(select_id=last_insert_id)
 
@@ -622,29 +698,7 @@ class ConfigDBTree(ConfigTree):
             if retval != QMessageBox.Yes:
                 return
 
-            folder_parent = item.parent() if item else None
-            folder_parent_id = folder_parent.text(1) if folder_parent else None
-
-            # Unpack all items from folder to parent folder (or root)
-            self.db_connector.execute(f"""
-                UPDATE `{self.table_name}`
-                SET folder_id = {'NULL' if not folder_parent_id else folder_parent_id}
-                WHERE folder_id = ?
-            """, (folder_id,))
-            # Unpack all folders from folder to parent folder (or root)
-            self.db_connector.execute(f"""
-                UPDATE `folders`
-                SET parent_id = {'NULL' if not folder_parent_id else folder_parent_id}
-                WHERE parent_id = ?
-            """, (folder_id,))
-
-            self.db_connector.execute(f"""
-                DELETE FROM folders
-                WHERE id = ?
-            """, (folder_id,))
-
-            self.on_edited()
-            self.load()
+            self.remove_folder(folder_id)
 
         else:
             item_id = self.get_selected_item_id()
@@ -696,17 +750,19 @@ class ConfigDBTree(ConfigTree):
             if retval != QMessageBox.Yes:
                 return
 
-            if has_parent_id_col:
-                parent_id_of_deleting_item = self.db_connector.get_scalar(f"SELECT parent_id FROM {self.table_name} WHERE id = ?", (item_id,))
-                if has_children:
-                    self.db_connector.execute(f"""
-                        UPDATE `{self.table_name}`
-                        SET parent_id = ?
-                        WHERE parent_id = ?
-                    """, (parent_id_of_deleting_item, item_id,))
+            self.remove_item(item_id)
 
+    def remove_item(self, item_id: int):
+        locked_col_cnt = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE `name` = 'locked'")
+        if locked_col_cnt != 0 and self.db_connector.get_scalar(f"SELECT locked FROM {self.table_name} WHERE id = ?", (item_id,)) == 1:
+            raise ValueError('Item is locked')
+
+        self._editing_manager = True
+        try:
             self.manager.delete(item_id)
-            self.load()
+        finally:
+            self._editing_manager = False
+        self.load()
 
     def rename_item(self):
         item = self.tree.currentItem()
@@ -725,20 +781,18 @@ class ConfigDBTree(ConfigTree):
 
             current_name = item.text(0)
             dlg_title, dlg_prompt = ('Rename folder', 'Enter a new name for the folder')
-            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt, text=current_name)
+            text, ok = get_text(self, dlg_title, dlg_prompt, text=current_name)
             if not ok:
                 return
 
             try:
-                self.db_connector.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?", (text, folder_id))
+                self.set_folder_name(folder_id, text)
             except sqlite3.IntegrityError as e:
                 display_message(
                     message=f"Error renaming folder, name already exists",
                     icon=QMessageBox.Warning,
                 )
                 return
-            # self.reload_current_row()
-            self.load()
 
         else:
             item_id = self.get_selected_item_id()
@@ -755,7 +809,7 @@ class ConfigDBTree(ConfigTree):
 
             current_name = item.text(0)
             dlg_title, dlg_prompt = ('Rename item', 'Enter a new name for the item')
-            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt, text=current_name)
+            text, ok = get_text(self, dlg_title, dlg_prompt, text=current_name)
             if not ok:
                 return
 
@@ -763,21 +817,11 @@ class ConfigDBTree(ConfigTree):
             if not item_id:
                 return
             try:
-                self.db_connector.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
-                if self.table_name in ['agents', 'blocks', 'tools', 'tasks', 'entities']:  # todo
-                    self.db_connector.execute(f"UPDATE `{self.table_name}` SET `config` = json_set(config, '$.name', ?) WHERE id = ?", (text, item_id,))
-                # self.reload_current_row()
-
-                is_baked = self.is_tree_item_baked()
-                auto_bake = system.manager.config.get('system.auto_bake', False)
-                if auto_bake and is_baked:
-                    self.bake_item(force=True)
+                self.set_item_name(item_id, text)
 
                 # if is_baked and old_name != text and hasattr(self, 'get_module_file_path'):  # todo dedupe
                 #     old_file_path = self.get_module_file_path(item_id, module_name=old_name)
                 #     os.remove(old_file_path)
-                    
-                self.load()
 
             except sqlite3.IntegrityError as e:
                 display_message(
@@ -785,6 +829,57 @@ class ConfigDBTree(ConfigTree):
                     icon=QMessageBox.Warning,
                 )
                 return
+
+    @llm_tool(
+        name='rename_item',
+        description='Rename an item',
+        params={
+            'item_id': 'Id of the item to rename',
+            'name': 'New name of the item',
+        },
+    )
+    def set_item_name(self, item_id: int, name: str):
+        try:
+            is_locked = self.db_connector.get_scalar(f"SELECT locked FROM {self.table_name} WHERE id = ?", (item_id,)) == 1
+        except sqlite3.OperationalError:
+            is_locked = False
+        if is_locked:
+            raise ValueError('Item is locked')
+
+        self.db_connector.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (name, item_id,))
+        if self.table_name in ['agents', 'blocks', 'tools', 'entities']:  # todo
+            self.db_connector.execute(f"UPDATE `{self.table_name}` SET `config` = json_set(config, '$.name', ?) WHERE id = ?", (name, item_id,))
+
+        auto_bake = system.manager.config.get('system.auto_bake', False)
+        if auto_bake and self.is_tree_item_baked(item_id):
+            self.bake_item(force=True, item_id=item_id)
+
+        self.load()
+        if self.get_selected_item_id() == item_id:
+            self.on_item_selected()
+
+    @llm_tool(
+        description='Move an item into a folder, under another item, or to the top of a kind group',
+        params={
+            'item_id': 'Id of the item to move',
+            'folder_id': 'Id of the folder to move it into, empty for top level',
+            'parent_item': 'Id of the item to nest it under, ignores folder_id',
+            'kind': 'Kind group to move it into, ignores folder_id and parent_item',
+        },
+    )
+    def move_item(self, item_id: int, folder_id: int = None, parent_item: int = None, kind: str = None):
+        if kind is not None:
+            self.tree.move_to_kind_group('item', item_id, kind)
+        elif parent_item is not None:
+            if not self.support_item_nesting:
+                raise ValueError('This tree does not support nesting items')
+            self.tree.update_item_parent(item_id, parent_item)
+        else:
+            self.tree.update_item_folder(item_id, folder_id)
+
+        auto_bake = system.manager.config.get('system.auto_bake', False)
+        if auto_bake and self.is_tree_item_baked(item_id):
+            self.bake_item(force=True, item_id=item_id)
 
     def pin_item(self):
         is_pinned = self.is_tree_item_pinned()
@@ -813,7 +908,14 @@ class ConfigDBTree(ConfigTree):
     #     self.add_folder()
     #     self.load()
 
-    def add_folder(self, name=None, parent_folder=None):
+    @llm_tool(
+        description='Add a folder, returns its id',
+        params={
+            'name': 'Name of the new folder',
+            'parent_folder': 'Id of the folder to add it under',
+        },
+    )
+    def add_folder(self, name: str = None, parent_folder: int = None):
         if self.folder_key is None:
             raise ValueError('Folder key not set')
 
@@ -826,7 +928,7 @@ class ConfigDBTree(ConfigTree):
 
         if name is None:
             dlg_title, dlg_prompt = ('New folder', 'Enter the name of the new folder')
-            name, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+            name, ok = get_text(self, dlg_title, dlg_prompt)
             if not ok:
                 return
 
@@ -858,6 +960,62 @@ class ConfigDBTree(ConfigTree):
         self.load()
 
         return ins_id
+
+    @llm_tool(
+        description='Move a folder under another folder, or to the top of a kind group',
+        params={
+            'folder_id': 'Id of the folder to move',
+            'parent_folder': 'Id of the new parent folder, empty for top level',
+            'kind': 'Kind group to move it into, ignores parent_folder',
+        },
+    )
+    def move_folder(self, folder_id: int, parent_folder: int = None, kind: str = None):
+        if self.db_connector.get_scalar("SELECT locked FROM folders WHERE id = ?", (folder_id,)) == 1:
+            raise ValueError('Folder is locked')
+        if kind is not None:
+            self.tree.move_to_kind_group('folder', folder_id, kind)
+        else:
+            self.tree.update_folder_parent(folder_id, parent_folder)
+
+    @llm_tool(
+        name='select_folder',
+        description='Select a folder in the tree',
+        params={'folder_id': 'Id of the folder to select'},
+    )
+    def select_folder(self, folder_id: int):
+        self.select_tree_row(folder_id, is_folder=True)
+
+    @llm_tool(
+        name='rename_folder',
+        description='Rename a folder',
+        params={
+            'folder_id': 'Id of the folder to rename',
+            'name': 'New name of the folder',
+        },
+    )
+    def set_folder_name(self, folder_id: int, name: str):
+        if self.db_connector.get_scalar("SELECT locked FROM folders WHERE id = ?", (folder_id,)) == 1:
+            raise ValueError('Folder is locked')
+        self.db_connector.execute("UPDATE `folders` SET `name` = ? WHERE id = ?", (name, folder_id))
+        self.load()
+
+    @llm_tool(
+        name='delete_folder',
+        description='Delete a folder, its contents are moved to its parent folder',
+        params={'folder_id': 'Id of the folder to delete'},
+        confirm=True,
+    )
+    def remove_folder(self, folder_id: int):
+        if self.db_connector.get_scalar("SELECT locked FROM folders WHERE id = ?", (folder_id,)) == 1:
+            raise ValueError('Folder is locked')
+
+        folder_parent_id = self.db_connector.get_scalar("SELECT parent_id FROM folders WHERE id = ?", (folder_id,))
+        self.db_connector.execute(f"UPDATE `{self.table_name}` SET folder_id = ? WHERE folder_id = ?", (folder_parent_id, folder_id))
+        self.db_connector.execute("UPDATE `folders` SET parent_id = ? WHERE parent_id = ?", (folder_parent_id, folder_id))
+        self.db_connector.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+
+        self.on_edited()
+        self.load()
 
     def get_folder_path_from_id(self, folder_id):
         """
@@ -917,7 +1075,7 @@ class ConfigDBTree(ConfigTree):
             dlg_title = add_opts['title']
             dlg_prompt = add_opts['prompt']
 
-            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+            text, ok = get_text(self, dlg_title, dlg_prompt)
             if not ok:
                 return
 
@@ -935,11 +1093,68 @@ class ConfigDBTree(ConfigTree):
             self.load()
 
     def show_context_menu(self):
-        menu = QMenu(self)
+        context_menu = self.Tree_Context_Menu(self)
+        menu = context_menu._create_menu_recursive(title='', schema=context_menu.schema, parent=self)
+        self.on_context_menu(menu)
+        menu.exec_(QCursor.pos())
+        menu.deleteLater()
+        context_menu.deleteLater()
 
-        btn_rename = menu.addAction('Rename')
-        btn_duplicate = menu.addAction('Duplicate')
-        btn_delete = menu.addAction('Delete')
+    class Tree_Context_Menu(CustomMenu):
+        def __init__(self, parent):
+            super().__init__(parent)
+
+            def is_item_selected():
+                item = parent.tree.currentItem()
+                return item is not None and isinstance(item.data(0, Qt.UserRole), dict)
+
+            def is_bakeable():
+                is_exe = getattr(sys, 'frozen', False)
+                return not is_exe and parent.items_bakeable and parent.tree.currentItem() is not None
+
+            self.schema = [
+                {
+                    'text': 'Add sub-item',
+                    'target': lambda: parent.add_item(parent_id=parent.get_selected_item_id()),
+                    'visibility_predicate': lambda: parent.support_item_nesting and is_item_selected(),
+                },
+                {
+                    'text': 'Rename',
+                    'target': parent.rename_item,
+                },
+                {
+                    'text': 'Duplicate',
+                    'target': parent.duplicate_item,
+                },
+                {
+                    'text': 'Delete',
+                    'target': parent.delete_item,
+                },
+                {'type': 'separator'},
+                {
+                    'text': 'Pin',
+                    'target': parent.pin_item,
+                    'visibility_predicate': lambda: parent.items_pinnable and not parent.is_tree_item_pinned(),
+                },
+                {
+                    'text': 'Unpin',
+                    'target': parent.pin_item,
+                    'visibility_predicate': lambda: parent.items_pinnable and parent.is_tree_item_pinned(),
+                },
+                {'type': 'separator'},
+                {
+                    'text': 'Bake',
+                    'target': parent.bake_item,
+                    'visibility_predicate': lambda: is_bakeable() and not (
+                        parent.is_tree_item_baked() and system.manager.config.get('system.auto_bake', False)
+                    ),
+                },
+                {
+                    'text': 'Unbake',
+                    'target': parent.unbake_item,
+                    'visibility_predicate': lambda: is_bakeable() and parent.is_tree_item_baked(),
+                },
+            ]
 
         # if self.__class__.__name__ == 'Page_Models_Settings':
         #     # Add a providers submenu
@@ -973,40 +1188,6 @@ class ConfigDBTree(ConfigTree):
 
         #         provider_action.triggered.connect(make_provider_setter(provider_name))
 
-        # add separator
-        if self.items_pinnable:
-            menu.addSeparator()
-            is_pinned = self.is_tree_item_pinned()
-            btn_pin = menu.addAction('Pin' if not is_pinned else 'Unpin')
-            btn_pin.triggered.connect(self.pin_item)
-
-        is_exe = getattr(sys, 'frozen', False)
-        if not is_exe:
-            item = self.tree.currentItem()
-            if item:
-                # tag = item.data(0, Qt.UserRole)
-                # if tag != 'folder':
-                menu.addSeparator()
-                is_baked = self.is_tree_item_baked()
-                if is_baked:
-                    auto_bake = system.manager.config.get('system.auto_bake', False)
-                    if not auto_bake:
-                        btn_bake = menu.addAction('Bake')
-                        btn_bake.triggered.connect(self.bake_item)
-                        
-                    btn_unbake = menu.addAction('Unbake')
-                    btn_unbake.triggered.connect(self.unbake_item)
-                else:
-                    btn_bake = menu.addAction('Bake')
-                    btn_bake.triggered.connect(self.bake_item)
-
-        btn_rename.triggered.connect(self.rename_item)
-        btn_duplicate.triggered.connect(self.duplicate_item)
-        btn_delete.triggered.connect(self.delete_item)
-
-        self.on_context_menu(menu)
-        menu.exec_(QCursor.pos())
-
     def on_context_menu(self, menu):
         """Hook for subclasses to add items to the context menu."""
         pass
@@ -1022,41 +1203,25 @@ class ConfigDBTree(ConfigTree):
         if not item_id:
             return
 
-        item_tuple = self.db_connector.get_results(f"""
-            SELECT
-                uuid,
-                name
-            FROM `{self.table_name}`
-            WHERE id = ?
-        """, (item_id,), return_type='tuple')
-
-        if not item_tuple:
+        uuid = self.db_connector.get_scalar(
+            f"SELECT uuid FROM `{self.table_name}` WHERE id = ?", (item_id,)
+        )
+        if not uuid:
             return
 
-        uuid, name = item_tuple[:2]
-
-        app_path = get_application_path()
-        baked_dir_path = os.path.join(app_path, 'src', 'utils', 'baked', self.table_name)
-        os.makedirs(baked_dir_path, exist_ok=True)
-
-        short_uuid = f'_{uuid[:4]}'
-        safe_filename = f"{convert_to_safe_case(name) + short_uuid}.yaml"
-        safe_filepath = os.path.join(baked_dir_path, safe_filename)
-
-        if os.path.exists(safe_filepath):
-            os.remove(safe_filepath)
+        for path, baked_item in get_all_baked_items(self.table_name).items():
+            if baked_item.get('uuid') == uuid:
+                os.remove(path)
 
         self.db_connector.execute(f"UPDATE `{self.table_name}` SET baked = 0 WHERE id = ?", (item_id,))
         self.load()
         # self.load()
 
-    def bake_item(self, force=False):
+    def bake_item(self, force=False, item_id=None):
         if not self.items_bakeable:
             return
 
-        # check if running from source code or executable
-        is_exe = getattr(sys, 'frozen', False)
-        if is_exe:
+        if getattr(sys, 'frozen', False):
             if not force:
                 display_message(
                     message='Baking is not supported from binaries.',
@@ -1065,58 +1230,34 @@ class ConfigDBTree(ConfigTree):
             return
 
         table_name = self.table_name
-        bake_columns = ['uuid', 'name', 'config', 'parent_id']
-        item = self.tree.currentItem()
-        if not item:
-            return
-        tag = item.data(0, Qt.UserRole)
-        if tag == 'folder':
-            table_name = 'folders'
-            item_id = self.get_selected_folder_id()
-            bake_columns += ['type']
-        else:
-            item_id = self.get_selected_item_id()
-
+        if item_id is None:
+            item = self.tree.currentItem()
+            if not item:
+                return
+            if item.data(0, Qt.UserRole) == 'folder':
+                table_name = 'folders'
+                item_id = self.get_selected_folder_id()
+            else:
+                item_id = self.get_selected_item_id()
         if not item_id:
             return
-        
-        non_existing_columns = [
-            col for col in bake_columns 
-            if self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table_name}') WHERE name = ?", (col,)) == 0
-        ]
-        # table_has_uuid_col = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table_name}') WHERE name = 'uuid'") > 0
-        if 'uuid' in non_existing_columns:
+
+        uuid_col_exists = self.db_connector.get_scalar(
+            f"SELECT COUNT(*) FROM pragma_table_info('{table_name}') WHERE name = 'uuid'"
+        ) > 0
+        if not uuid_col_exists:
             display_message(
                 message=f"Table `{table_name}` does not have a 'uuid' column. Cannot bake.",
                 icon=QMessageBox.Warning,
             )
             return
-        
-        bake_columns = [col for col in bake_columns if col not in non_existing_columns]
 
-        item_tuple = self.db_connector.get_results(f"""
-            SELECT
-                {', '.join(bake_columns)}
-            FROM `{table_name}`
-            WHERE id = ?
-        """, (item_id,), return_type='tuple')
-
-        if not item_tuple:
-            return
-
-        uuid, name, config = item_tuple[:3]
-
-        app_path = get_application_path()
-        baked_dir_path = os.path.join(app_path, 'src', 'utils', 'baked', table_name)
-        os.makedirs(baked_dir_path, exist_ok=True)
-
-        short_uuid = f'_{uuid[:4]}'
-        safe_filename = f"{convert_to_safe_case(name) + short_uuid}.yaml"
-        safe_filepath = os.path.join(baked_dir_path, safe_filename)
-
-        existing_baked = get_all_baked_items(table_name)
-        if uuid in [baked_json['uuid'] for baked_json in existing_baked.values()]:
-            if not force:
+        if not force:
+            uuid = self.db_connector.get_scalar(
+                f"SELECT uuid FROM `{table_name}` WHERE id = ?", (item_id,)
+            )
+            existing_baked = get_all_baked_items(table_name)
+            if uuid in [b.get('uuid') for b in existing_baked.values()]:
                 dr = display_message_box(
                     icon=QMessageBox.Question,
                     title="Overwrite item",
@@ -1125,55 +1266,16 @@ class ConfigDBTree(ConfigTree):
                 )
                 if dr != QMessageBox.Yes:
                     return
-                    
-            existing_path = next((path for path, baked_json in existing_baked.items() if baked_json['uuid'] == uuid), None)
-            # rename the existing file to new filename
-            os.rename(existing_path, safe_filepath)
-
-        wrapped_config = {
-            col_name: item_tuple[i] for i, col_name in enumerate(bake_columns)
-        }
-        wrapped_config['config'] = json.loads(config)
-
-        parent_id = wrapped_config.pop('parent_id', None)
-        if parent_id:
-            parent_uuid = self.db_connector.get_scalar(
-                f"SELECT uuid FROM `{table_name}` WHERE id = ?", (parent_id,))
-            if parent_uuid:
-                wrapped_config['parent_uuid'] = parent_uuid
-
-        folder_id = self.db_connector.get_scalar(f"SELECT folder_id FROM `{table_name}` WHERE id = ?", (item_id,))
-        if folder_id:
-            folder_path = self.get_folder_path_from_id(folder_id)
-            wrapped_config['folder_path'] = folder_path
 
         try:
-            # Write the config dictionary to the YAML file with pretty printing
-            # Create a custom SafeDumper class with our string representer
-            class CustomDumper(yaml.SafeDumper):
-                pass
-            
-            # Add our custom string representer to handle multiline strings properly
-            CustomDumper.add_representer(str, str_presenter)
-            
-            with open(safe_filepath, 'w', encoding='utf-8') as f:
-                yaml.dump(wrapped_config, f, 
-                         Dumper=CustomDumper,
-                         default_flow_style=False, 
-                         allow_unicode=True, 
-                         sort_keys=False,
-                         width=1000,
-                         line_break='\n')
-
+            target = bake_table_item(table_name, item_id)
+            if target is None:
+                return
             if not force:
                 display_message(
-                    message=f"Successfully baked item to:\n{safe_filepath}",
+                    message=f"Successfully baked item to:\n{target}",
                     icon=QMessageBox.Information,
                 )
-            
-            is_baked = self.db_connector.get_scalar(f"SELECT baked FROM `{table_name}` WHERE id = ?", (item_id,)) == 1
-            if not is_baked:
-                self.db_connector.execute(f"UPDATE `{table_name}` SET baked = 1 WHERE id = ?", (item_id,))
                 self.load()
 
         except Exception as e:
@@ -1181,45 +1283,6 @@ class ConfigDBTree(ConfigTree):
                 message=f"Failed to write file.\nError: {e}",
                 icon=QMessageBox.Critical,
             )
-
-    def show_history_context_menu(self):
-        if not self.versionable:
-            return
-
-        id = self.get_selected_item_id()
-        if not id:
-            return
-
-        metadata = self.db_connector.get_scalar(f"""
-            SELECT metadata
-            FROM `{self.table_name}`
-            WHERE id = ?
-        """, (id,))
-        if not metadata:
-            return
-
-        metadata = json.loads(metadata)
-        current_version = metadata.get('current_version', None)
-        versions = metadata.get('versions', {})
-
-        menu = QMenu(self)
-        for key, value in versions.items():
-            action = menu.addAction(key)
-            action.setCheckable(True)
-            action.setChecked(key == current_version)
-            action.triggered.connect(lambda: self.load_version(key))
-        # show_history = menu.addAction('Last week')
-        # show_history = menu.addAction('Yesterday 17:42')
-        sep = menu.addSeparator()
-        # show_history = menu.addAction('Newwww')
-        # sep = menu.addSeparator()
-        # show_history = menu.addAction('Delete version')
-        show_history = menu.addAction('Save as new version')
-        # show_history.triggered.connect(self.show_history)
-        menu.exec_(QCursor.pos())
-
-    def load_version(self, version_config):
-        pass
 
     def is_tree_item_pinned(self):
         # todo temp
@@ -1247,37 +1310,39 @@ class ConfigDBTree(ConfigTree):
                 """, (item_id,)) == 1
             return is_pinned
 
-    def is_tree_item_baked(self):
+    def is_tree_item_baked(self, item_id=None):
         # todo temp
-        item = self.tree.currentItem()
-        if not item:
-            return None
-        tag = item.data(0, Qt.UserRole)
-        if tag == 'folder':
-            return False
-            # raise NotImplementedError("")
-            # folder_id = int(item.text(1))
-            # is_baked = self.db_connector.get_scalar(f"""
-            #     SELECT baked
-            #     FROM folders
-            #     WHERE id = ?
-            #     """, (folder_id,)) == 1
-            # return is_pinned
-        else:
+        if item_id is None:
+            item = self.tree.currentItem()
+            if not item:
+                return None
+            tag = item.data(0, Qt.UserRole)
+            if tag == 'folder':
+                return False
+                # raise NotImplementedError("")
+                # folder_id = int(item.text(1))
+                # is_baked = self.db_connector.get_scalar(f"""
+                #     SELECT baked
+                #     FROM folders
+                #     WHERE id = ?
+                #     """, (folder_id,)) == 1
+                # return is_pinned
             item_id = self.get_selected_item_id()
             if not item_id:
                 return False
-            table_has_baked_col = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE name = 'baked'") > 0
-            if not table_has_baked_col:
-                return False
-            is_baked = self.db_connector.get_scalar(f"""
-                SELECT baked
-                FROM `{self.table_name}`
-                WHERE id = ?
-                """, (item_id,)) == 1
-            return is_baked
+        table_has_baked_col = self.db_connector.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{self.table_name}') WHERE name = 'baked'") > 0
+        if not table_has_baked_col:
+            return False
+        is_baked = self.db_connector.get_scalar(f"""
+            SELECT baked
+            FROM `{self.table_name}`
+            WHERE id = ?
+            """, (item_id,)) == 1
+        return is_baked
 
     def check_infinite_load(self):
+        if self.tree.signalsBlocked():
+            return  # mid tree.load, e.g. `clear()` resetting the scrollbar
         if self.tree.verticalScrollBar().value() == self.tree.verticalScrollBar().maximum():
             self.load(append=True)
     

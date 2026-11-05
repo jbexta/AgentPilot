@@ -4,8 +4,10 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QCursor
 
-from gui.util import find_main, get_selected_pages, save_table_config, find_attribute, BreadcrumbWidget, CVBoxLayout
-from utils.helpers import convert_to_safe_case, set_module_type
+from gui.gui_utils.helpers import find_main, get_selected_pages, save_table_config, find_attribute
+from gui.gui_utils.breadcrumb_widget import BreadcrumbWidget
+from gui.gui_utils.layouts import CVBoxLayout
+from utils.helpers import convert_to_safe_case, format_llm_tools, set_module_type
 
 from utils import sql
 
@@ -21,7 +23,7 @@ class ConfigWidget(QWidget):
         self.conf_namespace = None
         self.edit_bar = None
         self.user_editable = getattr(parent, 'user_editable', True)
-        self.propagate_config = getattr(parent, 'propagate_config', True)
+        self.propagate_config = getattr(parent, 'propagate_config', False)
 
         self.edit_bar_timer = QTimer(self)
         self.edit_bar_timer.setSingleShot(True)
@@ -228,6 +230,34 @@ class ConfigWidget(QWidget):
         )  # todo, use?
         self.load_config(config)
 
+    def agent_visualisation(self):
+        """This widget's own contribution to the agent visualisation.
+        Opt-in: returns an empty string unless implemented by the widget."""
+        return ''
+
+    def get_agent_visualisation(self, refs):
+        """Walk downwards from this widget, composing its own agent
+        visualisation with those of all nested config widgets. Widgets
+        with tools are appended to refs as they are numbered."""
+        parts = [format_llm_tools(self, refs), self.agent_visualisation()]
+        for child in self._agent_viz_children():
+            parts.append(child.get_agent_visualisation(refs))
+        return '\n'.join(p for p in parts if p)
+
+    def _agent_viz_children(self):
+        """Nearest ConfigWidget descendants, stopping descent at each one found."""
+        found = []
+
+        def walk(obj):
+            for child in obj.children():
+                if isinstance(child, ConfigWidget):
+                    found.append(child)
+                elif isinstance(child, QWidget):
+                    walk(child)
+
+        walk(self)
+        return found
+
     def update_breadcrumbs(self):
         breadcrumb_widget = find_attribute(self, 'breadcrumb_widget')
         if not breadcrumb_widget:
@@ -301,7 +331,7 @@ class ConfigWidget(QWidget):
     def enterEvent(self, event):
         if self._in_edit_bar_event:
             return
-        from gui.util import find_attribute
+        from gui.gui_utils.helpers import find_attribute
         if find_attribute(self, 'user_editing', False):
             self._in_edit_bar_event = True
             try:
@@ -345,6 +375,19 @@ class ConfigWidget(QWidget):
         #     with block_signals(self.splitter):
         #         self.splitter.setOrientation(orientation)
 
+    def defer_update_page_map(self):
+        """Post `update_page_map` to the event queue, carrying over the replay state
+        active *now* — updates caused by an undo/redo stay suppressed even though
+        they fire after the replay call has returned."""
+        # from core.actions import base as undo_history
+        # was_replaying = undo_history._replaying
+        #
+        # def fire():
+        #     with undo_history.replay_guard(was_replaying):
+        #         self.update_page_map()
+        # QTimer.singleShot(0, fire)
+        QTimer.singleShot(0, self.update_page_map)
+
     def update_page_map(self):
         """Persist the current page/tab/tree selection state to the DB."""
 
@@ -352,6 +395,8 @@ class ConfigWidget(QWidget):
         main = find_main()
         if main:
             path = get_selected_pages(main.main_pages)
+            # from core.actions.navigate import record_path_change
+            # record_path_change(path)
             sql.execute(
                 "UPDATE settings SET value = ? WHERE `field` = 'page_path'",
                 (json.dumps(path),),
@@ -389,27 +434,28 @@ class ConfigWidget(QWidget):
             self.config_widget.set_widget_edit_mode(state)
 
     def set_widget_edit_mode(self, state):
-        if hasattr(self, 'settings_sidebar'):
-            if getattr(self.settings_sidebar, 'new_page_btn', None):
-                self.settings_sidebar.new_page_btn.setVisible(state)
-        if getattr(self, 'new_page_btn', None):
-            self.new_page_btn.setVisible(state)
-        if getattr(self, 'adding_field', None):
-            self.adding_field.setVisible(state)
-        from gui.temp import OptionsButton
-        for btn in self.findChildren(OptionsButton):
-            btn.setVisible(state)
+        pass
+        # if hasattr(self, 'settings_sidebar'):
+        #     if getattr(self.settings_sidebar, 'new_page_btn', None):
+        #         self.settings_sidebar.new_page_btn.setVisible(state)
+        # if getattr(self, 'new_page_btn', None):
+        #     self.new_page_btn.setVisible(state)
+        # if getattr(self, 'adding_field', None):
+        #     self.adding_field.setVisible(state)
+        # from gui.temp import OptionsButton
+        # for btn in self.findChildren(OptionsButton):
+        #     btn.setVisible(state)
 
     def toggle_edit_bar(self, state):
         self.edit_bar_timer.stop()
         if state:
-            from gui.util import find_attribute
+            from gui.gui_utils.helpers import find_attribute
             user_editing = find_attribute(self, 'user_editing', False)
             user_editable = find_attribute(self, 'user_editable', False)
             if not user_editing or not user_editable:
                 return
             if not self.edit_bar:
-                from gui.util import EditBar
+                from gui.gui_utils.edit_bar import EditBar
                 self.edit_bar = EditBar(self)
             self.edit_bar_timer.start(500)
         else:
@@ -430,7 +476,7 @@ class ConfigWidget(QWidget):
             parent = getattr(parent, 'parent', None)
 
     def show_first_parent_edit_bar(self):
-        from gui.util import find_attribute
+        from gui.gui_utils.helpers import find_attribute
         if not find_attribute(self, 'user_editing', False):
             return
         parent = self.parent

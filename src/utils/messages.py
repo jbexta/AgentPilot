@@ -39,8 +39,6 @@ class MessageHistory:
         self.messages: List[Message] = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
         self.alt_turn_state: int = 0  # A flag to indicate if it's a new run
 
-        self.msg_id_buffer: List[int] = []
-
     def load(self):
         self.messages = []
         self.workflow.leaf_id = sql.get_scalar("""
@@ -69,7 +67,6 @@ class MessageHistory:
 
         self.load_branches()
         self.refresh_messages()
-        self.load_msg_id_buffer()
 
     def load_branches(self):
         root_id = self.workflow.context_id
@@ -107,8 +104,8 @@ class MessageHistory:
               JOIN contexts c ON cp.parent_id = c.id
             )
             SELECT m.id, m.role, m.msg, m.member_id, m.alt_turn, m.log
-            FROM contexts_messages m
-            JOIN context_path cp ON m.context_id = cp.context_id
+            FROM context_path cp
+            CROSS JOIN contexts_messages m ON m.context_id = cp.context_id
             WHERE m.id > ?
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
             ORDER BY m.id;""", (self.workflow.leaf_id, last_msg_id,))
@@ -150,25 +147,24 @@ class MessageHistory:
                         break
 
         run_finished = None not in member_turn_outputs.values()  #!looper!#  # ~~ #
-        if run_finished:
+        # Only advance alt_turn when not inside an active run. During
+        # streaming (responding=True) the dict can look "full" after a
+        # streaming member's first chunk, which would prematurely flip
+        # alt_turn and split the turn across two alt_turn groups in the DB.
+        # The flip during a live run is owned by behaviour.receive's finally.
+        responding = getattr(self.workflow, 'responding', False)
+        if not responding:
+            # The context may be mid-run under a different Workflow instance
+            # (this history belongs to a widget re-attached during the run).
+            from plugins.workflows.utils.runs import get_run_manager
+            responding = get_run_manager().is_running(self.workflow.context_id)
+        if run_finished and not responding:
             self.alt_turn_state = 1 - self.alt_turn_state
             member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}
 
         self.workflow.reset_last_outputs()
         self.workflow.set_last_outputs(member_last_outputs)
         self.workflow.set_turn_outputs(member_turn_outputs)
-
-    def load_msg_id_buffer(self):
-        self.msg_id_buffer = []
-        last_msg_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name = 'contexts_messages'")
-        last_msg_id = last_msg_id if last_msg_id is not None else 0
-        for msg_id in range(last_msg_id + 1, last_msg_id + 100):
-            self.msg_id_buffer.append(msg_id)
-
-    def get_next_msg_id(self) -> int:
-        last_id = self.msg_id_buffer[-1]
-        self.msg_id_buffer.append(last_id + 1)
-        return self.msg_id_buffer.pop(0)
 
     def add(self,
         role: str,
@@ -177,19 +173,39 @@ class MessageHistory:
         log_obj=None
     ) -> Message:
         with self.thread_lock:
-            next_id = self.get_next_msg_id()
             if log_obj is None:
                 log_obj = {}
+            # The id is only known after insert (concurrent workflows share the
+            # same autoincrement sequence), so the log's `id` is set in a
+            # follow-up update.
+            next_id = sql.execute(
+                "INSERT INTO contexts_messages (context_id, member_id, role, msg, alt_turn, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (self.workflow.leaf_id, member_id, role, content, self.alt_turn_state, None, json.dumps(log_obj)))
             log_obj['id'] = next_id
+            sql.execute("UPDATE contexts_messages SET log = ? WHERE id = ?", (json.dumps(log_obj), next_id))
             new_msg = Message(next_id, role, content, member_id, self.alt_turn_state, log_obj)
-
-            log_json_str = json.dumps(log_obj) if log_obj is not None else '{}'
-            sql.execute \
-                ("INSERT INTO contexts_messages (context_id, member_id, role, msg, alt_turn, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (self.workflow.leaf_id, member_id, role, content, new_msg.alt_turn, None, log_json_str))
             self.refresh_messages()
 
+            from plugins.workflows.utils.runs import get_run_manager
+            get_run_manager().clear_tail(self.workflow.context_id, member_id, role=role)
+
             return new_msg
+
+    def update_message(self, msg_id: int, content: str):
+        """Replace the stored content of an existing message row in place.
+
+        Used by the live voice path to grow a message row
+        as streamed deltas arrive, without inserting a new row per delta.
+        """
+        with self.thread_lock:
+            sql.execute("UPDATE contexts_messages SET msg = ? WHERE id = ?", (content, msg_id))
+            for msg in self.messages:
+                if msg.id == msg_id:
+                    msg.content = content
+                    msg.token_count = len(
+                        tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content or '')
+                    )
+                    break
 
     def get_workflow_from_full_member_id(self, full_member_id: str):  # !nestmember!
         walk_ids = full_member_id.split('.')[:-1]
@@ -377,8 +393,6 @@ class MessageHistory:
 
             elif msg['role'] == 'result':
                 _, res_dict = try_parse_json(msg['content'])
-                if res_dict.get('status') != 'success':
-                    continue
                 call_id = res_dict.get('tool_call_id')
                 tool_uuid = res_dict.get('tool_uuid')
                 tool_name = convert_to_safe_case(system.manager.tools.tool_id_names.get(tool_uuid, ''))

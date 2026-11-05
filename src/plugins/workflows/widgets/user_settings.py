@@ -19,6 +19,14 @@ class UserSettings(ConfigFields):
                 'stretch_y': True,
                 'label_position': 'top',
             },
+            {
+                'text': 'Enable VAD',
+                'type': bool,
+                'default': False,
+                'tooltip': 'Voice input: automatically detect the end of speech instead of '
+                           'requiring a manual send. When off, the mic button is push-to-talk.',
+                'row_key': 'vad',
+            },
             # {
             #     'text': 'Member options',
             #     'type': 'popup_button',

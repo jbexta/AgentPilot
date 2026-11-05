@@ -81,6 +81,21 @@ class SonautoProvider(Provider):
                 if 'url' in obj and 'local_path' in obj:
                     arguments[k] = obj['url']
 
+        # Sonauto (v3 only) requires exactly one of prompt_strength and
+        # style_scale to be > 1.0. style_scale defaults to 4.5 server-side
+        # when omitted, so any prompt_strength > 1.0 collides with it.
+        # Give prompt_strength precedence: when it's raised above 1.0, pin
+        # style_scale to 1.0 to override the server default. style_scale is
+        # not a valid v2 parameter, so only touch it for v3.
+        if model_name == 'v3':
+            prompt_strength = arguments.get('prompt_strength')
+            style_scale = arguments.get('style_scale')
+            if (
+                prompt_strength is not None and prompt_strength > 1.0
+                and (style_scale is None or style_scale > 1.0)
+            ):
+                arguments['style_scale'] = 1.0
+
         # For inpaint, convert section_start/section_end to sections
         if model_name == 'v2-inpaint':
             start = arguments.pop('section_start', None)
@@ -251,14 +266,6 @@ class SonautoProvider(Provider):
                 'default': False,
             },
             {
-                'key': 'prompt_strength',
-                'text': 'Prompt Strength',
-                'type': 'float',
-                'default': 2.0,
-                'minimum': 0.0,
-                'maximum': 10.0,
-            },
-            {
                 'key': 'output_format',
                 'text': 'Output Format',
                 'type': ('ogg', 'mp3', 'flac', 'wav', 'm4a'),
@@ -280,8 +287,45 @@ class SonautoProvider(Provider):
             },
         ]
 
+        # v3-only additional fields
+        v3_extra = [
+            {
+                'key': 'prompt_strength',
+                'text': 'Prompt Strength',
+                'type': 'float',
+                'default': 1.0,
+                'minimum': 1.0,
+                'maximum': 12.0,
+                'tooltip': 'Higher values adhere more to the prompt but '
+                           'sound less natural. Exactly one of Prompt '
+                           'Strength and Style Scale may be > 1.0.',
+            },
+            {
+                'key': 'style_scale',
+                'text': 'Style Scale',
+                'type': 'float',
+                'default': 4.5,
+                'minimum': 1.0,
+                'maximum': 12.0,
+                'tooltip': 'Higher values adhere more to the style implied '
+                           'by the prompt/tags but sound less natural. '
+                           'Exactly one of Prompt Strength and Style Scale '
+                           'may be > 1.0.',
+            },
+        ]
+
         # v2-only additional fields
         v2_extra = [
+            {
+                'key': 'prompt_strength',
+                'text': 'Prompt Strength',
+                'type': 'float',
+                'default': 2.0,
+                'minimum': 1.4,
+                'maximum': 3.1,
+                'tooltip': 'Higher values adhere more to the prompt but '
+                           'sound less natural.',
+            },
             {
                 'key': 'balance_strength',
                 'text': 'Balance Strength',
@@ -319,6 +363,16 @@ class SonautoProvider(Provider):
         # v2-extend additional fields
         extend_extra = [
             {
+                'key': 'prompt_strength',
+                'text': 'Prompt Strength',
+                'type': 'float',
+                'default': 1.8,
+                'minimum': 1.4,
+                'maximum': 3.1,
+                'tooltip': 'Higher values adhere more to the prompt but '
+                           'sound less natural.',
+            },
+            {
                 'key': 'audio_url',
                 'text': 'Audio',
                 'type': 'media_upload',
@@ -352,6 +406,16 @@ class SonautoProvider(Provider):
 
         # v2-inpaint additional fields
         inpaint_extra = [
+            {
+                'key': 'prompt_strength',
+                'text': 'Prompt Strength',
+                'type': 'float',
+                'default': 2.0,
+                'minimum': 1.4,
+                'maximum': 3.1,
+                'tooltip': 'Higher values adhere more to the prompt but '
+                           'sound less natural.',
+            },
             {
                 'key': 'audio_url',
                 'text': 'Audio',
@@ -397,7 +461,7 @@ class SonautoProvider(Provider):
         models = {
             'Sonauto v3': {
                 '_model_name': 'v3',
-                'schema': list(shared_fields),
+                'schema': shared_fields + v3_extra,
             },
             'Sonauto v2': {
                 '_model_name': 'v2',
@@ -432,6 +496,7 @@ class SonautoProvider(Provider):
             table_name='models',
             item_configs=all_models,
             delete_existing=False,
+            match_on=('name', 'api_id'),
         )
 
     def resolve_schema(self, schema):

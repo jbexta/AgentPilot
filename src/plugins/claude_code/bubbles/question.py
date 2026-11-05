@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget,
 )
 
+from gui.gui_utils.helpers import set_style_property
 from plugins.workflows.bubbles import MessageBubble
 from utils.helpers import set_module_type
 
@@ -210,6 +211,7 @@ class OptionRow(QFrame):
         self._focused = False
         self._selected = False
         self.setFocusPolicy(Qt.NoFocus)
+        self.setProperty('class', 'question-option')
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 3, 6, 3)
@@ -242,13 +244,8 @@ class OptionRow(QFrame):
         self._apply_style()
 
     def _apply_style(self):
-        bg = '#2a3a3d' if self._focused else 'transparent'
-        color = '#44d4c8' if self._focused else '#9fb8b5'
-        weight = '600' if self._selected else '400'
-        self.setStyleSheet(
-            f"QFrame {{ background-color: {bg}; border-radius: 3px; }}"
-            f"QLabel {{ color: {color}; font-weight: {weight}; background: transparent; }}"
-        )
+        self.setProperty('selected', self._selected)
+        set_style_property(self, 'focused', self._focused)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -271,6 +268,7 @@ class FreeTextRow(QFrame):
         self.number = number
         self._focused = False
         self.setFocusPolicy(Qt.NoFocus)
+        self.setProperty('class', 'question-option')
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 3, 6, 3)
@@ -295,14 +293,7 @@ class FreeTextRow(QFrame):
         pass
 
     def _apply_style(self):
-        bg = '#2a3a3d' if self._focused else 'transparent'
-        color = '#44d4c8' if self._focused else '#9fb8b5'
-        self.setStyleSheet(
-            f"QFrame {{ background-color: {bg}; border-radius: 3px; }}"
-            f"QLabel {{ color: {color}; background: transparent; }}"
-            f"QLineEdit {{ background-color: #141c1e; color: #d1e8e5; "
-            f"border: 1px solid #2a3a3d; border-radius: 3px; padding: 2px 4px; }}"
-        )
+        set_style_property(self, 'focused', self._focused)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

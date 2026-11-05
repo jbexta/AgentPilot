@@ -90,7 +90,10 @@ class DefaultBehavior:
                 self.workflow.message_history.refresh_messages()
                 if self.workflow.chat_widget:
                     self.workflow.chat_widget.message_collection.refresh(block_autorun=True)
-                
+
+                if self.workflow.stop_requested:
+                    break
+
                 if any(
                     getattr(self.workflow.members[member_id], 'break_on_run', False)
                     for member_id in runnable_member_ids
@@ -121,4 +124,11 @@ class DefaultBehavior:
                     )
 
         finally:
+            mh = self.workflow.message_history
+            members = self.workflow.get_members()
+            if all(m.turn_output is not None for m in members):
+                mh.alt_turn_state = 1 - mh.alt_turn_state
+                for m in members:
+                    m.turn_output = None
+            self.workflow.stop_requested = False
             self.workflow.responding = False

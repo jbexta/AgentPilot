@@ -76,6 +76,14 @@ class PopupModel(ConfigJoined):
             
         self.build_schema()
 
+    def set_fields_schema(self, input_schema):
+        """Use the model's synced schema for the params fields, else the generic chat schema."""
+        fields = self.widgets[0]
+        schema = input_schema or fields.default_schema
+        if schema != fields.schema:
+            fields.schema = schema
+            fields.build_schema()
+
     def showEvent(self, event):
         super().showEvent(event)
         parent = self.parent
@@ -261,6 +269,7 @@ class PopupModel(ConfigJoined):
                     'default': 100,
                 },
             ]
+            self.default_schema = self.schema
 
         def after_init(self):
             self.btn_reset_to_default = QPushButton('Reset to defaults')

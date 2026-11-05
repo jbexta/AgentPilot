@@ -1,0 +1,44 @@
+uuid: dfe3ec66-4615-47c6-abaa-ba26de6c55c1
+name: open_food
+config:
+  _TYPE: workflow
+  name: open_food
+  avatar_path: ''
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      data: |-
+        # Open Food Plugin (`src/plugins/open_food`)
+
+        Keeps a local, searchable copy of **Open Food Facts** products.
+
+        ## 1. Manager (`managers/open_food.py`)
+
+        `OpenFoodManager` imports the products sold in the chosen countries from the full Open Food Facts CSV export into **its own SQLite file** in the data folder.
+        *   Running queries are tracked per kind so a newer search can interrupt an older one.
+        *   Product images are fetched on demand and cached in memory (`url → bytes`, or `None` if the fetch failed). A semaphore limits how many are fetched at once.
+
+        ## 2. Pages
+        *   `Page_ProductSearch` (`pages/product_search.py`): searches the local copy.
+        *   `Page_OpenFood_Settings` (`pages/open_food.py`): **Countries**, Data folder, current Snapshot, and a **Download data** button.
+
+        Same pattern as the Companies House plugin: bulk data in a separate SQLite file, so lookups are local and unlimited.
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text Block
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: true
+  params: []
+kind: PROJECT:1
+parent_uuid: 64ca8d4b-e24d-4ba6-ac2f-95240ea5d57a
