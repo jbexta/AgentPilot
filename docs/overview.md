@@ -120,7 +120,7 @@ class Page_Entities(ConfigDBTree):
 
 This keeps related configurations together while maintaining separation.
 
-**All page modules:** Daemons, Settings, Tttt, System, Icons, Modules, Display, Product_search, Projects, Chat, Embroidery, Telephony, Jobs, Skills, Agents, Open_food, Finance, Tasks, Models, Videos, Companies_house, Environments, Claude, Blocks, Slopify, Contexts, Contacts, Voices, Tools, Plans, Company_search, Files
+**All page modules:** Daemons, Modules, Display, Icons, System, Tttt, Settings, Tools, Embroidery, Models, Finance, Skills, Files, Slopify, Chat, Projects, Company_search, Plans, Videos, Tasks, Jobs, Agents, Companies_house, Blocks, Contacts, Telephony, Environments, Product_search, Contexts, Voices, Open_food, Claude
 
 ### Widgets
 
@@ -211,7 +211,7 @@ Because a widget class can be on screen many times, a non-root tool takes an ext
 - Override `agent_visualisation()` to describe a widget's state to the agent (see `VideoStudio`). Override `get_agent_visualisation(refs)` to control which children are walked (see `FileTree`).
 - A tool taking a `refs` parameter receives the caller's reference list, cleared, to number widgets itself (only `view_ui` needs this).
 
-**All widget modules:** Config_db_tree, Config_json_db_tree, Config_table, Config_widget, Config_side_tabs, Config_fields, Config_tabs, Filter_builder, Config_json_tree, Config_pages, Config_tree, Config_collection, Config_joined, Config_ext_tree, Config_voice_tree, Wait_settings, File_tree_deploy, Prompt_settings, Generate_widget, Overlay, Agent_settings, Computer_use_settings, Chat_widget, Github_account, Vcs_panel, Audio_settings, Input_settings, Text_settings, Fund_map, Claude_context, User_settings, Git_diff_settings, Multi_preview, Notif_settings, Video_settings, File_tree, Deploy_panel, Media_settings, Live_agent_settings, Git_checkpoint_settings, Workflow_settings, Code_settings, Contact_settings, Workflow_popup, Message_collection, Set_variable_settings, Query_settings, Image_settings, Cc_user_settings, Probability_settings, File_tree_vcs, Claude_code_settings
+**All widget modules:** Config_table, Config_voice_tree, Config_pages, Config_tree, Config_side_tabs, Config_db_tree, Config_json_tree, Config_widget, Config_collection, Config_ext_tree, Filter_builder, Config_tabs, Config_json_db_tree, Config_joined, Config_fields, Computer_use_settings, Live_agent_settings, Git_diff_settings, Workflow_popup, Generate_widget, Input_settings, Code_settings, Notif_settings, Video_settings, Cc_user_settings, Audio_settings, Contact_settings, File_tree_vcs, Chat_widget, Fund_map, Image_settings, Prompt_settings, Probability_settings, Git_checkpoint_settings, Wait_settings, Set_variable_settings, Claude_context, Workflow_settings, Text_settings, Claude_code_settings, Multi_preview, Agent_settings, Github_account, Deploy_panel, Overlay, Message_collection, User_settings, File_tree, File_tree_deploy, Vcs_panel, Media_settings, Query_settings
 
 ### Fields
 
@@ -226,7 +226,7 @@ pickers, etc.)
 - Self-contained with their own validation and styling
 - Have an option_schema defining how they themselves can be configured
 
-**All field modules:** Model, Font, Module, Preset_menu, Color_picker, File_picker, Button, Button_toggle, Input_source, Popup_button, Entity, Float, Text, Combo, List, Venv, Input_target, Member_type_menu, Project_type_menu, Image, Boolean, Media_upload, Integer, Condition_popup_button
+**All field modules:** Input_source, Member_type_menu, Text, Combo, Button, List, Input_target, Popup_button, Project_type_menu, Button_toggle, Module, Image, Condition_popup_button, File_picker, Media_upload, Color_picker, Integer, Float, Boolean, Entity, Font, Model, Preset_menu, Venv
 
 Common field kwargs (kwargs that can be used with **any** field module):
 

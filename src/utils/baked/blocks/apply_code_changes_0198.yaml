@@ -1,0 +1,66 @@
+uuid: 01989eea-203f-424d-a8fc-456e1535378f
+name: apply_code_changes
+config:
+  _TYPE: workflow
+  name: apply_code_changes
+  description: Reload changed modules, or offer a restart if other source files changed since the app loaded them.
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      _TYPE: code
+      name: Code block
+      language: Python
+      data: |
+        import asyncio
+        import os
+        from PySide6.QtWidgets import QMessageBox
+        from plugins.projects.utils.sync import (
+            changed_files, is_project_module, resolve_module_type_name, snapshot_mtimes,
+        )
+        from utils.filesystem import get_application_path
+        from utils.helpers import display_message_box
+
+        main = system.manager._main_gui
+        main_pages = main.main_pages
+        loaded = main_pages.loaded_mtimes
+        mtimes = snapshot_mtimes()
+        modified = changed_files(loaded, mtimes)
+        if not modified and mtimes.keys() >= loaded.keys():
+            return 'No changes'
+        registered_files = {
+            os.path.abspath(module.__file__)
+            for module in main_pages.get_registered_modules()
+            if is_project_module(module)
+        }
+        src_dir = os.path.join(get_application_path(), 'src')
+        new_modules = {
+            fp for fp in modified - loaded.keys()
+            if resolve_module_type_name(os.path.relpath(fp, src_dir))
+        }
+        if modified - registered_files - new_modules:
+            retval = display_message_box(
+                icon=QMessageBox.Question,
+                title='Restart required',
+                text='Files that are not modules were modified. '
+                     'Restart the application to apply them?',
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval == QMessageBox.Yes:
+                asyncio.ensure_future(main.restart_when_idle(int(context_id)))
+                return 'Restarting'
+            return 'Restart declined'
+        main_pages.reload_modules()
+        return 'Reloaded modules'
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+kind: ''

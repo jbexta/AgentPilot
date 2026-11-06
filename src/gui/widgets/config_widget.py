@@ -4,7 +4,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QCursor
 
-from gui.gui_utils.helpers import find_main, get_selected_pages, save_table_config, find_attribute
+from gui.gui_utils.helpers import Attention, find_main, get_selected_pages, save_table_config, find_attribute
 from gui.gui_utils.breadcrumb_widget import BreadcrumbWidget
 from gui.gui_utils.layouts import CVBoxLayout
 from utils.helpers import convert_to_safe_case, format_llm_tools, set_module_type
@@ -193,6 +193,15 @@ class ConfigWidget(QWidget):
                 config[key] = val
 
         return config
+
+    def attention(self):
+        """How much this widget's content needs the user."""
+        return Attention.NONE
+
+    def update_attention(self):
+        """Bubble a change of attention up to the root"""
+        if hasattr(self.parent, 'update_attention'):
+            self.parent.update_attention()
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""

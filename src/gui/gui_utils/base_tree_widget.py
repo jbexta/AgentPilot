@@ -23,11 +23,13 @@ class BaseTreeWidget(QTreeWidget):
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.folder_items_mapping = {None: self}
+        self.items_mapping = {}
         self.kind_folder_items = {}
         self._kind_names = {}  # kind -> (label, icon_path), for kind folder headers
         self._kind_parents = {}  # kind -> the referenced row's own kind, to nest under
         self._baked_ids = []  # Store baked IDs for delegate access
-        self._notify_ids = set()  # IDs with unread workflow responses, painted by delegate
+        self._notify_ids = {}  # ID: Attention of its chats, painted by delegate
+        self._running_ids = set()  # IDs with a running chat, painted by delegate
 
         # Set up custom delegate for baked item styling
         self.baked_delegate = BakedItemDelegate(self)
@@ -841,7 +843,7 @@ class BaseTreeWidget(QTreeWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.RightButton and hasattr(self.parent, 'show_context_menu'):
             self.parent.show_context_menu()
-            # return
+            return
         elif event.button() == Qt.LeftButton:
             item = self.itemAt(event.pos())
             if item:

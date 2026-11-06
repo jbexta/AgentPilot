@@ -13,13 +13,3 @@ def get_default_cwd():
 
     return system.manager.config.get(
         'claude.default_working_dir', '') or DEFAULT_CWD
-
-
-def resolve_cwd(member_cwd=None):
-    """The member's working dir, else the default, which is created if
-    missing."""
-    cwd = member_cwd
-    if not cwd:
-        cwd = get_default_cwd()
-        os.makedirs(cwd, exist_ok=True)
-    return cwd

@@ -22,6 +22,7 @@ class Member:
     default_role = 'block'
     allow_async = True
     allow_condition = True
+    self_paced = False  # applies the task's `Speed` itself
 
     def __init__(self, **kwargs):
         self.main = kwargs.get('main')

@@ -5,7 +5,7 @@ from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Bubbles')
-class ClaudeToolResultBubble(MessageBubble):
+class AgentToolResultBubble(MessageBubble):
     def __init__(self, parent, message):
         self._expanded = False
         super().__init__(parent=parent, message=message)

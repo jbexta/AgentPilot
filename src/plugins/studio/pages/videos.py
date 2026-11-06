@@ -1,4 +1,6 @@
+from gui.gui_utils.helpers import Attention
 from plugins.studio.studios.video_studio import VideoStudio
+from plugins.workflows.utils.gens import get_gen_manager
 from utils.helpers import set_module_type
 
 
@@ -11,6 +13,10 @@ class Page_Videos(VideoStudio):
     def __init__(self, parent):
         super().__init__(parent=parent, full_screen=False)
         self.recent_file_restored = False
+        get_gen_manager().changed.connect(self.update_attention)
+
+    def attention(self):
+        return Attention.DONE if get_gen_manager().unread else Attention.NONE
 
     def load(self):
         if not self.recent_file_restored:

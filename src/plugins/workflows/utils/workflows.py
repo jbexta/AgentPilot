@@ -214,7 +214,7 @@ def has_circular_link(linked_id, existing_chain=None):
 
 
 EXPENSIVE_MEMBER_TYPES = (
-    'user', 'agent', 'live_agent', 'claude_code', 'contact',
+    'user', 'agent', 'live_agent', 'contact',
     'prompt', 'audio', 'image', 'video', 'voice',
 )
 
@@ -228,7 +228,8 @@ def is_instant_runnable(config, seen=None):
                    for m in config.get('members', []))
     if member_type == 'text':
         return bool(blocks_instant_runnable(config.get('data', ''), seen))
-    return member_type not in EXPENSIVE_MEMBER_TYPES
+    from plugins.workflows.utils.acp import is_acp_agent
+    return member_type not in EXPENSIVE_MEMBER_TYPES and not is_acp_agent(member_type)
 
 
 def blocks_instant_runnable(template, seen=None):

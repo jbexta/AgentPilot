@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QMessageBox
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_json_tree import ConfigJsonTree
-from utils.helpers import display_message
+from utils.helpers import display_message #
 
 
 class InputSettings(ConfigJoined):
@@ -49,6 +49,15 @@ class InputSettings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent, add_stretch_to_end=True)
             self.schema = [
+                {
+                    'text': 'Branch',
+                    'type': ('True', 'False'),
+                    'default': 'True',
+                    'visibility_predicate': lambda fields: (
+                        fields.parent.parent.members_in_view[fields.parent.input_key[0]]
+                        .member_config.get('_TYPE') == 'condition'
+                    ),
+                },
                 {
                     'text': 'Conditional',
                     'type': bool,

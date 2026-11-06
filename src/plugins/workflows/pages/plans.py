@@ -7,38 +7,33 @@ from gui import system
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
+from plugins.workflows.utils.acp import acp_agents, agent_member_type, agent_of
+from plugins.workflows.utils.agent_kinds import AgentKindTree
 from plugins.workflows.widgets.chat_widget import ChattableWorkflowWidget
 from utils import sql
 from utils.helpers import display_message, get_text
 
 
-class Page_Plan_Settings(ConfigDBTree):
+class Page_Plan_Settings(AgentKindTree, ConfigDBTree):
     display_name = 'Plans'
     icon_path = ":/resources/icon-plan.png"
     page_type = 'any'
 
     def __init__(self, parent, kind=None, folder_key='plans'):
         # ``kind`` scopes the page to a single project (a 'PROJECT:<id>' value,
-        # possibly a lambda). When set, the tree is filtered to that project and
-        # new plans inherit the kind. When None (the standalone page), all plans
-        # are shown grouped by kind so project plans appear under their project.
-        scoped = kind is not None
-        if scoped:
-            query = """
-                SELECT name, id, uuid, folder_id
-                FROM plans
-                WHERE kind = :kind
-                ORDER BY pinned DESC, ordr, name COLLATE NOCASE"""
-        else:
-            query = """
-                SELECT name, id, uuid, folder_id, kind
-                FROM plans
-                ORDER BY kind, pinned DESC, ordr, name COLLATE NOCASE"""
+        # possibly a lambda). When set, the tree is filtered to that project's
+        # plans and new plans inherit the scope. Plans are grouped by their
+        # agent kind, under their project on the standalone page.
+        query = """
+            SELECT name, id, uuid, folder_id, kind
+            FROM plans
+            {where}
+            ORDER BY kind, pinned DESC, ordr, name COLLATE NOCASE"""
         super().__init__(
             parent=parent,
             manager='plans',
             kind=kind,
-            query=query,
+            query=query.format(where="WHERE kind LIKE :kind || ':%'" if kind is not None else ''),
             schema=[
                 {'text': 'Name', 'key': 'name', 'type': str, 'stretch': True},
                 {'text': 'id', 'key': 'id', 'type': int, 'visible': False},
@@ -50,14 +45,30 @@ class Page_Plan_Settings(ConfigDBTree):
             default_item_icon=':/resources/icon-description.png',
             config_widget=self.Plan_Config_Widget(parent=self),
             folder_key=folder_key,
-            group_by_kind=not scoped,
+            group_by_kind=True,
             searchable=True,
             items_bakeable=False,
+            notify_unread=True,
         )
         self.splitter.setSizes([400, 1000])
 
+        system.manager.plans.move_orphans()
         self._sync_tree_with_disk()
         self._init_watcher()
+
+    def on_edited(self):
+        system.manager.plans.move_orphans()
+
+    def context_rows(self, context_ids):
+        """A plan stores the id of its chat in its config."""
+        if not context_ids:
+            return []
+        placeholders = ','.join('?' * len(context_ids))
+        return sql.get_results(f"""
+            SELECT json_extract(config, '$.chat_context_id'), id
+            FROM plans
+            WHERE json_extract(config, '$.chat_context_id') IN ({placeholders})""",
+            tuple(context_ids))
 
     # The file is the source of truth — bypass the DB-config plumbing for the body.
 
@@ -67,24 +78,24 @@ class Page_Plan_Settings(ConfigDBTree):
             return super().on_item_selected()
         self.toggle_config_widget(config_type='item')
         self.config_widget.maybe_rebuild_schema(self.schema_overrides, item_id)
-        name = self._name_for(item_id)
-        body = system.manager.plans.read(name) if name else ''
+        row = self._row_for(item_id)
+        body = system.manager.plans.read(*row) if row else ''
         self.config_widget.load_config({'data': body})
         self.config_widget.load()
-        # Point the chat's Claude Code agent at the selected plan and
-        # restore (or create) this plan's own conversation.
-        if name:
-            self.config_widget.chat.load_for_plan(item_id, name)
+        # Point the chat's agent at the selected plan and restore (or
+        # create) this plan's own conversation.
+        if row:
+            self.config_widget.chat.load_for_plan(item_id, *row)
 
     def save_config(self):
         item_id = self.get_selected_item_id()
         if item_id is None:
             return
-        name = self._name_for(item_id)
-        if not name:
+        row = self._row_for(item_id)
+        if not row:
             return
         body = self.config_widget.get_config().get('data', '')
-        system.manager.plans.write(name, body)
+        system.manager.plans.write(*row, body)
 
     def rename_item(self):
         item = self.tree.currentItem()
@@ -98,9 +109,10 @@ class Page_Plan_Settings(ConfigDBTree):
         if not item_id:
             return
         mgr = system.manager.plans
-        old_name = self._name_for(item_id)
-        if not old_name:
+        row = self._row_for(item_id)
+        if not row:
             return
+        old_name, kind = row
         old_slug = mgr._slug(old_name)
 
         current = old_name
@@ -120,18 +132,15 @@ class Page_Plan_Settings(ConfigDBTree):
                 continue
             if new_slug == old_slug:
                 return
-            exists = self.db_connector.get_scalar(
-                "SELECT COUNT(*) FROM plans WHERE name = ? AND id != ?", (new_slug, item_id)
-            )
-            new_path = mgr.path_for(new_slug)
-            if exists or (new_path and new_path.exists()):
+            if mgr.exists(new_slug, kind, exclude_id=item_id):
                 display_message(
                     message='A plan with that name already exists.',
                     icon=QMessageBox.Warning,
                 )
                 current = text
                 continue
-            old_path = mgr.path_for(old_slug)
+            old_path = mgr.path_for(old_slug, kind)
+            new_path = mgr.path_for(new_slug, kind)
             try:
                 if old_path and old_path.exists() and new_path:
                     old_path.rename(new_path)
@@ -149,43 +158,48 @@ class Page_Plan_Settings(ConfigDBTree):
 
     # -- tree ↔ disk identity sync ---------------------------------------------
 
-    def _name_for(self, item_id):
-        return self.db_connector.get_scalar("SELECT name FROM plans WHERE id = ?", (item_id,))
-
     def _sync_tree_with_disk(self):
         """Insert DB rows for files that exist on disk but aren't tracked,
         and drop rows whose file no longer exists. Identity only — never
-        touches the body.
+        touches the body. Plans of agents that aren't loaded are left alone.
         """
         mgr = system.manager.plans
+        agents = acp_agents()
         disk = set(mgr.list_files())
-        rows = self.db_connector.get_results("SELECT id, name FROM plans") or []
-        db = {mgr._slug(name): row_id for row_id, name in rows}
-        for slug in disk - db.keys():
-            self.db_connector.execute("INSERT INTO plans (name) VALUES (?)", (slug,))
-        for slug in db.keys() - disk:
-            self.db_connector.execute("DELETE FROM plans WHERE id = ?", (db[slug],))
+        rows = self.db_connector.get_results("SELECT id, name, kind FROM plans") or []
+        db = {
+            (agent_of(kind), mgr._slug(name)): row_id
+            for row_id, name, kind in rows if agent_of(kind) in agents
+        }
+        for agent, slug in disk - db.keys():
+            self.db_connector.execute(
+                "INSERT INTO plans (name, kind) VALUES (?, ?)", (slug, agent)
+            )
+        for key in db.keys() - disk:
+            self.db_connector.execute("DELETE FROM plans WHERE id = ?", (db[key],))
 
     # -- live watcher ----------------------------------------------------------
 
     def _init_watcher(self):
-        plans_dir = system.manager.plans.PLANS_DIR
-        plans_dir.mkdir(parents=True, exist_ok=True)
         self._watcher = QFileSystemWatcher(self)
-        self._watcher.addPath(str(plans_dir))
+        for agent in acp_agents():
+            plans_dir = system.manager.plans.plans_dir(agent)
+            plans_dir.mkdir(parents=True, exist_ok=True)
+            self._watcher.addPath(str(plans_dir))
         self._watch_files()
         self._watcher.directoryChanged.connect(self._on_dir_changed)
         self._watcher.fileChanged.connect(self._on_file_changed)
 
     def _watch_files(self):
-        plans_dir = system.manager.plans.PLANS_DIR
         watched = set(self._watcher.files())
-        for p in plans_dir.glob('*.md'):
-            s = str(p)
-            if s not in watched:
-                self._watcher.addPath(s)
+        for agent in acp_agents():
+            for p in system.manager.plans.plans_dir(agent).glob('*.md'):
+                s = str(p)
+                if s not in watched:
+                    self._watcher.addPath(s)
 
     def _on_dir_changed(self, _path):
+        system.manager.plans.move_orphans()
         self._sync_tree_with_disk()
         self.load()
         self._watch_files()
@@ -200,10 +214,10 @@ class Page_Plan_Settings(ConfigDBTree):
         if item_id is None:
             return
         mgr = system.manager.plans
-        name = self._name_for(item_id)
-        if not name or str(mgr.path_for(name)) != path:
+        row = self._row_for(item_id)
+        if not row or str(mgr.path_for(*row)) != path:
             return
-        new_body = mgr.read(name)
+        new_body = mgr.read(*row)
         current = self.config_widget.get_config().get('data', '')
         if new_body == current:
             return
@@ -215,7 +229,7 @@ class Page_Plan_Settings(ConfigDBTree):
 
     class Plan_Config_Widget(ConfigJoined):
         """Right pane: the plan markdown editor stacked over a chat that
-        drives a Claude Code agent to edit the plan file.
+        drives the plan's agent to edit the plan file.
 
         The document body (``{'data': ...}``) is owned by the editor, so the
         page's existing on_item_selected/save_config and the disk watcher
@@ -269,15 +283,15 @@ class Page_Plan_Settings(ConfigDBTree):
                 ]
 
         class PlanChatWidget(ChattableWorkflowWidget):
-            """Chat that edits the selected plan via a Claude Code agent.
+            """Chat that edits the selected plan via the plan's agent.
 
             Unlike the Blocks/Tools chat (which *runs* the workflow), this
-            hosts a fixed single Claude Code member whose working directory
-            is the plans folder. As you chat, the agent reads and edits the
-            plan's ``.md`` file directly; the Plans page's file watcher then
-            refreshes the editor pane. Each plan keeps its own persistent
-            conversation, stored as a context whose id is saved on the plan
-            row.
+            hosts a fixed single member of the plan's agent, whose working
+            directory is the agent's plans folder. As you chat, the agent
+            reads and edits the plan's ``.md`` file directly; the Plans
+            page's file watcher then refreshes the editor pane. Each plan
+            keeps its own persistent conversation, stored as a context whose
+            id is saved on the plan row.
             """
 
             def __init__(self, parent):
@@ -290,7 +304,7 @@ class Page_Plan_Settings(ConfigDBTree):
                 # empty contexts are created when a plan is selected.
                 pass
 
-            def load_for_plan(self, item_id, name):
+            def load_for_plan(self, item_id, name, kind):
                 """Load (or create) this plan's conversation and target its file."""
                 self._plan_item_id = item_id
                 slug = system.manager.plans._slug(name)
@@ -306,7 +320,9 @@ class Page_Plan_Settings(ConfigDBTree):
                     self.goto_context(context_id)
                     return
 
-                config = self._build_plan_workflow_config(slug)
+                config = self._build_plan_workflow_config(slug, agent_of(kind))
+                if config is None:
+                    return
                 sql.execute(
                     "INSERT INTO contexts (kind, config) VALUES (?, ?)",
                     (self.kind, json.dumps(config)),
@@ -321,15 +337,20 @@ class Page_Plan_Settings(ConfigDBTree):
                 )
                 self.goto_context(context_id)
 
-            def _build_plan_workflow_config(self, slug):
-                plans_dir = str(system.manager.plans.PLANS_DIR)
+            def _build_plan_workflow_config(self, slug, agent):
+                """The plan chat's workflow, or None when the agent isn't
+                loaded."""
+                member_type = agent_member_type(agent)
+                if member_type is None:
+                    return None
+                plans_dir = str(system.manager.plans.plans_dir(agent))
                 sys_msg = (
                     "You are a planning assistant embedded in AgentPilot's "
                     "Plans page. The user is collaboratively editing a "
                     f"markdown plan stored at `{slug}.md` in your current "
                     "working directory.\n\n"
                     f"When the user asks for changes, read `{slug}.md` first, "
-                    "then use the Edit/Write tools to update that same file "
+                    "then use your file editing tools to update that same file "
                     "in place. Keep it clean, well-structured markdown. Do "
                     "not create other files or touch anything outside this "
                     "plan unless explicitly asked. Reply briefly in chat "
@@ -356,21 +377,11 @@ class Page_Plan_Settings(ConfigDBTree):
                             'width': 450,
                             'height': 350,
                             'config': {
-                                '_TYPE': 'claude_code',
+                                '_TYPE': member_type,
                                 'name': 'Plan Editor',
                                 'working_dir': plans_dir,
                                 'chat.sys_msg': sys_msg,
-                                'chat.permission_mode': 'default',
-                                'builtin_tools': {
-                                    'bash': False,
-                                    'read': True,
-                                    'write': True,
-                                    'edit': True,
-                                    'glob': True,
-                                    'grep': True,
-                                    'webfetch': False,
-                                    'websearch': False,
-                                },
+                                **acp_agents()[agent].file_editor_config,
                             },
                         },
                     ],

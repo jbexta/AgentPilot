@@ -1,6 +1,5 @@
 import json
 import shutil
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QFileSystemWatcher
 from PySide6.QtWidgets import QMessageBox
@@ -8,10 +7,12 @@ from PySide6.QtWidgets import QMessageBox
 from gui import system
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
+from plugins.workflows.utils.acp import agent_of
+from plugins.workflows.utils.agent_kinds import AgentKindTree
 from utils.helpers import display_message, get_text
 
 
-class Page_Skill_Settings(ConfigDBTree):
+class Page_Skill_Settings(AgentKindTree, ConfigDBTree):
     display_name = 'Skills'
     icon_path = ":/resources/icon-skills.png"
     page_type = 'any'  # either 'settings', 'main', or 'any'
@@ -43,16 +44,20 @@ class Page_Skill_Settings(ConfigDBTree):
         self._sync_tree_with_disk()
         self._init_watcher()
 
-    # File is the source of truth for description + body.
+    def on_edited(self):
+        system.manager.skills.sync_to_disk()
+
+    # File is the source of truth for description + body. The methods
+    # below are shared with the project page's skills tree.
 
     def on_item_selected(self):
         item_id = self.get_selected_item_id()
         if not (item_id and self.config_widget):
-            return super().on_item_selected()
+            return ConfigDBTree.on_item_selected(self)
         self.toggle_config_widget(config_type='item')
         self.config_widget.maybe_rebuild_schema(self.schema_overrides, item_id)
-        name = self._name_for(item_id)
-        description, body = system.manager.skills.read(name) if name else ('', '')
+        row = self._row_for(item_id)
+        description, body = system.manager.skills.read(*row) if row else ('', '')
         self.config_widget.load_config({
             'description': description,
             'data': body,
@@ -70,8 +75,8 @@ class Page_Skill_Settings(ConfigDBTree):
         item_id = self.get_selected_item_id()
         if item_id is None:
             return
-        name = self._name_for(item_id)
-        if not name:
+        row = self._row_for(item_id)
+        if not row:
             return
         config = self.config_widget.get_config()
         mgr = system.manager.skills
@@ -84,7 +89,7 @@ class Page_Skill_Settings(ConfigDBTree):
                 (json.dumps(db_config), item_id)
             )
         mgr.write(
-            name,
+            *row,
             config.get('description', ''),
             config.get('data', ''),
         )
@@ -96,17 +101,18 @@ class Page_Skill_Settings(ConfigDBTree):
             return
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
-            return super().rename_item()
+            return ConfigDBTree.rename_item(self)
 
         item_id = self.get_selected_item_id()
         if not item_id:
             return
         mgr = system.manager.skills
-        old_name = self._name_for(item_id)
-        if not old_name:
+        row = self._row_for(item_id)
+        if not row:
             return
-        old_slug = mgr._slug(old_name)
-        old_dir = mgr.SKILLS_DIR / old_slug if old_slug else None
+        old_name, kind = row
+        old_path = mgr.path_for(old_name, kind)
+        old_dir = old_path.parent if old_path else None
 
         current = old_name
         while True:
@@ -123,21 +129,18 @@ class Page_Skill_Settings(ConfigDBTree):
                 )
                 current = text
                 continue
-            if new_slug == old_slug:
+            if new_slug == mgr._slug(old_name):
                 return
-            exists = self.db_connector.get_scalar(
-                "SELECT COUNT(*) FROM skills WHERE name = ? AND id != ?", (new_slug, item_id)
-            )
-            new_dir = mgr.SKILLS_DIR / new_slug
-            if exists or new_dir.exists():
+            if mgr.exists(new_slug, kind, exclude_id=item_id):
                 display_message(
                     message='A skill with that name already exists.',
                     icon=QMessageBox.Warning,
                 )
                 current = text
                 continue
+            new_dir = mgr.path_for(new_slug, kind).parent
             try:
-                description, body = mgr.read(old_name)
+                description, body = mgr.read(old_name, kind)
                 if old_dir and old_dir.exists():
                     # Copy + delete instead of rename: on some filesystems
                     # (e.g. vboxsf) files inside a just-renamed directory
@@ -148,7 +151,7 @@ class Page_Skill_Settings(ConfigDBTree):
                     "UPDATE skills SET name = ? WHERE id = ?", (new_slug, item_id)
                 )
                 # Rewrite SKILL.md so the frontmatter `name:` matches the new slug.
-                mgr.write(new_slug, description, body)
+                mgr.write(new_slug, kind, description, body)
                 is_baked = self.db_connector.get_scalar(
                     "SELECT baked FROM skills WHERE id = ?", (item_id,)
                 ) == 1
@@ -161,67 +164,61 @@ class Page_Skill_Settings(ConfigDBTree):
                     message=f'Error renaming skill: {e}', icon=QMessageBox.Warning
                 )
                 return
-            self._watch_skill_dirs()
+            if hasattr(self, '_watch_skill_dirs'):
+                self._watch_skill_dirs()
             self.load()
             return
 
     # -- tree ↔ disk identity sync ---------------------------------------------
 
-    def _name_for(self, item_id):
-        return self.db_connector.get_scalar("SELECT name FROM skills WHERE id = ?", (item_id,))
-
     def _sync_tree_with_disk(self):
         mgr = system.manager.skills
         disk = set(mgr.list_files())
-        rows = self.db_connector.get_results("SELECT id, name FROM skills") or []
-        db = {mgr._slug(name): row_id for row_id, name in rows}
-        for slug in disk - db.keys():
-            self.db_connector.execute("INSERT INTO skills (name) VALUES (?)", (slug,))
-        for slug in db.keys() - disk:
-            self.db_connector.execute("DELETE FROM skills WHERE id = ?", (db[slug],))
+        rows = self.db_connector.get_results("SELECT id, name, kind FROM skills") or []
+        db = {(agent_of(kind), mgr._slug(name)): row_id for row_id, name, kind in rows}
+        for agent, slug in disk - db.keys():
+            self.db_connector.execute(
+                "INSERT INTO skills (name, kind) VALUES (?, ?)", (slug, agent)
+            )
+        for key in db.keys() - disk:
+            self.db_connector.execute("DELETE FROM skills WHERE id = ?", (db[key],))
 
     # -- live watcher ----------------------------------------------------------
 
     def _init_watcher(self):
-        skills_dir = system.manager.skills.SKILLS_DIR
-        skills_dir.mkdir(parents=True, exist_ok=True)
+        mgr = system.manager.skills
         self._watcher = QFileSystemWatcher(self)
-        self._watcher.addPath(str(skills_dir))
+        self._watcher.addPath(str(mgr.ROOT))
         self._watch_skill_dirs()
         self._watch_external_roots()
         self._watcher.directoryChanged.connect(self._on_dir_changed)
         self._watcher.fileChanged.connect(self._on_file_changed)
 
     def _watch_external_roots(self):
-        """Watch ``~/.claude/skills`` and each project's ``.claude/skills``
-        so skills dropped there by terminal sessions get adopted live."""
+        """Watch every agent's global and project skills dirs so skills
+        dropped there by terminal sessions get adopted live."""
         watched = set(self._watcher.directories())
-        project_dirs = self.db_connector.get_results(
-            "SELECT json_extract(config, '$.working_dir') FROM projects",
-            return_type='list'
-        ) or []
-        roots = [Path.home() / '.claude' / 'skills']
-        roots += [Path(d) / '.claude' / 'skills' for d in project_dirs if d]
-        for root in roots:
+        for _, root in system.manager.skills.external_roots():
             if root.is_dir() and str(root) not in watched:
                 self._watcher.addPath(str(root))
 
     def _watch_skill_dirs(self):
-        """Watch each ``<slug>/`` (for SKILL.md add/remove/rename) and each
-        existing ``SKILL.md`` (for content changes)."""
-        skills_dir = system.manager.skills.SKILLS_DIR
+        """Watch each agent's ``skills/`` and ``<slug>/`` dir (for SKILL.md
+        add/remove/rename) and each existing ``SKILL.md`` (for content
+        changes)."""
+        mgr = system.manager.skills
         watched = set(self._watcher.files()) | set(self._watcher.directories())
-        for sub in skills_dir.iterdir():
-            if not sub.is_dir():
+        for agent_dir in mgr.ROOT.iterdir():
+            skills_dir = agent_dir / 'skills'
+            if not skills_dir.is_dir():
                 continue
-            sd = str(sub)
-            if sd not in watched:
-                self._watcher.addPath(sd)
-            skill_md = sub / 'SKILL.md'
-            if skill_md.exists():
-                sm = str(skill_md)
-                if sm not in watched:
-                    self._watcher.addPath(sm)
+            subs = [skills_dir] + [s for s in skills_dir.iterdir() if s.is_dir()]
+            for sub in subs:
+                if str(sub) not in watched:
+                    self._watcher.addPath(str(sub))
+                skill_md = sub / 'SKILL.md'
+                if skill_md.exists() and str(skill_md) not in watched:
+                    self._watcher.addPath(str(skill_md))
 
     def _on_dir_changed(self, _path):
         system.manager.skills.sync_to_disk()
@@ -235,10 +232,10 @@ class Page_Skill_Settings(ConfigDBTree):
         if item_id is None:
             return
         mgr = system.manager.skills
-        name = self._name_for(item_id)
-        if not name or str(mgr.path_for(name)) != path:
+        row = self._row_for(item_id)
+        if not row or str(mgr.path_for(*row)) != path:
             return
-        new_desc, new_body = mgr.read(name)
+        new_desc, new_body = mgr.read(*row)
         current_desc = self.config_widget.get_config().get('description', '')
         current_body = self.config_widget.get_config().get('data', '')
         if new_desc == current_desc and new_body == current_body:
@@ -279,6 +276,6 @@ class Page_Skill_Settings(ConfigDBTree):
                     'key': 'app_only',
                     'type': bool,
                     'default': False,
-                    'tooltip': 'Only visible to Claude Code sessions running inside the app, never to terminal sessions',
+                    'tooltip': 'Only visible to agent sessions running inside the app, never to terminal sessions',
                 },
             ]

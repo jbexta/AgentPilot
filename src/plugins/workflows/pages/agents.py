@@ -57,7 +57,6 @@ class Page_Entities(ConfigDBTree):
             searchable=True,
             kind='AGENT',
             folder_key='agents',
-            notify_unread=True,
         )
         self.splitter.setSizes([400, 1000])
         self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)

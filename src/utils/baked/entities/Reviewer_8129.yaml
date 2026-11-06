@@ -8,8 +8,8 @@ config:
   members:
   - id: '4'
     linked_id: null
-    loc_x: 132
-    loc_y: 53
+    loc_x: 173
+    loc_y: 150
     width: 450.0
     height: 350.0
     config:
@@ -24,8 +24,8 @@ config:
       group.hide_bubbles: false
   - id: '5'
     linked_id: null
-    loc_x: 238
-    loc_y: 55
+    loc_x: 265
+    loc_y: 135
     width: 450.0
     height: 350.0
     config:
@@ -35,11 +35,44 @@ config:
       group.output_role: block
       group.output_placeholder: ''
       group.hide_bubbles: true
+  - id: '6'
+    linked_id: null
+    loc_x: 419
+    loc_y: 131
+    width: 450.0
+    height: 350.0
+    config:
+      data: RUNNING AGENT
+      _format_block_keys:
+      - data
+      _TYPE: text
+      name: Text
+  - id: '7'
+    linked_id: null
+    loc_x: 315
+    loc_y: 196
+    width: 450.0
+    height: 350.0
+    config:
+      expression: diff != "No changes."
+      _TYPE: condition
+      name: Condition
   inputs:
   - source_member_id: '4'
     target_member_id: '5'
     config:
       looper: false
+      name: Agent
+  - source_member_id: '7'
+    target_member_id: '6'
+    config:
+      looper: false
+      name: Agent
+  - source_member_id: '6'
+    target_member_id: '4'
+    config:
+      looper: true
+      mappings.data: []
       name: Agent
   options:
     autorun: true

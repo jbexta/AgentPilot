@@ -1,0 +1,42 @@
+uuid: bea7eb23-4897-47c9-a3ac-34e51b0f8fee
+name: Live Agent
+config:
+  _TYPE: workflow
+  name: Live Agent
+  avatar_path: null
+  description: ''
+  members:
+  - id: '2'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450.0
+    height: 350.0
+    config:
+      live.model:
+        _model_name: gpt-live-1
+        kind: CHAT
+        provider: litellm
+        model_params:
+          voice: quartz
+          delegation: Responses
+          backend_model:
+            _model_name: gpt-6-astra
+            kind: CHAT
+            provider: litellm
+            model_params:
+              structure.data: []
+              xml_roles.data: []
+          structure.data: []
+          xml_roles.data: []
+      live.sys_msg: ''
+      name: Agent
+      _TYPE: live_agent
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+kind: AGENT

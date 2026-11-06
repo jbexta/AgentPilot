@@ -1,7 +1,8 @@
 from PySide6.QtCore import QSize
-from PySide6.QtGui import QColor, QPalette, QTextDocument, QTextOption, Qt
-from PySide6.QtWidgets import QStyledItemDelegate, QTextEdit
+from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QTextDocument, QTextOption, Qt
+from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem, QTextEdit
 
+from gui.gui_utils.helpers import colorize_pixmap
 from gui.style import ACCENT_COLOR_1, TEXT_COLOR
 
 
@@ -67,6 +68,18 @@ class WrappingDelegate(QStyledItemDelegate):
 class BakedItemDelegate(QStyledItemDelegate):
     """Custom delegate to handle styling for baked items in tree widgets"""
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.running_icon = QIcon(colorize_pixmap(QPixmap(':/resources/icon-run.png')))
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        item_data = index.data(Qt.UserRole)
+        running_ids = getattr(option.widget, '_running_ids', ())
+        if index.column() == 0 and isinstance(item_data, dict) and item_data.get('id') in running_ids:
+            option.icon = self.running_icon
+            option.features |= QStyleOptionViewItem.HasDecoration
+
     def paint(self, painter, option, index):
         # Check if this item is baked by looking for our custom data
         item_data = index.data(Qt.UserRole)
@@ -82,10 +95,10 @@ class BakedItemDelegate(QStyledItemDelegate):
             if hasattr(tree_widget, '_disabled_ids'):
                 is_disabled = item_data.get('id') in tree_widget._disabled_ids
 
-        has_notify = False
+        attention = None
         if isinstance(item_data, dict) and item_data.get('id'):
             if hasattr(tree_widget, '_notify_ids'):
-                has_notify = item_data.get('id') in tree_widget._notify_ids
+                attention = tree_widget._notify_ids.get(item_data.get('id'))
 
         if is_disabled:
             painter.save()
@@ -107,12 +120,12 @@ class BakedItemDelegate(QStyledItemDelegate):
             # Use default painting for non-baked items
             super().paint(painter, option, index)
 
-        if has_notify:
+        if attention:
             # notification bubble on the right edge of the row's name column
-            accent_color = QColor(ACCENT_COLOR_1)
+            color = QColor(attention.color)
             painter.save()
-            painter.setPen(accent_color)
-            painter.setBrush(accent_color)
+            painter.setPen(color)
+            painter.setBrush(color)
             radius = 4
             center_x = option.rect.right() - 10
             center_y = option.rect.center().y()

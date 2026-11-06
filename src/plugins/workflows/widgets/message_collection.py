@@ -64,6 +64,7 @@ class MessageCollection(QWidget):
         # Bubbles fit the viewport, which narrows when the scrollbar appears.
         self.scroll_area.viewport().installEventFilter(self)
         self.scroll_animation = QPropertyAnimation(self.scroll_area.verticalScrollBar(), b"value")
+        self.last_scroll_max = 0
 
         self.waiting_for_bar = self.WaitingForBar(self)
         self.layout.addWidget(self.waiting_for_bar)
@@ -73,13 +74,16 @@ class MessageCollection(QWidget):
     def maybe_scroll_to_end(self):
         scroll_bar = self.scroll_area.verticalScrollBar()
         from_bottom = getattr(self.parent, 'restore_scroll_pos', None)
+        was_at_bottom = (self.scroll_animation.state() == QPropertyAnimation.Running
+                         or scroll_bar.value() >= self.last_scroll_max - 50)
+        self.last_scroll_max = scroll_bar.maximum()
         if from_bottom is not None:
             self.scroll_animation.stop()  # a stale animation would undo the pin
             scroll_bar.setValue(scroll_bar.maximum() - from_bottom)
             return
-        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 50
-        if is_at_bottom and not getattr(self.parent, 'restore_scroll_pos', None):
-            safe_single_shot(50, lambda: self.scroll_to_end())
+        if was_at_bottom:
+            self.scroll_animation.stop()
+            scroll_bar.setValue(scroll_bar.maximum())
 
     def release_scroll_pos(self):
         """Stop holding the restored position once the user scrolls."""
@@ -151,6 +155,9 @@ class MessageCollection(QWidget):
         self.refresh_waiting_bar()
 
     def refresh(self, block_autorun=False):  # todo block_autorun temp
+        viewport = self.scroll_area.viewport()
+        viewport.setUpdatesEnabled(False)
+        safe_single_shot(0, lambda: viewport.setUpdatesEnabled(True))
         with self.workflow.message_history.thread_lock:
             # A run keeps writing through its own Workflow object's history; if
             # this widget was re-pointed at the context mid-run, its history is
@@ -190,7 +197,8 @@ class MessageCollection(QWidget):
                 if self.chat_bubbles[i].bubble.msg_id == -1:
                     bubble_container = self.chat_bubbles.pop(i)
                     self.chat_scroll_layout.removeWidget(bubble_container)
-                    bubble_container.hide()  # deleteLater()
+                    bubble_container.hide()
+                    bubble_container.deleteLater()
 
             # if last bubble is code then start timer
             if not block_autorun:
@@ -250,9 +258,11 @@ class MessageCollection(QWidget):
                 bubble_msg_id = bubble_cont.bubble.msg_id
                 self.chat_scroll_layout.removeWidget(bubble_cont)
                 # bubble_cont.hide()  # .deleteLater()
+                bubble_cont.hide()
                 bubble_cont.deleteLater()
                 if bubble_msg_id == msg_id:
                     break
+            self.last_member_bubbles.clear()
 
             index = next((i for i, msg in enumerate(self.workflow.message_history.messages) if msg.id == msg_id),
                          -1)
@@ -380,7 +390,7 @@ class MessageCollection(QWidget):
 class MessageContainer(QWidget):
     """Container widget for the avatar, bubble and buttons"""
     def __init__(self, parent, message):
-        super().__init__(parent=parent)
+        super().__init__(parent=parent.chat_widget)
         self.parent = parent
         self.log_windows = []
         self.setProperty("class", "message-container")
@@ -605,12 +615,13 @@ class MessageContainer(QWidget):
 
         show_hidden = workflow.config.get('config', {}).get('show_hidden_bubbles', False)
         show_nested = workflow.config.get('config', {}).get('show_nested_bubbles', False)
-        if self.member_id.count('.') > 0 and not show_nested:
-            self.hide()
-        if member_hidden and not show_hidden:
-            self.hide()
+        self.setVisible(not (
+            (self.member_id.count('.') > 0 and not show_nested)
+            or (member_hidden and not show_hidden)
+        ))
 
         self.bubble.append_text(message.content)
+        self.check_and_toggle_collapse_button()
 
     @property
     def hover_buttons(self):
@@ -744,11 +755,12 @@ class MessageContainer(QWidget):
             bubbles = self.parent.chat_bubbles
             last_bubble_id = bubbles[-1].bubble.msg_id if bubbles else None
             # container_is_last = self.parent.chat_bubbles[-1].bubble.msg_id == self if self.parent.chat_bubbles else True  # (self not in self.parent.chat_bubbles) or last_bubble_id == self.bubble.msg_id
-            last_message = self.parent.workflow.message_history.last()  # todo hacky, rewrite bubbles
-            last_message_id = last_message['id'] if last_message else None
+            messages = self.parent.workflow.message_history.messages
+            last_message_id = messages[-1].id if messages else None
             container_is_last = self.bubble.msg_id == -1 or self.bubble.msg_id == last_message_id
-            self.collapse_button.setVisible(too_big)  # is_under_mouse and too_big)
-            self.bubble.updateGeometry()  # its width reserves the visible buttons
+            if self.collapse_button.isVisibleTo(self) != too_big:
+                self.collapse_button.setVisible(too_big)  # is_under_mouse and too_big)
+                self.bubble.updateGeometry()  # its width reserves the visible buttons
             if too_big and not self.bubble.collapsed and not container_is_last and not getattr(self.bubble, 'is_edit_mode', False):
                 self.collapse_button.click()
             else:

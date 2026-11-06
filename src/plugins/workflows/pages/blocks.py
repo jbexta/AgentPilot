@@ -54,7 +54,6 @@ class Page_Block_Settings(ConfigDBTree):
             kind_folder_key=lambda kind: f'{kind.lower()}:block',
             searchable=True,
             has_chat=True,
-            notify_unread=True,
         )
         self.splitter.setSizes([400, 1000])
 

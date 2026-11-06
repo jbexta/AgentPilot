@@ -40,7 +40,10 @@ config:
       builtin_tools.websearch: true
       custom_tools.data:
       - folder:Application
-      hooks.data: []
+      hooks.data:
+      - entity: apply_code_changes:blocks:01989eea-203f-424d-a8fc-456e1535378f
+        event: Stop
+        matcher: ''
       _format_block_keys:
       - chat.sys_msg
       _TYPE: claude_code
@@ -53,3 +56,4 @@ config:
     mini_view: true
   params: []
 kind: AGENT
+folder_path: Plugins

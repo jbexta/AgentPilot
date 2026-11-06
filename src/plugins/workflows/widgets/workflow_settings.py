@@ -32,6 +32,7 @@ from gui.gui_utils.layouts import CVBoxLayout, CHBoxLayout
 from gui.gui_utils.base_tree_widget import BaseTreeWidget
 from utils.helpers import path_to_pixmap, display_message_box, block_signals, display_message, \
     apply_alpha_to_hex, set_module_type, get_text
+from plugins.workflows.utils.acp import is_acp_agent
 from plugins.workflows.utils.workflows import get_avatar_paths_from_config, \
     get_member_name_from_config, merge_config_into_workflow_config, merge_multiple_into_workflow_config, \
     resolve_linked_config, save_linked_config, has_circular_link, \
@@ -413,8 +414,8 @@ class WorkflowSettings(ConfigWidget):
             members.sort(key=lambda m: m.x())
             first_member = members[0]
             second_member = members[1]
-            conversation_types_except_user = ['agent', 'claude_code']
-            if first_member.member_type == 'user' and second_member.member_type in conversation_types_except_user:
+            second_type = second_member.member_type
+            if first_member.member_type == 'user' and (second_type == 'agent' or is_acp_agent(second_type)):
                 return True
 
         return False
@@ -1987,7 +1988,8 @@ class DraggableMember(QGraphicsObject):
         def __init__(self, parent, diameter):
             super().__init__(0, 0, diameter, diameter, parent=parent)
             from gui.style import TEXT_COLOR
-            self.setPen(QPen(QColor(TEXT_COLOR), 0) if parent.member_type in ['user', 'agent', 'claude_code'] else Qt.NoPen)
+            outlined = parent.member_type in ['user', 'agent'] or is_acp_agent(parent.member_type)
+            self.setPen(QPen(QColor(TEXT_COLOR), 0) if outlined else Qt.NoPen)
             self.setAcceptHoverEvents(True)
 
     class MemberProxy(QGraphicsProxyWidget):
@@ -2207,8 +2209,12 @@ class DraggableMember(QGraphicsObject):
         else:
             super().mouseMoveEvent(event)
 
+        moved_ids = {self.id} | {
+            x.id for x in self.workflow_settings.scene.selectedItems()
+            if isinstance(x, DraggableMember)
+        }
         for line in self.workflow_settings.inputs_in_view.values():
-            if line.source_member_id == self.id or line.target_member_id == self.id:
+            if line.source_member_id in moved_ids or line.target_member_id in moved_ids:
                 line.updatePosition()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):

@@ -2,19 +2,16 @@ import asyncio
 import json
 import os
 import sys
+import time
 import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
 
-import psutil
-from PySide6.QtWidgets import QApplication
-
-from plugins.claude_code.utils.projects import resolve_cwd
-from plugins.workflows.members import LlmMember
+from gui import system
+from plugins.workflows.utils.acp import AcpAgent, RUN_TAG_VAR, kill_tagged
 from plugins.workflows.utils.runs import get_run_manager
-from utils import sql
-from utils.helpers import convert_to_safe_case, set_module_type
+from utils.helpers import set_module_type
 from claude_agent_sdk import (
     ClaudeAgentOptions, ClaudeSDKClient, AssistantMessage, TextBlock,
     HookMatcher, ThinkingBlock, ToolUseBlock, ToolResultBlock,
@@ -42,6 +39,40 @@ def format_tool_result_content(content, is_error=False):
     body = str(content or '').strip()[:500]
     prefix = 'Error: ' if is_error else 'Result: '
     return (prefix + body) if body else prefix.rstrip(': ')
+
+
+TOOL_KINDS = {
+    'Edit': 'edit', 'Write': 'edit', 'MultiEdit': 'edit',
+    'NotebookEdit': 'edit', 'Read': 'read', 'Glob': 'search',
+    'Grep': 'search', 'Bash': 'execute', 'WebFetch': 'fetch',
+    'WebSearch': 'fetch',
+}
+
+
+def agent_tool_json(tool_id, name, tool_input):
+    """A Claude tool use as an ``agent_tool`` message payload."""
+    tool_input = tool_input or {}
+    path = tool_input.get('file_path') or tool_input.get('notebook_path')
+    payload = {
+        'id': tool_id,
+        'name': name,
+        'kind': TOOL_KINDS.get(name, 'other'),
+        'input': tool_input,
+        'paths': [path] if path else [],
+    }
+    if name == 'Edit':
+        payload['diff'] = {
+            'path': path,
+            'old_text': tool_input.get('old_string') or '',
+            'new_text': tool_input.get('new_string') or '',
+        }
+    elif name == 'Write':
+        payload['diff'] = {
+            'path': path,
+            'old_text': '',
+            'new_text': tool_input.get('content') or '',
+        }
+    return json.dumps(payload)
 
 
 CC_SETTINGS_PATH = Path.home() / '.claude' / 'agentpilot_cc_settings.json'
@@ -74,42 +105,28 @@ def force_subscription_settings():
 
 CONFIRM_HOOK_TIMEOUT = 7 * 24 * 3600  # the user may approve much later
 
-# Inherited by everything a run's CLI spawns, even detached processes,
-# so they can be found and stopped with it. Valued '<app pid>:<run id>'.
-RUN_TAG_VAR = 'AP_CC_RUN'
-
-
-def kill_tagged(prefix):
-    """Kill every process whose run tag starts with *prefix*."""
-    procs = []
-    for proc in psutil.process_iter():
-        try:
-            if proc.environ().get(RUN_TAG_VAR, '').startswith(prefix):
-                procs.append(proc)
-        except psutil.Error:
-            continue
-    for proc in procs:
-        try:
-            proc.terminate()
-        except psutil.NoSuchProcess:
-            pass
-    _, alive = psutil.wait_procs(procs, timeout=1)
-    for proc in alive:
-        try:
-            proc.kill()
-        except psutil.NoSuchProcess:
-            pass
-
 
 @set_module_type(module_type='Members', settings='claude_code_settings')
-class ClaudeCode(LlmMember):
-    workflow_insert_mode = 'single'
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs, model_config_key='chat.model')
-        self._question_future = None
-        self._session_id = None
-        self._ui_refs = []
+class ClaudeCode(AcpAgent):
+    agent_name = 'Claude'
+    self_paced = True
+    context_files = ('CLAUDE.md',)
+    context_dirs = ('.claude',)
+    skills_dir = '.claude/skills'
+    plans_dir = '.claude/plans'
+    file_editor_config = {
+        'chat.permission_mode': 'default',
+        'builtin_tools': {
+            'bash': False,
+            'read': True,
+            'write': True,
+            'edit': True,
+            'glob': True,
+            'grep': True,
+            'webfetch': False,
+            'websearch': False,
+        },
+    }
 
     def _build_allowed_tools(self):
         """Build the list of built-in Claude Code tools from the toggle settings.
@@ -140,50 +157,21 @@ class ClaudeCode(LlmMember):
         """An in-process MCP server serving the selected app and workflow tools,
         with the names to auto-approve and the names requiring the user's
         confirmation. None when no custom tools are selected."""
-        from gui import system
-        tools_manager = system.manager.tools
-        uuids, method_tools = tools_manager.resolve_selection(
-            self.config.get('custom_tools.data', [])
-        )
+        app_tools = self.app_tools()
+        if not app_tools:
+            return None
 
-        def as_mcp_result(result_json):
-            result = json.loads(result_json)
-            return {
-                'content': [{'type': 'text', 'text': result['output']}],
-                'is_error': result['status'] == 'error',
-            }
-
-        def method_handler(method_tool):
-            async def handler(args):
-                return as_mcp_result(
-                    await tools_manager.call_method_tool(method_tool, args, self._ui_refs)
-                )
-            return handler
-
-        def workflow_handler(tool_uuid):
-            async def handler(args):
-                return as_mcp_result(await tools_manager.compute_tool_async(tool_uuid, args))
-            return handler
+        def as_mcp(handler):
+            async def mcp_handler(args):
+                text, is_error = await handler(args)
+                return {'content': [{'type': 'text', 'text': text}], 'is_error': is_error}
+            return mcp_handler
 
         sdk_tools = [
-            tool(t['name'], t['description'], tools_manager.method_tool_schema(t))(method_handler(t))
-            for t in method_tools
+            tool(t['name'], t['description'], t['schema'])(as_mcp(t['handler']))
+            for t in app_tools
         ]
-        confirm_names = {f'mcp__ui__{t["name"]}' for t in method_tools if t.get('confirm')}
-        for tool_uuid in uuids:
-            name = tools_manager.tool_id_names.get(tool_uuid)
-            tool_config = tools_manager.get(name)
-            if tool_config is None:
-                continue
-            sdk_tools.append(tool(
-                convert_to_safe_case(name),
-                tool_config.get('description', ''),
-                self.transform_parameters(tool_config.get('params', [])),
-            )(workflow_handler(tool_uuid)))
-            if tool_config.get('options', {}).get('confirm'):
-                confirm_names.add(f'mcp__ui__{convert_to_safe_case(name)}')
-        if not sdk_tools:
-            return None
+        confirm_names = {f'mcp__ui__{t["name"]}' for t in app_tools if t['confirm']}
         # Confirmation is enforced by `_confirm_hook` in every permission
         # mode, so all ui tools skip the SDK's own permission prompt.
         auto_approve = [f'mcp__ui__{t.name}' for t in sdk_tools]
@@ -208,6 +196,22 @@ class ClaudeCode(LlmMember):
             }
         }
 
+    async def _model_end_hook(self, input_dict, tool_use_id, context):
+        """PreToolUse hook marking the end of the model's step."""
+        if self._model_end is None:
+            self._model_end = time.monotonic()
+        return {}
+
+    async def _speed_hook(self, input_dict, tool_use_id, context):
+        """PostToolUse hook pausing for the task's `Speed`, in proportion
+        to the model's last step."""
+        if self._model_end is not None:
+            model_time = self._model_end - self._step_start
+            self._model_end = None
+            await asyncio.sleep(model_time * self._slowdown)
+        self._step_start = time.monotonic()
+        return {}
+
     def _build_hooks(self):
         """Build SDK hooks dict from config.
 
@@ -228,11 +232,12 @@ class ClaudeCode(LlmMember):
                 lookup_name = name.replace('-', '_').replace(' ', '_')
                 for mgr in (system.manager.blocks,
                              system.manager.tools,
-                             system.manager.entities):
+                             system.manager.agents):
                     if lookup_name in mgr:
                         config = mgr[lookup_name]
                         async for _ in receive_workflow(
-                            config, params=input_dict,
+                            config,
+                            params={**input_dict, 'context_id': self.workflow.context_id},
                             main=system.manager._main_gui,
                         ):
                             pass
@@ -281,7 +286,12 @@ class ClaudeCode(LlmMember):
             Allow or Deny based on user's button click.
         """
         if tool_name == 'AskUserQuestion':
-            return await self._handle_ask_user_question(input_dict)
+            # The SDK expects the original questions plus the answers
+            # dict back as ``updated_input``.
+            return PermissionResultAllow(updated_input={
+                'questions': input_dict.get('questions', []),
+                'answers': await self.ask_question(input_dict),
+            })
 
         mode = self.config.get('chat.permission_mode', 'default')
         if mode == 'acceptEdits' and tool_name in (
@@ -301,72 +311,33 @@ class ClaudeCode(LlmMember):
             return PermissionResultAllow()
         return PermissionResultDeny(message="User rejected tool use")
 
-    async def _handle_ask_user_question(self, input_dict):
-        """Surface an AskUserQuestion payload to the user.
-
-        Renders a ``QuestionBubble`` in the chat and awaits the user's
-        answers. Returns ``PermissionResultAllow`` with ``updated_input``
-        containing the original questions plus an ``answers`` dict keyed
-        by question text, as required by the Claude Agent SDK contract.
-        """
-        self._question_future = asyncio.get_running_loop().create_future()
-        chat_widget = self.workflow.chat_widget
-        if chat_widget:
-            chat_widget.new_sentence(
-                'question',
-                self.full_member_id(),
-                json.dumps(input_dict),
-            )
-        answers = await self._question_future
-        self._question_future = None
-        return PermissionResultAllow(
-            updated_input={
-                'questions': input_dict.get('questions', []),
-                'answers': answers or {},
-            }
-        )
-
-    async def receive(self):
-        # Save every yielded block as its own row immediately. Deferring
-        # to end-of-turn would leave streaming bubbles with msg_id=-1,
-        # which ``message_collection.refresh()`` wipes — so any
-        # context/branch switch mid-stream drops the thinking and
-        # tool-call history from the display. Each block also pops its
-        # bubble-grouping slot so the next block of the same role
-        # creates a fresh bubble instead of appending.
-        async for key, chunk in self.stream():
-            chunk = chunk or ''
-            yield key, chunk
-            chat = self.workflow.chat_widget
-            if chat:
-                chat.message_collection.last_member_bubbles.pop(
-                    (key, self.full_member_id()), None)
-            log_obj = {
-                'id': 0,
-                'context_id': self.workflow.context_id,
-                'member_id': self.full_member_id(),
-                'session_id': self._session_id,
-            }
-            self.workflow.save_message(
-                key, chunk, self.full_member_id(), log_obj)
-
     def _skills_options(self, working_dir):
-        """Serve the app's skills to this session from the one fixed
-        ``app_skills`` plugin folder. The folder can't vary per session, so
-        the CWD rule — project-scoped skills are only available when the
-        session's working_dir is that project's — is enforced by
-        disallowing the Skill tool for every non-matching project skill.
+        """Serve the app's Claude skills to this session from their one
+        fixed ``app_skills/Claude`` folder, shaped as a local plugin. The
+        folder can't vary per session, so the CWD rule — project-scoped
+        skills are only available when the session's working_dir is that
+        project's — is enforced by disallowing the Skill tool for every
+        non-matching project skill.
         """
         from gui import system
         from utils import sql
 
         mgr = system.manager.skills
+        plugin_dir = mgr.skills_dir(self.agent_name).parent
+        plugin_json = plugin_dir / '.claude-plugin' / 'plugin.json'
+        if not plugin_json.exists():
+            plugin_json.parent.mkdir(parents=True, exist_ok=True)
+            plugin_json.write_text(
+                json.dumps({'name': 'agentpilot', 'version': '0.1.0'}),
+                encoding='utf-8',
+            )
         wd = os.path.realpath(working_dir) if working_dir else None
         disallowed = []
-        rows = sql.get_results("SELECT name, kind FROM skills") or []
+        rows = sql.get_results(
+            "SELECT name, kind FROM skills WHERE kind LIKE 'PROJECT:%:' || ?",
+            (self.agent_name,)
+        ) or []
         for name, kind in rows:
-            if not (kind or '').startswith('PROJECT:'):
-                continue
             project_dir = sql.get_scalar(
                 "SELECT json_extract(config, '$.working_dir') FROM projects WHERE id = ?",
                 (int(kind.split(':')[1]),)
@@ -374,7 +345,7 @@ class ClaudeCode(LlmMember):
             if not wd or not project_dir or os.path.realpath(project_dir) != wd:
                 disallowed.append(f'Skill(agentpilot:{mgr._slug(name)})')
         return {
-            'plugins': [{'type': 'local', 'path': str(mgr.PLUGIN_DIR)}],
+            'plugins': [{'type': 'local', 'path': str(plugin_dir)}],
             **({'disallowed_tools': disallowed} if disallowed else {}),
         }
 
@@ -390,8 +361,7 @@ class ClaudeCode(LlmMember):
 
         allowed_tools = self._build_allowed_tools()
         ui_server = self._ui_mcp_server()
-        working_dir = resolve_cwd(
-            await self.format_config_value('working_dir', '{{ cwd }}'))
+        working_dir = await self.format_config_value('working_dir', '{{ cwd }}') or self.default_working_dir()
         hooks = self._build_hooks() or {}
         if ui_server and ui_server[2]:
             hooks.setdefault('PreToolUse', []).append(HookMatcher(
@@ -399,14 +369,16 @@ class ClaudeCode(LlmMember):
                 hooks=[self._confirm_hook],
                 timeout=CONFIRM_HOOK_TIMEOUT,
             ))
+        self._slowdown = 1 / system.manager.tasks.speed(self.workflow.context_id) - 1
+        if self._slowdown > 0:
+            self._model_end = None
+            hooks.setdefault('PreToolUse', []).append(HookMatcher(hooks=[self._model_end_hook]))
+            hooks.setdefault('PostToolUse', []).append(HookMatcher(
+                hooks=[self._speed_hook],
+                timeout=CONFIRM_HOOK_TIMEOUT,
+            ))
         permission_mode = self.config.get('chat.permission_mode', 'default')
-        if not self._session_id:
-            self._session_id = sql.get_scalar(
-                "SELECT json_extract(log, '$.session_id') FROM contexts_messages "
-                "WHERE context_id = ? AND member_id = ? "
-                "AND json_extract(log, '$.session_id') IS NOT NULL "
-                "ORDER BY id DESC LIMIT 1",
-                (self.workflow.context_id, self.full_member_id()))
+        self.restore_session_id()
 
         def _stderr_cb(line):
             print(f"[claude-code stderr] {line}", file=sys.stderr, flush=True)
@@ -439,6 +411,7 @@ class ClaudeCode(LlmMember):
             system_prompt=system_msg,
             **({"model": model} if model else {}),
             max_turns=max_turns,
+            max_buffer_size=32 * 1024 * 1024,
             effort=self.config.get('chat.effort', None),
             thinking={"type": "adaptive", "display": "summarized"},
             max_budget_usd=self.config.get('chat.max_budget', None),
@@ -463,8 +436,9 @@ class ClaudeCode(LlmMember):
             # won't see the flag on its own. Calling ``client.interrupt``
             # sends a control-request to the CLI which unblocks the
             # current turn; the loop then observes the flag and breaks.
-            stop_task = asyncio.create_task(self._watch_stop(client))
+            stop_task = asyncio.create_task(self._watch_stop(client.interrupt, client.disconnect))
             try:
+                self._step_start = time.monotonic()
                 await client.query(prompt)
                 async for msg in client.receive_response():
                     if self.workflow and self.workflow.stop_requested:
@@ -479,17 +453,14 @@ class ClaudeCode(LlmMember):
                                 if block.thinking.strip():
                                     yield 'thinking', block.thinking
                             elif isinstance(block, (ToolUseBlock, ServerToolUseBlock)):
-                                yield 'claude_tool', json.dumps({
-                                    'id': block.id,
-                                    'name': block.name,
-                                    'input': block.input or {},
-                                })
+                                yield 'agent_tool', agent_tool_json(
+                                    block.id, block.name, block.input)
                             elif isinstance(block, ServerToolResultBlock):
-                                yield 'claude_tool_result', format_tool_result_content(block)
+                                yield 'agent_tool_result', format_tool_result_content(block)
                     elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
                         for block in msg.content:
                             if isinstance(block, ToolResultBlock):
-                                yield 'claude_tool_result', format_tool_result_content(block)
+                                yield 'agent_tool_result', format_tool_result_content(block)
                     elif isinstance(msg, ConversationResetMessage):
                         self._session_id = None
                     elif isinstance(msg, ResultMessage) and (
@@ -504,53 +475,3 @@ class ClaudeCode(LlmMember):
                 if self.workflow and self.workflow.stop_requested:
                     await client.disconnect()
                     await asyncio.to_thread(kill_tagged, run_tag)
-
-    async def _watch_stop(self, client):
-        while not (self.workflow and self.workflow.stop_requested):
-            await asyncio.sleep(0.1)
-        get_run_manager().reject_pending(self.workflow.context_id)
-        if self._question_future and not self._question_future.done():
-            self._question_future.set_result(None)
-        try:
-            await asyncio.wait_for(client.interrupt(), timeout=3)
-            await asyncio.sleep(3)
-        except Exception:
-            pass
-        await client.disconnect()
-
-    def _get_current_page_source(self):
-        """Get the source file path of the currently active page."""
-        import sys
-        main = self.workflow.chat_widget.main
-        current_widget = main.main_pages.content.currentWidget()
-        module = sys.modules.get(type(current_widget).__module__)
-        return getattr(module, '__file__', '') or ''
-
-    async def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
-        name = self.config.get('name', '')
-        builtin_blocks = {
-            'char_name': name,
-            'full_name': name,
-            'response_type': 'response',
-            'verb': '',
-            'current_page': self._get_current_page_source(),
-        }
-        formatted_sys_msg = await self.format_config_value(
-            'chat.sys_msg', additional_blocks=builtin_blocks)
-
-        message_str = ''
-        if msgs_in_system:
-            if msgs_in_system_len > 0:
-                msgs_in_system = msgs_in_system[-msgs_in_system_len:]
-            message_str = "\n".join(
-                f"""{msg['role']}: \"{msg['content'].strip().strip('"')}\"""" for msg in msgs_in_system)
-            message_str = f"\n\nCONVERSATION:\n\n{message_str}\nassistant: "
-        if response_instruction != '':
-            response_instruction = f"\n\n{response_instruction}\n\n"
-
-        return formatted_sys_msg + response_instruction + message_str
-
-
-_app = QApplication.instance()
-if _app:
-    _app.aboutToQuit.connect(lambda: kill_tagged(f'{os.getpid()}:'))

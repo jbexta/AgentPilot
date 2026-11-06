@@ -11,15 +11,9 @@ from plugins.workflows.utils.workflows import get_entity_workflow_config
 from utils import sql
 from utils.helpers import BaseManager, llm_tool, set_module_type
 
-STATUSES = ('TODO', 'RUNNING', 'AWAITING_APPROVAL', 'DONE', 'FAILED', 'RECURRING', 'SCHEDULED')
+STATUSES = ('TODO', 'RUNNING', 'REVIEW', 'DONE', 'FAILED', 'RECURRING', 'SCHEDULED')
 AGENT_STATUSES = ('TODO', 'DONE', 'FAILED')
-ACTIVE_STATUSES = ('RUNNING', 'AWAITING_APPROVAL')
-DEFAULT_TASK_TEMPLATE = (
-    '{{ task }}\n\n'
-    'When you have finished, call '
-    "tasks_set_status(id={{ task_id }}, status='DONE', note=<summary of what you did>). "
-    "If you can't complete it, call tasks_set_status with status='FAILED' and the reason."
-)
+ACTIVE_STATUSES = ('RUNNING', 'REVIEW')
 
 
 def is_repeating(rrule_str):
@@ -69,7 +63,7 @@ class TaskManager(BaseManager):
     def fail_interrupted(self):
         """Fail tasks whose run was cut short by the app closing."""
         task_ids = sql.get_results(
-            "SELECT id FROM tasks WHERE status IN ('RUNNING', 'AWAITING_APPROVAL')",
+            "SELECT id FROM tasks WHERE status IN ('RUNNING', 'REVIEW')",
             return_type='list',
         )
         for task_id in task_ids:
@@ -354,15 +348,21 @@ class TaskManager(BaseManager):
 
     async def run_message(self, task_id, continuing=False):
         """The user message starting a run: the task's id, the task text
-        rendered with the `Task template` setting, and how to add
-        sub-tasks."""
+        rendered with the `Task template` setting, and its open sub-tasks.
+        Just the task text when the task's `Use template` is off."""
         item = self.get_item_dict(task_id)
+        use_template = sql.get_scalar(
+            "SELECT json_extract(config, '$.use_template') FROM tasks WHERE id = ?",
+            (task_id,),
+        )
+        if use_template == 0:
+            return item['description']
         lines = [
             'Continue working on this task.' if continuing else 'Work on this task.',
             '',
             f"Task #{item['id']}: {item['name']}",
         ]
-        template = self.system.config.get('system.task_template', DEFAULT_TASK_TEMPLATE)
+        template = self.system.config.get('system.task_template', '')
         task_text = await self.system.blocks.format_string(
             template,
             additional_blocks={'task': item['description'], 'task_id': str(item['id'])},
@@ -373,12 +373,6 @@ class TaskManager(BaseManager):
         if open_sub_tasks:
             lines += ['', 'Open sub-tasks:']
             lines += [f"- #{sub['id']} {sub['name']} ({sub['status']})" for sub in open_sub_tasks]
-        if item['status'] != 'RECURRING':
-            lines += [
-                '',
-                'To break the work down, create sub-tasks with '
-                f"tasks_add(name=<name>, description=<what to do>, parent_id={item['id']}).",
-            ]
         return '\n'.join(lines)
 
     async def run_scheduled(self, task_id):
@@ -401,6 +395,16 @@ class TaskManager(BaseManager):
         prefix, _, task_id = kind.partition(':')
         return int(task_id) if prefix == 'TASK' and task_id.isdigit() else None
 
+    def speed(self, context_id):
+        """The `Speed` of the task the chat belongs to, 1.0 if it isn't a
+        task's chat."""
+        task_id = self.task_id_for_context(context_id)
+        speed = sql.get_scalar(
+            "SELECT json_extract(config, '$.speed') FROM tasks WHERE id = ?",
+            (task_id,),
+        ) if task_id is not None else None
+        return 1.0 if speed is None else max(speed, 0.1)
+
     def on_runs_changed(self):
         """Keep non-recurring task statuses in step with their runs, however
         the run was started (Run, the schedule or a reply in the chat)."""
@@ -420,8 +424,8 @@ class TaskManager(BaseManager):
                 status = 'RUNNING'
             awaiting = runs.is_awaiting_confirm(context_id)
             if awaiting and status == 'RUNNING':
-                self.set_item_status(task_id, 'AWAITING_APPROVAL')
-            elif not awaiting and status == 'AWAITING_APPROVAL':
+                self.set_item_status(task_id, 'REVIEW')
+            elif not awaiting and status == 'REVIEW':
                 self.set_item_status(task_id, 'RUNNING')
 
         for context_id, task_id in self._active_runs.items():

@@ -1,0 +1,35 @@
+uuid: 0c8e9bc8-217e-4c0a-8cfc-cc2f2377b3fe
+name: OpenAI Codex
+config:
+  _TYPE: workflow
+  name: OpenAI Codex
+  avatar_path: null
+  description: ''
+  members:
+  - id: '1'
+    linked_id: null
+    loc_x: 20
+    loc_y: 64
+    width: 450
+    height: 350
+    config:
+      _TYPE: user
+      name: You
+  - id: '2'
+    linked_id: null
+    loc_x: 100
+    loc_y: 80
+    width: 450
+    height: 350
+    config:
+      name: Agent
+      _TYPE: codex
+  inputs: []
+  options:
+    autorun: true
+    show_hidden_bubbles: false
+    show_nested_bubbles: false
+    mini_view: false
+  params: []
+kind: AGENT
+folder_path: Plugins

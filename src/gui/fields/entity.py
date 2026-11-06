@@ -54,12 +54,22 @@ class EntityField(QWidget):
 
         self.browse_button = IconButton(
             self,
-            icon_path=':/resources/icon-blocks.png',
+            icon_path=':/resources/icon-block.png',
         )
         self.browse_button.setMaximumWidth(60)
         self.browse_button.clicked.connect(self.browse_entity)
 
+        self.goto_button = IconButton(
+            self,
+            icon_path=':/resources/icon-arrow-right.png',
+            size=21,
+            tooltip='Open in its page',
+        )
+        self.goto_button.clicked.connect(self.goto_entity)
+        self.goto_button.hide()
+
         self.layout.addWidget(self.browse_button)
+        self.layout.addWidget(self.goto_button)
         self.layout.addWidget(self.label)
 
         width = kwargs.get('width', None)
@@ -81,6 +91,17 @@ class EntityField(QWidget):
             ) or name
             self._value = f'{name}:{table}:{uuid}'
         self.label.setText(name if name else 'Select entity...')
+        self.goto_button.setVisible(self._value.count(':') >= 2)
+
+    def goto_entity(self):
+        """Open the picked entity in its page."""
+        from gui.gui_utils.helpers import find_main
+        _, table, uuid = self._value.rsplit(':', 2)
+        page_name = {'entities': 'agents', 'blocks': 'blocks', 'tools': 'tools'}[table]
+        main_pages = find_main().main_pages
+        main_pages.goto_page(page_name)
+        item_id = sql.get_scalar(f"SELECT id FROM `{table}` WHERE uuid = ?", (uuid,))
+        main_pages.pages[page_name].select_item(item_id)
 
     def browse_entity(self):
         """Open the LibraryDialog and let the user pick an entity."""

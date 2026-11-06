@@ -679,7 +679,7 @@ class DemoOverlay(QWidget):
 #    and every run is saved as a chat."
 #   [Task list: + "Call the dentist", no schedule]
 #   "Tasks without a schedule are just to-dos, with a status: to do,
-#    running, awaiting approval, done."
+#    running, review, done."
 #   [Back in chat: "Add 'buy milk' to my to-dos and show me what's left"]
 #   "Agents manage tasks with the built-in task tools, so you can just ask."
 #   [When column: type "every weekday at 9am"]
@@ -1657,7 +1657,7 @@ class DemoRunnable(QRunnable):
             self.add_tree_item(scheduled_tasks, 'Book dentist appointment')
             click_tree_item_cell(scheduled_tasks.tree, 'Book dentist appointment', 2, only_hover=True)
             self.text_to_speech(blocking=True,
-                text="""Each task has a status: to do, running, awaiting approval, done or failed. Agents update it as they work using the built-in task tools, so you can simply ask an agent to add, list or tick off your to-dos."""
+                text="""Each task has a status: to do, running, review, done or failed. Agents update it as they work using the built-in task tools, so you can simply ask an agent to add, list or tick off your to-dos."""
             )
             click_tree_item_cell(scheduled_tasks.tree, 'Book dentist appointment', 3, only_hover=True)
             self.text_to_speech(blocking=True,

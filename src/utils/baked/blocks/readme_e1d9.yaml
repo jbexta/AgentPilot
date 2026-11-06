@@ -17,11 +17,11 @@ config:
         <h1 align="center">Agent Pilot</h1>
 
         <p align="center">
-          <b>The Everything Interface</b>
+          <b>The Everything App</b>
         </p>
 
         <p align="center">
-          <b>Agent Pilot</b> is a generative, self-modifying desktop application powered by AI agents and workflows.<br>
+          Agent Pilot is a generative, self-modifying desktop application powered by AI agents and workflows.<br>
           Built with an extensible plugin system and a schema-driven UI.<br>
           Ships with prebuilt plugins ready to use.
         </p>
@@ -60,11 +60,10 @@ config:
         > **Tip:** You can migrate your database to the new version by replacing the executable before launching.
 
         ## 📚 Documentation
-        [User guide](docs/guides/how_to_use.md)<br>
-        [Module documentation](docs/guides/modules.md)<br>
-        [Core Architecture](docs/guides/how_to_build.md)<br>
-        [GUI Architecture](docs/guides/how_to_build.md)<br>
-        [Creating a plugin](docs/guides/how_to_build.md)<br>
+        [User guide](docs/guides/how_to_build.md)<br>
+        [GUI Architecture](docs/guides/gui_architecture.md)<br>
+        [Module documentation](docs/modules.md)<br>
+        [Creating a plugin](docs/plugins.md)<br>
 
         ## 🔌 Plugins
 

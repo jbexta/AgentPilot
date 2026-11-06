@@ -299,10 +299,11 @@ class ChattableWorkflowWidget(ConfigWidget):
         if not hasattr(self, 'page_splitter'):
             return
         has_bubbles = len(self.message_collection.chat_bubbles) > 0
+        was_hidden = self.message_collection.isHidden()
         self.message_collection.setVisible(has_bubbles)
         self.chat_panel.setVisible(
             has_bubbles or not self.member_bar.isHidden())
-        if has_bubbles:
+        if has_bubbles and was_hidden:
             self.page_splitter.setSizes([500, 500])
 
     async def run_workflow_async(self, from_member_id=None, feed_back=False):
@@ -344,6 +345,7 @@ class ChattableWorkflowWidget(ConfigWidget):
     def end_turn(self):
         self.workflow.responding = False
         self.input_widget.send_button.update_icon(is_generating=False)
+        self.workflow.message_history.refresh_messages()
 
         self.message_collection.refresh_waiting_bar(set_visibility=True)
         if self.workflow_settings:

@@ -5,8 +5,10 @@ import inspect
 import json
 import logging
 import os
+import shutil
 import sys
 import time
+from pathlib import Path
 
 import PySide6
 import qasync
@@ -18,7 +20,8 @@ from typing_extensions import override
 
 from utils.sql_upgrade import upgrade_script
 from utils.helpers import display_message_box, display_message, get_text, llm_tool, load_language
-from utils import process
+from utils import process, sql
+from utils.filesystem import get_application_path
 from utils import console_log
 from plugins.workflows.utils.workflows import get_avatar_paths_from_config
 from gui.style import get_stylesheet, get_palette, is_native_style
@@ -192,8 +195,15 @@ class MainPages(ConfigPages):
     def view_ui(self, refs):
         return self.get_agent_visualisation(refs)
 
-    @llm_tool(description='Quit the app and relaunch it in a fresh process')
+    @llm_tool(
+        description='Quit the app and relaunch it in a fresh process, then '
+                    'continue this chat. Only use it when you still have work '
+                    'to do after the restart, e.g. testing your changes. '
+                    'Otherwise just finish responding: changed modules are '
+                    'reloaded, or a restart offered, when you finish.',
+    )
     def restart_app(self):
+        self.main.save_page_editor()
         process.restart_app()
 
     @llm_tool(
@@ -202,6 +212,17 @@ class MainPages(ConfigPages):
     )
     def read_console(self, lines: int = 200):
         return console_log.tail(lines)
+
+    @llm_tool(
+        name='reload_modules',
+        description='Reload all modules and rebuild the GUI in place, then '
+                    'continue this chat. Only use it when you still have work '
+                    'to do after the reload, e.g. testing your changes. '
+                    'Otherwise just finish responding: changed modules are '
+                    'reloaded when you finish.',
+    )
+    def reload_modules_and_resume(self):
+        asyncio.ensure_future(self.main.reload_and_resume())
 
     def get_registered_modules(self):
         return {
@@ -250,8 +271,13 @@ class MainPages(ConfigPages):
 
         popup = self.main.module_popup
         if popup and popup.isVisible():
+            popup_selections = get_selected_pages(popup.project_widget)
+            scroll_bar = popup.tasks_tree.config_widget.message_collection.scroll_area.verticalScrollBar()
+            from_bottom = scroll_bar.maximum() - scroll_bar.value()
             self.main.module_popup = None
             self.main.open_page_editor()
+            set_selected_pages(self.main.module_popup.project_widget, popup_selections)
+            self.main.module_popup.tasks_tree.config_widget.restore_scroll_pos = from_bottom
             self.main.module_popup.setGeometry(popup.geometry())
             popup.close()
 
@@ -409,15 +435,96 @@ class Main(FramelessResizeMixin, QMainWindow):
         self.tray.show()
 
         safe_single_shot(2000, system.manager.daemons.start_all_daemons)
+        safe_single_shot(0, self.resume_running_chats)
 
+    def running_chats(self):
+        """Ids of the running chats and tasks, the runs that can be resumed."""
+        from utils import sql
+        from plugins.workflows.utils.runs import get_run_manager
+        return [
+            context_id for context_id in get_run_manager().runs
+            if (sql.get_scalar("SELECT kind FROM contexts WHERE id = ?", (context_id,)) or '')
+            .startswith(('CHAT', 'TASK:'))
+        ]
+
+    def save_running_chats(self):
+        from utils import sql
+        sql.execute("DELETE FROM settings WHERE field = 'running_chats'")
+        sql.execute(
+            "INSERT INTO settings (field, value) VALUES ('running_chats', ?)",
+            (json.dumps(self.running_chats()),),
+        )
+
+    def resume_running_chats(self):
+        from utils import sql
+        context_ids = sql.get_scalar(
+            "SELECT value FROM settings WHERE field = 'running_chats'",
+            load_json=True,
+        ) or []
+        sql.execute("DELETE FROM settings WHERE field = 'running_chats'")
+        if not system.manager.config.get('system.resume_chats_on_startup', True):
+            return
+        for context_id in context_ids:
+            asyncio.ensure_future(self.resume_chat(
+                context_id, 'The app was restarted. Continue where you left off.',
+            ))
+
+    async def reload_and_resume(self):
+        """Stop the running chats, reload all modules, then resume the chats
+        on the reloaded code."""
+        from plugins.workflows.utils.runs import get_run_manager
+        runs = get_run_manager()
+        context_ids = self.running_chats()
+        for context_id in context_ids:
+            runs.stop(context_id)
+        while any(runs.is_running(context_id) for context_id in context_ids):
+            await asyncio.sleep(0.1)
+        self.main_pages.reload_modules()
+        for context_id in context_ids:
+            asyncio.ensure_future(self.resume_chat(
+                context_id, 'Modules were reloaded. Continue where you left off.',
+            ))
+
+    async def restart_when_idle(self, context_id):
+        """Restart once the chat has finished, so it isn't resumed after the
+        restart."""
+        from plugins.workflows.utils.runs import get_run_manager
+        while get_run_manager().is_running(context_id):
+            await asyncio.sleep(0.1)
+        self.main_pages.restart_app()
+
+    async def resume_chat(self, context_id, message):
+        """Continue a chat's run with a message from its first member, as
+        `send_message` does."""
+        from utils import sql
+        from plugins.workflows.members.workflow import Workflow
+        from plugins.workflows.utils.runs import get_run_manager
+        kind = sql.get_scalar("SELECT kind FROM contexts WHERE id = ?", (context_id,))
+        if kind is None:
+            return
+        workflow = Workflow(main=self, context_id=context_id, kind=kind)
+        member_id = next(iter(workflow.members))
+        workflow.save_message('system', message, member_id=member_id)
+        await get_run_manager().start(workflow, member_id)
+
+    def save_page_editor(self):
+        from utils import sql
+        from gui.gui_utils.helpers import get_selected_pages
+        popup = self.module_popup
+        is_open = popup and popup.isVisible()
+        geometry = popup.geometry().getRect() if is_open else None
+        sql.execute("UPDATE settings SET value = json(?) WHERE field = 'page_editor'", (json.dumps(geometry),))
+        pages = get_selected_pages(popup.project_widget) if is_open else {}
+        sql.execute("DELETE FROM settings WHERE field = 'page_editor_pages'")
+        sql.execute(
+            "INSERT INTO settings (field, value) VALUES ('page_editor_pages', ?)",
+            (json.dumps(pages),),
+        )
 
     def closeEvent(self, event):
         # from core.actions import base as undo_history
         # undo_history.flush()
-        popup = self.module_popup
-        geometry = popup.geometry().getRect() if popup and popup.isVisible() else None
-        from utils import sql
-        sql.execute("UPDATE settings SET value = json(?) WHERE field = 'page_editor'", (json.dumps(geometry),))
+        self.save_page_editor()
         super().closeEvent(event)
         # The tray icon is a visible top-level window, so Qt doesn't consider
         # this the last window and won't quit on its own — without this the
@@ -594,7 +701,68 @@ class Main(FramelessResizeMixin, QMainWindow):
             sys.exit(0)
 
     def patch_db(self):
-        pass
+        # claude_tool* roles -> agent_tool*, with normalised payloads
+        claude_tool = "role = 'claude_tool' AND json_valid(msg)"
+        name = "json_extract(msg, '$.name')"
+        file_path = "json_extract(msg, '$.input.file_path')"
+        sql.execute(f"""
+            UPDATE contexts_messages SET msg = json_set(msg, '$.diff', json_object(
+                'path', {file_path},
+                'old_text', COALESCE(json_extract(msg, '$.input.old_string'), ''),
+                'new_text', COALESCE(json_extract(msg, '$.input.new_string'), '')))
+            WHERE {claude_tool} AND {name} = 'Edit'""")
+        sql.execute(f"""
+            UPDATE contexts_messages SET msg = json_set(msg, '$.diff', json_object(
+                'path', {file_path},
+                'old_text', '',
+                'new_text', COALESCE(json_extract(msg, '$.input.content'), '')))
+            WHERE {claude_tool} AND {name} = 'Write'""")
+        sql.execute(f"""
+            UPDATE contexts_messages SET msg = json_set(msg,
+                '$.kind', CASE {name}
+                    WHEN 'Edit' THEN 'edit' WHEN 'Write' THEN 'edit'
+                    WHEN 'MultiEdit' THEN 'edit' WHEN 'NotebookEdit' THEN 'edit'
+                    WHEN 'Read' THEN 'read'
+                    WHEN 'Glob' THEN 'search' WHEN 'Grep' THEN 'search'
+                    WHEN 'Bash' THEN 'execute'
+                    WHEN 'WebFetch' THEN 'fetch' WHEN 'WebSearch' THEN 'fetch'
+                    ELSE 'other' END,
+                '$.paths', json(CASE
+                    WHEN COALESCE({file_path}, json_extract(msg, '$.input.notebook_path')) IS NULL THEN '[]'
+                    ELSE json_array(COALESCE({file_path}, json_extract(msg, '$.input.notebook_path'))) END))
+            WHERE {claude_tool}""")
+        sql.execute("UPDATE contexts_messages SET role = 'agent_tool' WHERE role = 'claude_tool'")
+        sql.execute("UPDATE contexts_messages SET role = 'agent_tool_result' WHERE role = 'claude_tool_result'")
+        sql.execute("""
+            DELETE FROM modules
+            WHERE name IN ('claude_tool', 'claude_tool_result')
+              AND folder_id IN (SELECT id FROM folders WHERE type = 'modules' AND LOWER(name) = 'bubbles')""")
+        sql.execute("""
+            DELETE FROM modules
+            WHERE name = 'claude_context'
+              AND folder_id IN (SELECT id FROM folders WHERE type = 'modules' AND LOWER(name) = 'widgets')""")
+
+        # Skills and plans belong to an agent: kinds '' -> 'Claude',
+        # 'PROJECT:9' -> 'PROJECT:9:Claude', and app_skills/skills ->
+        # app_skills/Claude/skills
+        for table in ('skills', 'plans'):
+            sql.execute(f"UPDATE {table} SET kind = 'Claude' WHERE kind = ''")
+            sql.execute(f"""
+                UPDATE {table} SET kind = kind || ':Claude'
+                WHERE kind LIKE 'PROJECT:%' AND kind NOT LIKE 'PROJECT:%:%'""")
+        skills_root = Path(get_application_path()) / 'app_skills'
+        if (os.path.basename(sql.get_db_path()) == 'data.db' and (skills_root / 'skills').is_dir()
+                and not (skills_root / 'Claude' / 'skills').exists()):
+            (skills_root / 'Claude').mkdir(exist_ok=True)
+            shutil.move(skills_root / 'skills', skills_root / 'Claude' / 'skills')
+            if (skills_root / '.claude-plugin').is_dir():
+                shutil.move(skills_root / '.claude-plugin', skills_root / 'Claude' / '.claude-plugin')
+            manifest = skills_root / 'mirrors.json'
+            if manifest.exists():
+                mirrors = json.loads(manifest.read_text(encoding='utf-8'))
+                manifest.write_text(json.dumps(
+                    {k if '/' in k else f'Claude/{k}': v for k, v in mirrors.items()},
+                    indent=2), encoding='utf-8')
 
     # def show_side_bubbles(self):
     #     self.side_bubbles.show()
@@ -708,6 +876,9 @@ class Main(FramelessResizeMixin, QMainWindow):
         if geometry:
             self.open_page_editor()
             self.module_popup.setGeometry(*geometry)
+            pages = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'page_editor_pages'", load_json=True)
+            if pages:
+                set_selected_pages(self.module_popup.project_widget, pages)
 
     def apply_stylesheet(self):
         old_text_color = getattr(self, '_cached_text_color', None)
@@ -994,6 +1165,7 @@ def launch():
 
         with loop:
             loop.run_forever()
+            window.save_running_chats()
             loop.run_until_complete(window.stop_daemons())
             if process._restarting:
                 process._spawn()

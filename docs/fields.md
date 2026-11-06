@@ -11,6 +11,6 @@ pickers, etc.)
 - Self-contained with their own validation and styling
 - Have an option_schema defining how they themselves can be configured
 
-**All field modules:** Model, Font, Module, Preset_menu, Color_picker, File_picker, Button, Button_toggle, Input_source, Popup_button, Entity, Float, Text, Combo, List, Venv, Input_target, Member_type_menu, Project_type_menu, Image, Boolean, Media_upload, Integer, Condition_popup_button
+**All field modules:** Input_source, Member_type_menu, Text, Combo, Button, List, Input_target, Popup_button, Project_type_menu, Button_toggle, Module, Image, Condition_popup_button, File_picker, Media_upload, Color_picker, Integer, Float, Boolean, Entity, Font, Model, Preset_menu, Venv
 
 Common field kwargs (kwargs that can be used with **any** field module):

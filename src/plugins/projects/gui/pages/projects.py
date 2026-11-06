@@ -61,10 +61,32 @@ class Page_Projects(ConfigDBTree):
             readonly=True,
             searchable=True,
             filterable=True,
+            notify_unread=True,
         )
         self.splitter.setSizes([200, 800])
         define_table('project_concepts', relations=['project_id'])
-    
+
+    def context_rows(self, context_ids):
+        """A project's chats have the kind `PROJECT:<id>`, its tasks' chats
+        `TASK:<task id>` of a task with the kind `PROJECT:<id>:<type>`, and
+        its plans' chats are stored on a plan with the kind `PROJECT:<id>`."""
+        if not context_ids:
+            return []
+        placeholders = ','.join('?' * len(context_ids))
+        rows = self.db_connector.get_results(f"""
+            SELECT c.id, COALESCE(t.kind, p.kind, c.kind)
+            FROM contexts c
+            LEFT JOIN tasks t ON c.kind = 'TASK:' || t.id
+            LEFT JOIN plans p ON json_extract(p.config, '$.chat_context_id') = c.id
+            WHERE c.id IN ({placeholders})""", tuple(context_ids))
+        pairs = []
+        for context_id, kind in rows:
+            prefix, _, rest = (kind or '').partition(':')
+            project_id = rest.partition(':')[0]
+            if prefix == 'PROJECT' and project_id.isdigit():
+                pairs.append((context_id, int(project_id)))
+        return pairs
+
     def on_edited(self):
         self.config_widget.widgets[1].pages['Files'].load_config()
 

@@ -3,20 +3,20 @@ import asyncio
 import shiboken6
 from PySide6.QtCore import QObject, Signal
 
+from gui.gui_utils.helpers import Attention
+
 
 class BaseRunManager(QObject):
     """Shared skeleton for managers that track background work by key, route
     output to whichever widget currently displays that key, and keep unread
-    state for keys that finished while not visible."""
+    state for keys that progressed while not visible."""
 
     changed = Signal()  # work started/finished, or unread state changed
-    sidebar_button = None  # main-pages key whose button gets the notification dot
 
     def __init__(self):
         super().__init__()
         self.displays = {}  # key: widget
-        self.unread = set()
-        self.changed.connect(self._update_sidebar_dot)
+        self.unread = {}  # key: Attention
 
     def get_display(self, key):
         widget = self.displays.get(key)
@@ -32,35 +32,20 @@ class BaseRunManager(QObject):
             del self.displays[k]
         self.displays[key] = widget
 
-        if key in self.unread:
-            self.unread.discard(key)
+        if self.unread.pop(key, None) is not None:
             self.changed.emit()
-
-    def attention_keys(self):
-        """Keys needing the user's attention, shown as notification dots."""
-        return set(self.unread)
-
-    def _update_sidebar_dot(self):
-        from gui.gui_utils.helpers import find_main
-        main = find_main()
-        sidebar = getattr(getattr(main, 'main_pages', None), 'settings_sidebar', None)
-        button = sidebar.page_buttons.get(self.sidebar_button) if sidebar else None
-        if button:
-            button.notification_dot = len(self.attention_keys()) > 0
-            button.update()
 
 
 class WorkflowRun:
-    def __init__(self, workflow):
+    def __init__(self, workflow, notify):
         self.workflow = workflow
+        self.notify = notify
         self.stream_tail = {}  # (role, full_member_id): un-persisted streamed text
         self.pending_confirms = {}  # tool_call_id: (Future resolving to approved bool, label to display)
 
 
 class WorkflowRunManager(BaseRunManager):
     """Tracks live workflow runs by root context id."""
-
-    sidebar_button = 'contexts'
 
     def __init__(self):
         super().__init__()
@@ -70,9 +55,31 @@ class WorkflowRunManager(BaseRunManager):
     def is_running(self, context_id):
         return context_id in self.runs
 
-    def attention_keys(self):
-        awaiting = {context_id for context_id, run in self.runs.items() if run.pending_confirms}
-        return super().attention_keys() | awaiting
+    def is_displayed(self, context_id):
+        widget = self.get_display(context_id)
+        return (
+            widget is not None
+            and widget.isVisible()
+            and getattr(widget.workflow, 'context_id', None) == context_id
+        )
+
+    def attention(self):
+        """The Attention of each chat needing the user, as {context_id: state}.
+        A run awaiting approval counts as a new message."""
+        states = dict(self.unread)
+        for context_id, run in self.runs.items():
+            if run.pending_confirms:
+                states.setdefault(context_id, Attention.NEW)
+        return states
+
+    def mark_new(self, context_id):
+        """Flag a message saved by a run whose chat isn't on screen."""
+        run = self.runs.get(context_id)
+        if (run is None or not run.notify or context_id in self.unread
+                or self.is_displayed(context_id)):
+            return
+        self.unread[context_id] = Attention.NEW
+        self.changed.emit()
 
     def attach(self, widget):
         """Register `widget` as the display for its workflow's context, replay any
@@ -88,11 +95,11 @@ class WorkflowRunManager(BaseRunManager):
 
     async def start(self, workflow, from_member_id=None, feed_back=False, notify=True):
         """Run and track a workflow. `notify=False` for runs whose result is
-        delivered by the caller, so finishing undisplayed isn't "unread"."""
+        delivered by the caller, so their progress undisplayed isn't "unread"."""
         context_id = workflow.ensure_context()
         if context_id in self.runs:
             return
-        self.runs[context_id] = WorkflowRun(workflow)
+        self.runs[context_id] = WorkflowRun(workflow, notify)
         self.errors.pop(context_id, None)
         self.changed.emit()
         try:
@@ -102,14 +109,8 @@ class WorkflowRunManager(BaseRunManager):
             raise
         finally:
             self.runs.pop(context_id, None)
-            widget = self.get_display(context_id)
-            displayed = (
-                widget is not None
-                and widget.isVisible()
-                and getattr(widget.workflow, 'context_id', None) == context_id
-            )
-            if notify and not displayed:
-                self.unread.add(context_id)
+            if notify and not self.is_displayed(context_id):
+                self.unread[context_id] = Attention.DONE
             self.changed.emit()
 
     def stop(self, context_id):
@@ -127,8 +128,7 @@ class WorkflowRunManager(BaseRunManager):
             return None
         future = asyncio.get_running_loop().create_future()
         run.pending_confirms[tool_call_id] = (future, label)
-        widget = self.get_display(context_id)
-        if widget is None or not widget.isVisible():
+        if not self.is_displayed(context_id):
             from utils import sql
             from utils.helpers import display_message
             chat_name = sql.get_scalar("SELECT name FROM contexts WHERE id = ?", (context_id,)) or 'A chat'

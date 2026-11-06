@@ -2,18 +2,10 @@ import os
 import subprocess
 
 # from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMessageBox
 
 from plugins.projects.gui.project_types.general import GeneralProject
 # from plugins.projects.utils.sync import sync_file_to_db
-from plugins.projects.utils.sync import (
-    changed_files, is_project_module, resolve_module_type_name,
-    snapshot_mtimes,
-)
-from gui.gui_utils.helpers import find_main
-from utils import process
-from utils.filesystem import get_application_path
-from utils.helpers import display_message_box, set_module_type
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Project_types')
@@ -42,38 +34,6 @@ class ApplicationProject(GeneralProject):
         #     self._src_base = working_dir
         #     self._seed_mtimes(src_dir)
         #     self._poll_timer.start(2000)
-
-    def on_agent_turn_started(self):
-        self.turn_start_mtimes = snapshot_mtimes()
-
-    def on_agent_turn_finished(self):
-        mtimes = snapshot_mtimes()
-        modified = changed_files(self.turn_start_mtimes, mtimes)
-        if not modified and mtimes.keys() >= self.turn_start_mtimes.keys():
-            return
-        main_pages = find_main().main_pages
-        registered_files = {
-            os.path.abspath(module.__file__)
-            for module in main_pages.get_registered_modules()
-            if is_project_module(module)
-        }
-        src_dir = os.path.join(get_application_path(), 'src')
-        new_modules = {
-            fp for fp in modified - self.turn_start_mtimes.keys()
-            if resolve_module_type_name(os.path.relpath(fp, src_dir))
-        }
-        if modified - registered_files - new_modules:
-            retval = display_message_box(
-                icon=QMessageBox.Question,
-                title='Restart required',
-                text='Files that are not modules were modified. '
-                     'Restart the application to apply them?',
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-            if retval == QMessageBox.Yes:
-                process.restart_app()
-            return
-        main_pages.reload_modules()
 
     # def _seed_mtimes(self, src_dir):
     #     """Record current mtimes for all ``.py`` files under *src_dir*."""

@@ -1,8 +1,8 @@
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_tabs import ConfigTabs
 from gui.widgets.config_joined import ConfigJoined
-from gui.widgets.config_json_db_tree import ConfigJsonDBTree
 from gui.widgets.config_json_tree import ConfigJsonTree
+from plugins.workflows.widgets.agent_tools import AgentTools
 from utils.helpers import set_module_type
 
 
@@ -235,7 +235,7 @@ class ClaudeCodeSettings(ConfigJoined):
             super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.Builtin_Tools(parent=self),
-                self.Custom_Tools(parent=self),
+                AgentTools(parent=self),
             ]
 
         class Builtin_Tools(ConfigFields):
@@ -292,36 +292,5 @@ class ClaudeCodeSettings(ConfigJoined):
                         'type': bool,
                         'default': False,
                         'row_key': 1,
-                    },
-                ]
-
-        class Custom_Tools(ConfigJsonDBTree):
-            def __init__(self, parent):
-                super().__init__(
-                    parent=parent,
-                    add_item_options={'title': 'NA', 'prompt': 'NA'},
-                    del_item_options={'title': 'NA', 'prompt': 'NA'},
-                    tree_header_hidden=True,
-                    table_name='tools',
-                    key_field='uuid',
-                    item_icon_path=':/resources/icon-tool-small.png',
-                    show_fields=[
-                        'name',
-                        'uuid',
-                    ],
-                    readonly=True
-                )
-                self.conf_namespace = 'custom_tools'
-                self.schema = [
-                    {
-                        'text': 'Tool',
-                        'type': str,
-                        'width': 175,
-                        'default': '',
-                    },
-                    {
-                        'text': 'id',
-                        'visible': False,
-                        'default': '',
                     },
                 ]

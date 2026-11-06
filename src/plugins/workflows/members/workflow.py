@@ -17,6 +17,7 @@ from gui.gui_utils.helpers import safe_single_shot
 @set_module_type(module_type='Members', settings='workflow_settings')
 class Workflow(Member):
     workflow_insert_mode = None
+    self_paced = True  # its own members are slowed
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -89,7 +89,7 @@ class _ApprovalButton(MessageButton):
 
 
 @set_module_type(module_type='Bubbles')
-class ClaudeToolBubble(MessageBubble):
+class AgentToolBubble(MessageBubble):
     bubble_bg_color = '#1e222d'
     bubble_text_color = '#8c9fd4'
     wrap_code = True
@@ -159,8 +159,8 @@ class ClaudeToolBubble(MessageBubble):
                 data = json.loads(text)
                 name = data.get('name', 'Tool')
                 tool_input = data.get('input') or {}
-                if name in ('Edit', 'Write'):
-                    self._render_diff(text, name, tool_input)
+                if data.get('diff'):
+                    self._render_diff(text, name, data['diff'])
                     return
                 if name == 'ExitPlanMode':
                     display_text = (
@@ -201,18 +201,13 @@ class ClaudeToolBubble(MessageBubble):
             display_text = f'*{prompt}*\n\n{display_text}'
         super().setMarkdownText(text, display_text=display_text)
 
-    def _render_diff(self, text, name, tool_input):
-        file_path = tool_input.get('file_path', '')
-        if name == 'Write':
-            old_lines = []
-            new_lines = (tool_input.get('content') or '').splitlines()
-            start_line = 1
-        else:
-            old = tool_input.get('old_string') or ''
-            new = tool_input.get('new_string') or ''
-            old_lines = old.splitlines()
-            new_lines = new.splitlines()
-            start_line = _locate_line(file_path, old, new)
+    def _render_diff(self, text, name, diff):
+        file_path = diff.get('path', '')
+        old = diff.get('old_text') or ''
+        new = diff.get('new_text') or ''
+        old_lines = old.splitlines()
+        new_lines = new.splitlines()
+        start_line = _locate_line(file_path, old, new)
 
         rows = build_diff_rows(old_lines, new_lines, start_line)
         adds = sum(1 for r in rows if r[2] == '+')

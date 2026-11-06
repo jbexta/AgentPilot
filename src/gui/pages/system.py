@@ -15,7 +15,6 @@ from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_pages import ConfigPages
 from utils.helpers import display_message, get_languages, set_module_type  # , clone_specific_subdirectory
 from gui.gui_utils.helpers import find_main, retranslate
-from plugins.tasks.managers.tasks import DEFAULT_TASK_TEMPLATE
 from plugins.projects.gui.widgets.github_account import GitHubAccount
 from utils.reset import reset_application, create_blank_db, bootstrap_modules, bootstrap_entities, run_bake_block_maps, scrape_models
 
@@ -193,6 +192,12 @@ class Page_System_Settings(ConfigJoined):
                     'default': True,
                 },
                 {
+                    'text': 'Resume chats on startup',
+                    'type': bool,
+                    'default': True,
+                    'tooltip': 'Continue the chats that were running when the app was restarted or closed.',
+                },
+                {
                     'text': 'Allow importing db modules',
                     'type': bool,
                     'default': False,
@@ -300,7 +305,7 @@ class Page_System_Settings(ConfigJoined):
                 {
                     'text': 'Task template',
                     'type': str,
-                    'default': DEFAULT_TASK_TEMPLATE,
+                    'default': '',
                     'num_lines': 5,
                     'label_position': 'top',
                     'stretch_x': True,

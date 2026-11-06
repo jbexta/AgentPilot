@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from enum import IntEnum
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPainter, QPixmap, Qt
@@ -9,11 +10,27 @@ from PySide6.QtWidgets import (
 )
 
 from gui import system
+from gui.style import NOTIFY_DONE_COLOR, NOTIFY_NEW_COLOR
 from utils import sql
 from utils.helpers import (
     TRANSLATIONS, convert_to_safe_case, display_message, get_metadata,
     load_language, tr,
 )
+
+
+class Attention(IntEnum):
+    """How much a widget's content needs the user, shown as a coloured dot.
+    The highest state wins as it bubbles up to tabs and page buttons."""
+    NONE = 0
+    NEW = 1  # new messages
+    DONE = 2  # turn complete
+
+    @property
+    def color(self):
+        return {
+            Attention.NEW: NOTIFY_NEW_COLOR,
+            Attention.DONE: NOTIFY_DONE_COLOR,
+        }.get(self)
 
 
 _main_window = None

@@ -2,8 +2,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QPushButton
 
-from gui.gui_utils.helpers import colorize_pixmap
-from gui.style import ACCENT_COLOR_1
+from gui.gui_utils.helpers import Attention, colorize_pixmap
 from utils.helpers import path_to_pixmap
 
 
@@ -29,7 +28,7 @@ class IconButton(QPushButton):
         self.opacity = opacity
 
         self.icon = None
-        self.notification_dot = False
+        self.notification_dot = Attention.NONE
         # if isinstance(icon_path, str):
         self.pixmap = path_to_pixmap(icon_path, diameter=size, opacity=opacity)  if icon_path else QPixmap(0, 0)
         # copy of pixmap to restore when leaving hover state
@@ -68,9 +67,9 @@ class IconButton(QPushButton):
         super().paintEvent(event)
         if self.notification_dot:
             painter = QPainter(self)
-            accent_color = QColor(ACCENT_COLOR_1)
-            painter.setPen(accent_color)
-            painter.setBrush(accent_color)
+            color = QColor(self.notification_dot.color)
+            painter.setPen(color)
+            painter.setBrush(color)
             radius = 4
             painter.drawEllipse(self.rect().right() - radius * 2 - 4, 4, radius * 2, radius * 2)
             painter.end()

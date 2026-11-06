@@ -6,7 +6,7 @@ from typing_extensions import override
 from gui import system
 
 
-from gui.gui_utils.helpers import find_main, save_table_config
+from gui.gui_utils.helpers import Attention, find_main, save_table_config
 from gui.widgets.config_widget import ConfigWidget
 from utils import sql
 from utils.helpers import display_message, display_message_box, convert_to_safe_case, format_llm_tools, get_text, readable_class_name, set_module_type
@@ -26,6 +26,25 @@ class ConfigCollection(ConfigWidget):
         current_page = self.content.currentWidget()
         if current_page and hasattr(current_page, 'load'):
             current_page.load()
+
+    @override
+    def attention(self):
+        return max(
+            (p.attention() for p in self.pages.values() if hasattr(p, 'attention')),
+            default=Attention.NONE,
+        )
+
+    @override
+    def update_attention(self):
+        """Dot every page needing attention, except the current one."""
+        current = self.content.currentWidget()
+        for page_name, page in self.pages.items():
+            show = page is not current and hasattr(page, 'attention')
+            self.set_page_attention(page_name, page.attention() if show else Attention.NONE)
+        super().update_attention()
+
+    def set_page_attention(self, page_name, state):
+        pass
 
     @override
     def get_agent_visualisation(self, refs):

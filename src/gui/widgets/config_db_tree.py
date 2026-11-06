@@ -13,7 +13,7 @@ from plugins.workflows.utils.workflows import merge_config_into_workflow_config
 from utils.helpers import BaseManager, set_module_type, llm_tool, format_llm_tools
 
 from gui import system
-from gui.gui_utils.helpers import save_table_config, bake_table_item
+from gui.gui_utils.helpers import Attention, save_table_config, bake_table_item
 from gui.gui_utils.custom_menu import CustomMenu
 from gui.widgets.config_tree import ConfigTree
 
@@ -198,25 +198,35 @@ class ConfigDBTree(ConfigTree):
         # self.after_init()
 
     def refresh_notify_badges(self):
+        """Mark the rows of running chats and paint each row's attention dot,
+        then bubble the tree's attention up."""
         from plugins.workflows.utils.runs import get_run_manager
-        self.tree._notify_ids = self.get_notify_ids(get_run_manager().attention_keys())
+        runs = get_run_manager()
+        attention = runs.attention()
+        context_ids = attention.keys() | runs.runs.keys()
+        pairs = [
+            (context_id, row_id)
+            for context_id, row_id in self.context_rows(context_ids)
+            if row_id in self.tree.items_mapping
+        ]
+        notify_ids = {}
+        for context_id, row_id in pairs:
+            state = attention.get(context_id, Attention.NONE)
+            if state > notify_ids.get(row_id, Attention.NONE):
+                notify_ids[row_id] = state
+        self.tree._notify_ids = notify_ids
+        self.tree._running_ids = {row_id for context_id, row_id in pairs if context_id in runs.runs}
         self.tree.viewport().update()
+        self.update_attention()
 
-    def get_notify_ids(self, unread_context_ids) -> set:
-        """Map unread context ids to this tree's row ids. Rows in `contexts` map
-        directly; other tables map through contexts linked to their uuid."""
-        from utils import sql
-        if not unread_context_ids:
-            return set()
-        if self.table_name == 'contexts':
-            return set(unread_context_ids)
-        placeholders = ','.join('?' * len(unread_context_ids))
-        rows = sql.get_results(f"""
-            SELECT DISTINCT t.id
-            FROM `{self.table_name}` t
-            JOIN contexts c ON instr(c.config, '{self.table_name}.' || t.uuid) > 0
-            WHERE c.id IN ({placeholders})""", tuple(unread_context_ids), return_type='list')
-        return set(rows)
+    @override
+    def attention(self):
+        return max(self.tree._notify_ids.values(), default=Attention.NONE)
+
+    def context_rows(self, context_ids):
+        """Pair context ids with this tree's row ids, as (context_id, row_id).
+        Rows in `contexts` map directly; trees of other tables override this."""
+        return [(context_id, context_id) for context_id in context_ids]
 
     def after_init(self):
         from plugins.workflows.widgets.workflow_settings import WorkflowSettings
@@ -226,7 +236,7 @@ class ConfigDBTree(ConfigTree):
             self.config_widget.header_widget.build_schema()
 
     def on_manager_changed(self):
-        if self._editing_manager:
+        if self._editing_manager or not self.isVisible():
             return
         self.load(silent_select_id=self.get_selected_item_id())
 
@@ -305,6 +315,8 @@ class ConfigDBTree(ConfigTree):
         )
         if ':search' not in self.query and self.get_search_text():
             self.filter_rows()
+        if self.notify_unread:
+            self.refresh_notify_badges()
 
         selected_id = self.get_selected_item_id()
         if (not append and select_id is None and silent_select_id is None

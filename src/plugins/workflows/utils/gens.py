@@ -5,7 +5,7 @@ import shiboken6
 from PySide6.QtCore import QTimer
 
 from gui import system
-from gui.gui_utils.helpers import find_attribute
+from gui.gui_utils.helpers import Attention, find_attribute
 from plugins.workflows.utils.runs import BaseRunManager
 from plugins.workflows.utils.download import download_url_to_file
 from utils.helpers import display_message
@@ -52,7 +52,6 @@ class MediaGenManager(BaseRunManager):
     whichever MultiPreview currently displays the clip, and persists results
     into the clip config (marking it unread) when none does."""
 
-    sidebar_button = 'videos'
     POLL_INTERVAL_MS = 3000
 
     def __init__(self):
@@ -227,7 +226,7 @@ class MediaGenManager(BaseRunManager):
             clip.member_config['preview.results'] = results
             clip.member_config['preview.pending'] = list(gen.pending)
             gen.studio.update_config()
-            self.unread.add(key)
+            self.unread[key] = Attention.DONE
             clip.update()
         self._finish(key)
 

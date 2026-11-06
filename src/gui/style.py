@@ -8,6 +8,8 @@ SECONDARY_COLOR = '#ff292629'
 TEXT_COLOR = '#ffcacdd5'
 ACCENT_COLOR_1 = '#ff438bb9'
 ACCENT_COLOR_2 = '#ff6aab73'
+NOTIFY_NEW_COLOR = '#ff3d8fe0'
+NOTIFY_DONE_COLOR = '#ff4cb85c'
 
 
 def is_native_style():
@@ -193,6 +195,11 @@ QMenu::separator {{
 QMenu::indicator {{
      width: 20px;
      height: 13px;
+}}
+QPushButton.splitter-flip {{
+    background-color: {SECONDARY_COLOR};
+    border: 1px solid {LIGHT_TEXT_COLOR};
+    border-radius: 12px;
 }}
 QPushButton.send {{
     background-color: {SECONDARY_COLOR};

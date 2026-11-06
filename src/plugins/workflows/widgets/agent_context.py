@@ -1,4 +1,5 @@
 import os
+from functools import partial
 from pathlib import Path
 
 import qasync
@@ -8,27 +9,29 @@ from PySide6.QtWidgets import QMessageBox
 
 from gui import system
 from gui.widgets.config_fields import ConfigFields
+from plugins.workflows.utils.acp import acp_agent_classes
 from plugins.workflows.utils.workflows import blocks_instant_runnable
 from utils.helpers import (
     block_signals, display_message, display_message_box, set_module_type)
 
-CONTEXT_FILES = {'claude_md': 'CLAUDE', 'agents_md': 'AGENTS'}
 EXPENSIVE_MSG = ("Auto-write is off: the template uses a block that can't "
                  'be instantly run. Click Write to render it.')
 
 
-def find_context_files(directory, stem):
-    """Existing ``<stem>.md``/``.MD`` files in *directory*, then in its
-    ``.claude`` folder, matched by real entries so case-insensitive
-    filesystems don't yield one file twice."""
-    folders = (Path(directory), Path(directory) / '.claude')
+def find_context_files(directory, name, subdirs=()):
+    """Existing copies of context file *name* (in either ``.md`` case) in
+    *directory*, then in its *subdirs*, matched by real entries so
+    case-insensitive filesystems don't yield one file twice."""
+    stem = Path(name).stem
+    folders = [Path(directory)] + [Path(directory) / d for d in subdirs]
     return [f / n for f in folders if f.is_dir()
             for n in (f'{stem}.md', f'{stem}.MD') if n in os.listdir(f)]
 
 
 @set_module_type(module_type='Widgets')
-class ClaudeContext(ConfigFields):
-    """Edits the CLAUDE.md and AGENTS.md files of a directory as one text.
+class AgentContext(ConfigFields):
+    """Edits the context files of a directory (CLAUDE.md, AGENTS.md, ...)
+    as one text. There is a checkbox per file the coding agents read.
 
     *directory* is a callable returning the directory, or a falsy value
     to disable the widget. The text is a jinja template stored in the
@@ -44,19 +47,38 @@ class ClaudeContext(ConfigFields):
         self.checked = {}
         self.suspended = False
         self.cheap = self.last_cheap = True
+
+        agents = acp_agent_classes()
+        names = dict.fromkeys(n for a in agents for n in a.context_files)
+        self.files = {n.replace('.', '_').lower(): n for n in names}
+        self.subdirs = {
+            key: tuple(dict.fromkeys(
+                d for a in agents if name in a.context_files
+                for d in a.context_dirs))
+            for key, name in self.files.items()
+        }
+        self.readers = {
+            a.agent_name: [k for k, n in self.files.items()
+                           if n in a.context_files]
+            for a in agents
+        }
+        self.default_keys = [k for k, n in self.files.items()
+                             if agents and n in agents[0].context_files]
+
         row = {'type': bool, 'row_key': 0}
         open_btn = {**row, 'text': '', 'type': 'button',
                     'label_position': None, 'size': 20,
                     'icon_path': ':/resources/icon-files.png'}
-        self.schema = [
-            {**row, 'text': 'CLAUDE.md', 'key': 'claude_md', 'default': True},
-            {**open_btn, 'key': 'open_claude_md', 'tooltip': 'Open CLAUDE.md',
-             'target': lambda: self.open_file('CLAUDE'),
-             'visibility_predicate': lambda: bool(self.context_file('CLAUDE'))},
-            {**row, 'text': 'AGENTS.md', 'key': 'agents_md', 'default': False},
-            {**open_btn, 'key': 'open_agents_md', 'tooltip': 'Open AGENTS.md',
-             'target': lambda: self.open_file('AGENTS'),
-             'visibility_predicate': lambda: bool(self.context_file('AGENTS'))},
+        self.schema = []
+        for key, name in self.files.items():
+            self.schema += [
+                {**row, 'text': name, 'key': key,
+                 'default': key in self.default_keys},
+                {**open_btn, 'key': f'open_{key}', 'tooltip': f'Open {name}',
+                 'target': partial(self.open_file, key),
+                 'visibility_predicate': partial(self.has_file, key)},
+            ]
+        self.schema += [
             {**row, 'type': 'stretch'},
             {**row, 'text': 'Auto-write', 'key': 'auto_write',
              'default': True},
@@ -72,18 +94,23 @@ class ClaudeContext(ConfigFields):
              'visible': False},
         ]
 
-    def context_file(self, stem):
-        directory = self.directory()
-        return directory and next(
-            iter(find_context_files(directory, stem)), None)
+    def find_files(self, key, directory=None):
+        return find_context_files(directory or self.directory(),
+                                  self.files[key], self.subdirs[key])
 
-    def open_file(self, stem):
+    def context_file(self, key):
+        return self.directory() and next(iter(self.find_files(key)), None)
+
+    def has_file(self, key):
+        return bool(self.context_file(key))
+
+    def open_file(self, key):
         QDesktopServices.openUrl(
-            QUrl.fromLocalFile(str(self.context_file(stem))))
+            QUrl.fromLocalFile(str(self.context_file(key))))
 
     def get_config(self):
         return {k: v for k, v in super().get_config().items()
-                if not k.endswith('_md')}
+                if k not in self.files}
 
     def set_cheap(self, template, notify=True):
         """Allow auto-write only while every block is instant runnable,
@@ -103,12 +130,12 @@ class ClaudeContext(ConfigFields):
         super().load()
         directory = self.directory()
         self.setEnabled(bool(directory))
-        found = {key: find_context_files(directory, stem)
-                 for key, stem in CONTEXT_FILES.items()} if directory else {}
+        found = {key: self.find_files(key)
+                 for key in self.files} if directory else {}
         paths = {key: files[0] for key, files in found.items() if files}
         contents = {k: p.read_text('utf-8') for k, p in paths.items()}
-        self.checked = {k: k in (paths or ['claude_md'])
-                        for k in CONTEXT_FILES}
+        self.checked = {k: k in (paths or self.default_keys)
+                        for k in self.files}
         first = next(iter(paths.values()), None)
         first_text = next(iter(contents.values()), '')
         template = self.config.get(f'{self.conf_namespace}.text')
@@ -147,19 +174,29 @@ class ClaudeContext(ConfigFields):
 
     def update_config(self):
         newly_checked = False
-        for key, stem in CONTEXT_FILES.items():
+        for key in self.files:
             checked = getattr(self, f'{key}_wgt').get_value()
             if checked == self.checked.get(key):
                 continue
             self.checked[key] = checked
             newly_checked |= checked
-            path = next(iter(find_context_files(self.directory(), stem)), None)
+            path = self.context_file(key)
             if not checked and path and display_message_box(
                 icon=QMessageBox.Question, title='Delete file',
                 text=f'Delete {path}?',
                 buttons=QMessageBox.Yes | QMessageBox.No,
             ) == QMessageBox.Yes:
                 path.unlink()
+        if newly_checked:
+            duplicates = [
+                f'{agent} reads ' + ' and '.join(self.files[k] for k in keys)
+                for agent, keys in self.readers.items()
+                if sum(bool(self.checked.get(k)) for k in keys) > 1
+            ]
+            if duplicates:
+                display_message(
+                    '\n'.join(duplicates) + ', so it will see the text twice.',
+                    title='Duplicate context', icon=QMessageBox.Warning)
         text = self.text_wgt.get_value()
         self.set_cheap(text)
         if (self.cheap and self.auto_write_wgt.get_value()
@@ -183,10 +220,10 @@ class ClaudeContext(ConfigFields):
         directory = Path(self.directory())
         directory.mkdir(parents=True, exist_ok=True)
         written = []
-        for key, stem in CONTEXT_FILES.items():
+        for key, name in self.files.items():
             if self.checked.get(key):
-                path = next(iter(find_context_files(directory, stem)),
-                            directory / f'{stem}.md')
+                path = next(iter(self.find_files(key, directory)),
+                            directory / name)
                 path.write_text(rendered, encoding='utf-8')
                 written.append(str(path))
         if notify:

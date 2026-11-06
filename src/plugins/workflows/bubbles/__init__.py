@@ -59,6 +59,7 @@ class MessageBubble(QTextEdit):
     def __init__(self, parent, message, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent
+        self._size_cache = {}
         self.msg_id: int = None
         self.member_id: str = None
         # print(f"MessageBubble: {message.id} {message.member_id} {message.role}")
@@ -85,6 +86,7 @@ class MessageBubble(QTextEdit):
             QtWidgets.QSizePolicy.Preferred
         )
         self.setWordWrapMode(QTextOption.WordWrap)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setContextMenuPolicy(Qt.NoContextMenu)
         self.collapsed = False
 
@@ -172,6 +174,7 @@ class MessageBubble(QTextEdit):
         return code_blocks_with_line_numbers
 
     def on_text_edited(self):
+        self._size_cache.clear()
         self.updateGeometry()
         self.parent.check_and_toggle_buttons()
         # self.parent.check_and_toggle_collapse_button()
@@ -310,6 +313,7 @@ class MessageBubble(QTextEdit):
         # cursor.setPosition(start, cursor.MoveAnchor)
         # cursor.setPosition(end, cursor.KeepAnchor)
         # self.setTextCursor(cursor)
+        self._size_cache.clear()
         self.code_blocks = self.extract_code_blocks(text)
         # self.update_size()
 
@@ -422,6 +426,9 @@ class MessageBubble(QTextEdit):
 
     def _size_for(self, bubble_width):
         import math
+        cache_key = (bubble_width, self.frameWidth())
+        if cache_key in self._size_cache:
+            return self._size_cache[cache_key]
         # Clone the document to avoid altering the state of the real one.
         doc = self.document().clone()
         margins = self.contentsMargins()
@@ -437,25 +444,25 @@ class MessageBubble(QTextEdit):
         available_width = bubble_width - chrome - margins.left() - margins.right()
         max_text_width = available_width if available_width > 0 else 400
 
-        # --- Step 2: Calculate the text's "ideal" unwrapped width.
-        # Set text width to -1 to tell the layout to calculate the size without any wrapping.
-        doc.setTextWidth(-1)
-        ideal_content_width = math.ceil(doc.idealWidth()) # + 6
-
-        # --- Step 3: Determine the actual width the bubble should use.
-        # It should be as wide as its content, but no wider than the maximum allowed.
-        final_text_width = min(ideal_content_width, max_text_width)
-
-        # --- Step 4: Calculate the required height based on that final width.
-        # Now we set the final width to allow the layout to calculate wrapping and height.
-        doc.setTextWidth(final_text_width)
+        # --- Step 2: Lay out once at the max width. Shrinking to the widest
+        # line can't change the line breaks, so the height holds for both.
+        doc.setTextWidth(max_text_width)
         text_height = doc.size().height()
+
+        # --- Step 3: Use the full width if any line wrapped, else shrink
+        # the bubble to its content.
+        block = doc.begin()
+        while block.isValid() and block.layout().lineCount() <= block.text().count(' ') + 1:
+            block = block.next()
+        wrapped = block.isValid()
+        final_text_width = max_text_width if wrapped else min(math.ceil(doc.idealWidth()), max_text_width)
 
         # --- Step 5: Return the total size, including the widget's margins and chrome.
         hint_width = final_text_width + margins.left() + margins.right() + chrome
         hint_height = text_height + margins.top() + margins.bottom() + frame
 
-        return QSize(hint_width, hint_height)
+        self._size_cache[cache_key] = QSize(hint_width, hint_height)
+        return self._size_cache[cache_key]
 
     def minimumSizeHint(self):
         # QTextEdit's default minimumSizeHint inherits from QAbstractScrollArea

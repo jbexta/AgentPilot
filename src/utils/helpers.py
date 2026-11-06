@@ -868,6 +868,7 @@ def exec_non_modal(dialog):
     loop = QEventLoop()
     dialog.finished.connect(loop.quit)
     dialog.show()
+    dialog.activateWindow()
     mark_primary_buttons(dialog)
     loop.exec()
     return dialog.result()

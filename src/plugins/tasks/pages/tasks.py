@@ -32,7 +32,7 @@ from gui import system
 STATUS_ICONS = {
     'TODO': ':/resources/icon-dot.svg',
     'RUNNING': ':/resources/icon-run.png',
-    'AWAITING_APPROVAL': ':/resources/icon-pause.png',
+    'REVIEW': ':/resources/icon-pause.png',
     'DONE': ':/resources/icon-tick.svg',
     'FAILED': ':/resources/icon-cross.png',
     'RECURRING': ':/resources/icon-refresh.png',
@@ -745,7 +745,7 @@ class Page_Tasks_Settings(ConfigJoined):
                         replace(replace(kind, ':Todo', ''), ':Issues', ''),
                         CASE WHEN kind LIKE '%:Todo' THEN 0 WHEN kind LIKE '%:Issues' THEN 1 ELSE 2 END,
                         CASE status
-                            WHEN 'AWAITING_APPROVAL' THEN 0
+                            WHEN 'REVIEW' THEN 0
                             WHEN 'RUNNING' THEN 1
                             WHEN 'FAILED' THEN 2
                             WHEN 'TODO' THEN 3
@@ -831,15 +831,15 @@ class Page_Tasks_Settings(ConfigJoined):
                         done_ids.discard(item_id)
             self.tree._disabled_ids = done_ids  # painted dimmed
 
-        def get_notify_ids(self, unread_context_ids):
-            if not unread_context_ids:
-                return set()
-            placeholders = ','.join('?' * len(unread_context_ids))
-            kinds = sql.get_results(
-                f"SELECT kind FROM contexts WHERE id IN ({placeholders}) AND kind LIKE 'TASK:%'",
-                tuple(unread_context_ids), return_type='list',
+        def context_rows(self, context_ids):
+            if not context_ids:
+                return []
+            placeholders = ','.join('?' * len(context_ids))
+            rows = sql.get_results(
+                f"SELECT id, kind FROM contexts WHERE id IN ({placeholders}) AND kind LIKE 'TASK:%'",
+                tuple(context_ids),
             )
-            return {int(kind.partition(':')[2]) for kind in kinds}
+            return [(context_id, int(kind.partition(':')[2])) for context_id, kind in rows]
 
         def on_edited(self):
             daemon = system.manager.daemons.running_daemons.get('tasks')
@@ -1050,6 +1050,8 @@ class Page_Tasks_Settings(ConfigJoined):
                 self.description.load_config({
                     'task': stored.get('task', ''),
                     'time_expression': stored.get('time_expression', ''),
+                    'use_template': stored.get('use_template', True),
+                    'speed': stored.get('speed', 1.0),
                 })
 
             def load(self):
@@ -1087,6 +1089,26 @@ class Page_Tasks_Settings(ConfigJoined):
                             'placeholder_text': 'What is the task?',
                             'label_position': None,
                             'wrap_text': True,
+                        },
+                        {
+                            'text': 'Use template',
+                            'key': 'use_template',
+                            'type': bool,
+                            'default': True,
+                            'tooltip': 'Send the task with the `Task template` setting, otherwise send the task text as it is',
+                            'row_key': 'options',
+                        },
+                        {
+                            'text': 'Speed',
+                            'key': 'speed',
+                            'type': float,
+                            'style': 'slider',
+                            'minimum': 0.1,
+                            'maximum': 1.0,
+                            'step': 0.1,
+                            'default': 1.0,
+                            'tooltip': 'Below 1.0, waits (1 - speed) * 10 seconds after each workflow member',
+                            'row_key': 'options',
                         },
                     ]
 

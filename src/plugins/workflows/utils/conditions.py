@@ -8,6 +8,8 @@ Condition members.
 import celpy
 import celpy.celtypes
 
+from utils.helpers import convert_to_safe_case
+
 
 def evaluate_condition(expression, context):
     """Compile and evaluate a CEL expression against a context dict.
@@ -50,14 +52,22 @@ def build_condition_context(workflow):
         for CEL expression evaluation.
     """
     members_ctx = {}
+    placeholders_ctx = {}
     for m_id, member in workflow.members.items():
         members_ctx[m_id] = {
             'output': member.last_output or '',
             'name': member.config.get('info.name', ''),
             'type': member.config.get('_TYPE', ''),
         }
+        placeholder = member.config.get(
+            'group.output_placeholder',
+            f"{member.config.get('name', 'Assistant')}_{m_id}",
+        )
+        if placeholder:
+            placeholders_ctx[convert_to_safe_case(placeholder).lower()] = member.last_output or ''
 
     return {
+        **placeholders_ctx,
         'members': members_ctx,
         'params': dict(workflow.params) if workflow.params else {},
     }

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication, QPushButton, QTreeWidgetItem
 from gui.style import ACCENT_COLOR_1
 from utils.helpers import block_signals
 
-from gui.gui_utils.helpers import colorize_pixmap, find_ancestor_tree_item_id, find_attribute, find_main
+from gui.gui_utils.helpers import colorize_pixmap, find_ancestor_tree_item_id, find_main
 from gui.gui_utils.custom_menu import CustomMenu
 from gui.widgets.config_db_tree import ConfigDBTree
 from gui.widgets.config_fields import ConfigFields
@@ -15,7 +15,8 @@ from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_json_tree import ConfigJsonTree
 from gui.widgets.config_tabs import ConfigTabs
 from plugins.files.widgets.file_tree import FileTree
-from plugins.claude_code.widgets.claude_context import ClaudeContext
+from plugins.workflows.utils.agent_kinds import AgentKindTree
+from plugins.workflows.widgets.agent_context import AgentContext
 from plugins.workflows.widgets.chat_widget import ChattableWorkflowWidget
 from plugins.workflows.pages.plans import Page_Plan_Settings
 from plugins.workflows.pages.skills import Page_Skill_Settings
@@ -29,7 +30,6 @@ class GeneralProject(ConfigJoined):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            resizable=True,
             propagate_config=True,
             widgets=[
                 self.Project_Fields(parent=self),
@@ -37,6 +37,14 @@ class GeneralProject(ConfigJoined):
                 self.Project_Bottom_Tabs(parent=self),
             ],
         )
+
+    def build_schema(self):
+        self.widgets[0].build_schema()
+        self.layout.addWidget(self.widgets[0])
+        panes = ConfigJoined(parent=self, resizable=True, widgets=self.widgets[1:], layout_type='vertical')
+        panes.build_schema()
+        self.layout.addWidget(panes)
+        self.after_init()
 
     def after_init(self):
         file_preview = self.widgets[1].pages['Files'].file_preview
@@ -130,7 +138,7 @@ class GeneralProject(ConfigJoined):
                 parent=parent,
                 pages={
                     'Files': parent.Project_File_Tree(parent=self),
-                    'Context': ClaudeContext(self, lambda: self.config.get(
+                    'Context': AgentContext(self, lambda: self.config.get(
                         'working_dir'), conf_namespace='context'),
                 }
             )
@@ -207,6 +215,7 @@ class GeneralProject(ConfigJoined):
                     config_widget=self.Project_Chat_Widget(parent=self),
                     tree_header_hidden=True,
                     collapsible_tree=True,
+                    notify_unread=True,
                     extra_buttons=[
                         {
                             'text': 'Group by file',
@@ -306,18 +315,21 @@ class GeneralProject(ConfigJoined):
                         SELECT
                             m.context_id,
                             substr(
-                                json_extract(m.msg, '$.input.file_path'),
+                                path.value,
                                 length(json_extract(p.config, '$.working_dir')) + 2
                             ) AS rel_path
                         FROM contexts_messages m
                         JOIN contexts c ON c.id = m.context_id
                         JOIN projects p ON c.kind = 'PROJECT:' || p.id
+                        JOIN json_each(
+                            iif(m.role = 'agent_tool', m.msg, '{}'),
+                            '$.paths'
+                        ) path
                         WHERE c.kind = :kind
                           AND m.del = 0
-                          AND m.role = 'claude_tool'
-                          AND json_extract(m.msg, '$.name')
-                              IN ('Edit','Write','MultiEdit','NotebookEdit')
-                          AND json_extract(m.msg, '$.input.file_path')
+                          AND m.role = 'agent_tool'
+                          AND json_extract(m.msg, '$.kind') = 'edit'
+                          AND path.value
                               LIKE json_extract(p.config, '$.working_dir') || '/%'
                         ORDER BY rel_path
                     """,
@@ -525,17 +537,6 @@ class GeneralProject(ConfigJoined):
                         workflow_editable=False,
                     )
 
-                async def run_workflow_async(self, *args, **kwargs):
-                    from plugins.workflows.utils.runs import get_run_manager
-                    context_id = self.workflow.context_id
-                    on_started = find_attribute(self, 'on_agent_turn_started')
-                    if on_started and not get_run_manager().is_running(context_id):
-                        on_started()
-                    await super().run_workflow_async(*args, **kwargs)
-                    on_finished = find_attribute(self, 'on_agent_turn_finished')
-                    if on_finished and not get_run_manager().is_running(context_id):
-                        on_finished()
-
                 def load_config(self, json_config=None):
                     parent_kind = self.parent.kind
                     if callable(parent_kind):
@@ -560,7 +561,7 @@ class GeneralProject(ConfigJoined):
                         'SELECT kind FROM contexts WHERE id = ?', (task_id,),
                     )
 
-        class Project_Skills_Tree(ConfigDBTree):
+        class Project_Skills_Tree(AgentKindTree, ConfigDBTree):
             def __init__(self, parent):
                 super().__init__(
                     parent=parent,
@@ -573,10 +574,11 @@ class GeneralProject(ConfigJoined):
                             id,
                             uuid,
                             folder_id,
-                            parent_id
+                            parent_id,
+                            kind
                         FROM skills
-                        WHERE kind = :kind
-                        ORDER BY pinned DESC, ordr, name COLLATE NOCASE
+                        WHERE kind LIKE :kind || ':%'
+                        ORDER BY kind, pinned DESC, ordr, name COLLATE NOCASE
                     """,
                     schema=[
                         {
@@ -607,6 +609,7 @@ class GeneralProject(ConfigJoined):
                     support_item_nesting=True,
                     searchable=True,
                     collapsible_tree=True,
+                    group_by_kind=True,
                 )
 
             # A skill is text (its SKILL.md), not a workflow: edit it exactly
@@ -614,7 +617,6 @@ class GeneralProject(ConfigJoined):
             on_item_selected = Page_Skill_Settings.on_item_selected
             save_config = Page_Skill_Settings.save_config
             rename_item = Page_Skill_Settings.rename_item
-            _name_for = Page_Skill_Settings._name_for
             _db_config_for = Page_Skill_Settings._db_config_for
 
             def on_edited(self):

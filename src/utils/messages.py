@@ -187,7 +187,9 @@ class MessageHistory:
             self.refresh_messages()
 
             from plugins.workflows.utils.runs import get_run_manager
-            get_run_manager().clear_tail(self.workflow.context_id, member_id, role=role)
+            runs = get_run_manager()
+            runs.clear_tail(self.workflow.context_id, member_id, role=role)
+            runs.mark_new(self.workflow.context_id)
 
             return new_msg
 

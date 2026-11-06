@@ -1,6 +1,12 @@
 import asyncio
 import json
+import time
 
+from plugins.workflows.utils.conditions import (
+    build_condition_context,
+    evaluate_condition,
+)
+from gui import system
 from utils import sql
 
 
@@ -22,6 +28,7 @@ class DefaultBehavior:
             return
 
         self.workflow.responding = True
+        slowdown = 1 / system.manager.tasks.speed(self.workflow.context_id) - 1
         filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
         found_source = True if from_member_id is None else False
 
@@ -38,18 +45,45 @@ class DefaultBehavior:
                 if not found_source:
                     continue  # todo clean mechanism
                 if not all(
-                    self.workflow.members[inp_id].turn_output is not None 
+                    self.workflow.members[inp_id].turn_output is not None
                     for inp_id in getattr(member, "inputs", [])
                 ):
                     break
+                if not conditions_pass(member_id):
+                    for branch_id, branch_member in self.workflow.members.items():
+                        if branch_id == member_id or self.workflow.walk_inputs_recursive(branch_id, {member_id}):
+                            self.workflow.save_message(
+                                'hidden', 'UNREACHABLE', branch_member.full_member_id(),
+                            )
+                    self.workflow.message_history.refresh_messages()
+                    continue
                 if getattr(member, 'break_on_run', False):
                     break
                 runnable.append(member_id)
 
                 if self.workflow.member_looper_output(member_id) is not None:
-                    break
+                    break #
 
             return runnable
+
+        def conditions_pass(member_id) -> bool:
+            context = build_condition_context(self.workflow)
+            for input_info in self.workflow.config.get('inputs', []):
+                config = input_info['config']
+                if input_info['target_member_id'] != member_id or config.get('looper', False):
+                    continue
+                input_member = context['members'][input_info['source_member_id']]
+                if (
+                    input_member['type'] == 'condition'
+                    and input_member['output'] != config.get('branch', 'True').lower()
+                ):
+                    return False
+                if not config.get('conditional', False):
+                    continue
+                context['input_member'] = input_member
+                if not evaluate_condition(config.get('condition', 'true'), context):
+                    return False
+            return True
 
         async def run_member_task(member_id):  # todo dirty
             member = self.workflow.members[member_id]
@@ -62,7 +96,8 @@ class DefaultBehavior:
                 runnable_member_ids = get_async_members()
                 if not runnable_member_ids:
                     break  # done
-                
+
+                started = time.monotonic()
                 if len(runnable_member_ids) > 1:
                     # run all ready members concurrently
                     await asyncio.gather(*[
@@ -90,6 +125,12 @@ class DefaultBehavior:
                 self.workflow.message_history.refresh_messages()
                 if self.workflow.chat_widget:
                     self.workflow.chat_widget.message_collection.refresh(block_autorun=True)
+
+                if slowdown > 0 and not any(
+                    self.workflow.members[member_id].self_paced
+                    for member_id in runnable_member_ids
+                ):
+                    await asyncio.sleep((time.monotonic() - started) * slowdown)
 
                 if self.workflow.stop_requested:
                     break

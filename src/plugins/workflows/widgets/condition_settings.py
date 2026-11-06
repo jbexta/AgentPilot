@@ -1,8 +1,3 @@
-"""Condition Settings Widget.
-
-Provides a CEL expression editor for the Condition member type.
-"""
-
 from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from utils.helpers import set_module_type

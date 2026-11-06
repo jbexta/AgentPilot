@@ -31,9 +31,10 @@ from gui.widgets.config_fields import ConfigFields
 from gui.widgets.config_joined import ConfigJoined
 from gui.widgets.config_tabs import ConfigTabs
 from plugins.files.widgets.file_tree import FileTree
-from plugins.claude_code.members.conversation.claude_code import format_tool_result_content
+from plugins.claude_code.members.conversation.claude_code import (
+    agent_tool_json, format_tool_result_content)
 from plugins.claude_code.utils.projects import DEFAULT_CWD, get_default_cwd
-from plugins.claude_code.widgets.claude_context import ClaudeContext
+from plugins.workflows.widgets.agent_context import AgentContext
 from plugins.claude_code.widgets.cc_user_settings import (
     CCSettings_Advanced,
     CCSettings_General,
@@ -268,7 +269,7 @@ def _extract_messages(chain):
                         if not isinstance(block, dict):
                             continue
                         if block.get('type') == 'tool_result':
-                            yield ('claude_tool_result',
+                            yield ('agent_tool_result',
                                    format_tool_result_content(block.get('content')),
                                    ts, uuid)
                         elif block.get('type') == 'text':
@@ -295,11 +296,11 @@ def _extract_messages(chain):
                             if think.strip():
                                 yield 'thinking', think, ts, uuid
                         elif btype == 'tool_use':
-                            yield ('claude_tool',
-                                   json.dumps({
-                                       'name': block.get('name', ''),
-                                       'input': block.get('input') or {},
-                                   }),
+                            yield ('agent_tool',
+                                   agent_tool_json(
+                                       block.get('id'),
+                                       block.get('name', ''),
+                                       block.get('input')),
                                    ts, uuid)
 
 
@@ -760,7 +761,7 @@ class Page_Claude_Settings(ConfigTabs):
 
         def __init__(self, parent):
             super().__init__(parent=parent, propagate_config=True)
-            self.context = ClaudeContext(
+            self.context = AgentContext(
                 self, get_default_cwd, conf_namespace='claude.context')
             self.context.stretch = 1
             self.widgets = [self.Defaults_Fields(parent=self), self.context]

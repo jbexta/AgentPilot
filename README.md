@@ -44,11 +44,10 @@ Live app modification is currently only available if running from source.
 > **Tip:** You can migrate your database to the new version by replacing the executable before launching.
 
 ## 📚 Documentation
-[User guide](docs/guides/how_to_use.md)<br>
-[Module documentation](docs/guides/modules.md)<br>
-[Core Architecture](docs/guides/how_to_build.md)<br>
-[GUI Architecture](docs/guides/how_to_build.md)<br>
-[Creating a plugin](docs/guides/how_to_build.md)<br>
+[User guide](docs/guides/how_to_build.md)<br>
+[GUI Architecture](docs/guides/gui_architecture.md)<br>
+[Module documentation](docs/modules.md)<br>
+[Creating a plugin](docs/plugins.md)<br>
 
 ## 🔌 Plugins
 

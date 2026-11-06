@@ -1,3 +1,5 @@
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import *
 from typing_extensions import override
 
@@ -70,7 +72,23 @@ class ConfigTabs(ConfigCollection):
         self.load()
         self.update_breadcrumbs()
         self.update_page_map()
-        
+        self.update_attention()
+
+    @override
+    def set_page_attention(self, page_name, state):
+        icon = QIcon()
+        if state:
+            pixmap = QPixmap(8, 8)
+            pixmap.fill(Qt.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(state.color))
+            painter.drawEllipse(pixmap.rect())
+            painter.end()
+            icon = QIcon(pixmap)
+        self.content.setTabIcon(self.content.indexOf(self.pages[page_name]), icon)
+
     def goto_page(self, page_name):
         if page_name not in self.pages:
             print(f'page {page_name} not found in {self.pages}')

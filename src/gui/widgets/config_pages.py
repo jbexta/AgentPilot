@@ -158,6 +158,16 @@ class ConfigPages(ConfigCollection):
         self.load()
         self.update_breadcrumbs()
         self.update_page_map()
+        self.update_attention()
+
+    @override
+    def set_page_attention(self, page_name, state):
+        if self.settings_sidebar is None:
+            return
+        button = self.settings_sidebar.page_buttons.get(page_name)
+        if isinstance(button, IconButton):
+            button.notification_dot = state
+            button.update()
 
     class ConfigSidebarWidget(QWidget):
         def __init__(self, parent):

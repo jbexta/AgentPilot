@@ -68,7 +68,6 @@ class Page_Tool_Settings(ConfigDBTree):
             searchable=True,
             default_item_icon=':/resources/icon-tool-small.png',
             has_chat=True,
-            notify_unread=True,
         )
         self.splitter.setSizes([400, 1000])
         self.method_widget = self.Method_Tool_Widget(parent=self)

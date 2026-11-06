@@ -1,9 +1,3 @@
-"""Condition Flow Member Module.
-
-Evaluates a CEL expression and sets condition_passed on the member,
-allowing downstream routing based on the result.
-"""
-
 from plugins.workflows.members import Member
 from plugins.workflows.utils.conditions import (
     build_condition_context,
@@ -25,10 +19,8 @@ class Condition(Member):
     async def run(self):
         expression = self.config.get('expression', 'true')
         ctx = build_condition_context(self.workflow)
-        result = evaluate_condition(expression, ctx)
-        self.condition_passed = result
-        msg = f'Condition: {result}'
-        self.workflow.save_message(
-            'sys', msg, self.full_member_id(),
-        )
-        yield 'SYS', msg
+        if self.inputs:
+            ctx['input_member'] = ctx['members'][self.inputs[0]]
+        result = str(evaluate_condition(expression, ctx)).lower()
+        self.workflow.save_message('hidden', result, self.full_member_id())
+        yield 'hidden', result

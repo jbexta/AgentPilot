@@ -1,0 +1,5 @@
+[plugin]
+name = "codex"
+version = "0.1.0"
+description = "OpenAI Codex agent member, run through the official codex app-server."
+requires = ["workflows"]
